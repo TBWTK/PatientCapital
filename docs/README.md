@@ -57,3 +57,4 @@ PatientCapital помогает владельцу долгосрочного п
 - [Технический долг](DEBT.md)
 - [Данные](DATA.md)
 - [Модель угроз](SECURITY.md)
+- [ADR 0001: локальная MCP agent surface](decisions/0001-local-mcp-agent-surface.md)

@@ -43,3 +43,17 @@
 
 Business goals and constraints → architecture and invariants → capability/regression tests → code →
 fresh verification → compact `docs/STATE.md` checkpoint.
+
+## PatientCapital MCP tools
+
+- Read tools (`get_profile`, `list_assets`, `get_portfolio`, `get_recommendation`) may be used to
+  answer questions about the local portfolio, but their numbers must be quoted without model-side
+  recalculation or substitution.
+- `propose_contribution` may run only for a user-supplied contribution. Always call the result a
+  proposal, show its run id/algorithm version, and never imply that a trade happened.
+- `record_transaction` may run only when the user explicitly confirms the actual BUY/SELL facts.
+  Never convert recommendation lines into transactions automatically; send a fresh idempotency key
+  with the actual quantity, unit price, fee, currency, and timezone-aware occurrence time.
+- Any tool error, stale/missing price, version conflict, or unknown state stays visible. Do not
+  retry with guessed inputs. No PatientCapital tool may access shell, arbitrary SQL, broker APIs, or
+  GigaChat credentials.

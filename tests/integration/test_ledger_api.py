@@ -27,6 +27,7 @@ def test_transaction_is_idempotent_and_portfolio_is_derived(client: TestClient) 
     replay = client.post("/v1/transactions", json=_buy_payload())
     assert replay.status_code == 200
     assert replay.json()["id"] == transaction_id
+    assert replay.json() == created.json()
 
     conflict = client.post("/v1/transactions", json=_buy_payload(quantity=11))
     assert conflict.status_code == 409

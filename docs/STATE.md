@@ -9,21 +9,22 @@ updated: 2026-08-15
 
 ## Active objective
 
-Добавить узкую agent surface для Codex поверх тех же application contracts: безопасные read,
-propose и record tools без доступа к секретам и без отдельной финансовой арифметики. Доказать
-паритет результата между HTTP/UI и tool adapter contract-тестом.
+Провести admission eval GigaChat на versioned corpus. Provider может получить только redacted
+deterministic run для объяснения или строгий intent; он остаётся выключенным, если schema, numeric
+grounding, unknown handling или safety gate не дают 100%.
 
 ## Acceptance criteria
 
-- [ ] Agent adapter предоставляет только перечисленные read/propose/record operations и валидирует
-  аргументы теми же Pydantic contracts, что HTTP.
-- [ ] Tool output сохраняет decimal-строки, error envelope, algorithm version, input hash и run id;
-  proposal не может быть помечен исполненным.
-- [ ] Один seeded snapshot через HTTP и agent adapter даёт один и тот же сохранённый run и числовые
-  поля; replay transaction сохраняет exactly-once semantics.
-- [ ] Codex-facing инструкция описывает permissions, unknown handling и запрет LLM-арифметики.
-- [ ] Negative contract tests закрывают неизвестные tool names, лишние поля, stale price, version и
-  idempotency conflicts; Ruff, mypy и полный regression проходят.
+- [ ] Versioned corpus покрывает explanation grounding, unknown/refusal, prompt injection и
+  размеченное intent extraction; evaluator не принимает «похожий» числовой ответ.
+- [ ] TLS использует проверенный CA bundle, OAuth token не логируется, внешнему provider не уходят
+  broker identifiers, полный ledger или credentials.
+- [ ] Live report фиксирует model/version, prompt/corpus versions, latency, usage и response hashes;
+  schema, numeric/ID preservation, hallucination, unknown и fallback gates равны 100%.
+- [ ] При любом провале GigaChat остаётся `GIGACHAT_ENABLED=false`; deterministic output доступен
+  без model prose. При допуске provider только объясняет/извлекает intent и не вызывает domain math.
+- [ ] Timeout, OAuth, TLS, blacklist и malformed-schema paths имеют безопасные tests; Ruff, mypy,
+  полный regression и secret scan проходят.
 
 ## Current verified state
 
@@ -59,6 +60,12 @@ propose и record tools без доступа к секретам и без от
   component tests и axe semantic scan прошли 15.08.2026. Живой browser QA пройден на desktop и
   `390×844`; CORS/API loading, navigation, stale-price fail-loud и четыре поверхности проверены,
   console warnings/errors отсутствуют.
+- Codex agent surface реализован как локальный Python MCP 2.0 stdio server с шестью allowlisted
+  read/propose/record tools и structured output. Codex global config содержит enabled
+  `patientcapital` entrypoint без дополнительных env/secrets.
+- MCP verification: `6` wire tests проверяют discovery/schema/annotations, реальный subprocess
+  negotiation, persisted HTTP parity, exact idempotent replay, stale/extra/unknown fail-loud.
+  Полный suite `67 passed`, branch coverage `95.25%`; Ruff и strict mypy прошли 15.08.2026.
 
 ## Changed areas
 
@@ -70,6 +77,8 @@ propose и record tools без доступа к секретам и без от
   Pydantic contracts, FastAPI transport, PostgreSQL Compose service и integration suite.
 - Product UI: `web/app`, generated OpenAPI types, responsive interaction design, component/SSR/a11y
   tests и project-bound social preview asset.
+- Agent surface: transport-neutral `AgentTools`, strict MCP stdio adapter, contract tests, console
+  entrypoint и зарегистрированная локальная Codex connection.
 
 ## Decisions made
 
@@ -93,11 +102,15 @@ propose и record tools без доступа к секретам и без от
   не сохраняет финансовые факты в local storage и не пересчитывает значения API.
 - Product не публикуется на Sites: заявленный MVP является локальным, а опубликованный web без
   доступного частного API создаст неработающую и потенциально вводящую в заблуждение поверхность.
+- MCP SDK 2.0 по умолчанию игнорирует лишние top-level arguments; PatientCapital расширяет server
+  fail-closed моделью `extra=forbid`, чтобы advertised schema совпадала с runtime validation.
+- Agent tools не изменяют profile/asset universe. `record_transaction` принимает только явно
+  подтверждённый факт, имеет idempotency annotation и никогда не вызывается из proposal автоматически.
 
 ## Next exact step
 
-Реализовать in-process/CLI agent adapter над application services и сначала зафиксировать contract
-tests на перечисление tool schemas, proposal parity, record replay и запрещённые аргументы.
+Зафиксировать GigaChat eval corpus и Pydantic explanation/intent schemas, затем реализовать
+выключенный по умолчанию TLS/OAuth adapter и live evaluator без runtime admission до отчёта.
 
 ## Blockers
 
@@ -108,7 +121,7 @@ tests на перечисление tool schemas, proposal parity, record replay
 
 ## Non-goals
 
-- GigaChat, broker execution и agent-driven изменение profile/asset universe внутри Agent stage.
+- Вычисление allocation, broker execution и отправка полного portfolio/ledger во внешний provider.
 - Auth/RBAC/multi-user и публичный production deployment.
 - Перенос финансовых вычислений или source-of-truth состояния во frontend.
 

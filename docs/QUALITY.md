@@ -18,7 +18,7 @@ updated: 2026-08-15
 - [x] `Unknown handling`: stale/missing price, invalid weights, currency mismatch и неполная fee
   policy останавливают расчёт typed-причиной.
 - [x] `Ledger separation`: proposal не меняет positions; только transaction command создаёт event.
-- [ ] `Channel parity`: один snapshot через API, web adapter и agent tool возвращает тот же run id и
+- [x] `Channel parity`: один snapshot через API, web adapter и agent tool возвращает тот же run id и
   те же числовые строки.
 - [x] `Analytics`: allocation, cost basis, unrealized result и drift выводятся из одного ledger
   fixture без frontend-формул.
@@ -30,6 +30,8 @@ updated: 2026-08-15
 - [ ] OpenAPI schema snapshot и negative API contracts.
 - [x] Frontend typecheck, component/SSR tests, axe semantic scan и desktop/mobile browser flow
   (15.08.2026).
+- [x] MCP discovery, strict arguments, structured output, stdio process, HTTP parity, expected
+  errors и exact transaction replay (`6` wire tests, 15.08.2026).
 - [ ] Secret scan, dependency audit и security negative cases.
 - [ ] Clean-volume Docker smoke: health → seed/profile → propose → record → dashboard.
 - [ ] `git diff --check` и project-control audit.

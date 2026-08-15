@@ -13,11 +13,15 @@ authors = [{ name = "PatientCapital" }]
 dependencies = [
   "alembic>=1.15,<2",
   "fastapi>=0.116,<1",
+  "mcp>=2,<3",
   "psycopg[binary]>=3.2,<4",
   "pydantic-settings>=2.8,<3",
   "sqlalchemy>=2.0.38,<3",
   "uvicorn[standard]>=0.34,<1",
 ]
+
+[project.scripts]
+patientcapital-mcp = "patientcapital.agent.mcp_server:main"
 
 [dependency-groups]
 dev = [

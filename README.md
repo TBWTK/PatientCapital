@@ -37,7 +37,7 @@ TEST_DATABASE_URL=postgresql+psycopg://patientcapital:patientcapital@localhost:5
 ```
 
 На 15.08.2026 чистая Alembic migration, PostgreSQL integration и domain regression проходят:
-`61 passed`, branch coverage `95%`.
+`67 passed`, branch coverage `95.25%`.
 
 ## Web UI
 
@@ -51,3 +51,18 @@ npm run dev
 Интерфейс доступен на `http://localhost:3000`, API — на `http://127.0.0.1:8000`. Полный web/API
 Compose-запуск будет добавлен на Docker gate; документация не выдаёт планируемую команду за
 работающую.
+
+## Codex agent mode
+
+Локальный MCP server предоставляет шесть allowlisted tools: чтение профиля/активов/аналитики/run,
+создание неизменяемого proposal и отдельная идемпотентная запись подтверждённой сделки.
+
+```bash
+docker compose up -d db
+codex mcp add patientcapital -- "$(pwd)/.venv/bin/patientcapital-mcp"
+codex mcp get patientcapital --json
+```
+
+MCP работает через stdio, не открывает порт и не получает произвольный SQL, shell, broker access или
+GigaChat credentials. Точные agent permissions и обязательное разделение proposal/execution заданы
+в [AGENTS.md](AGENTS.md).

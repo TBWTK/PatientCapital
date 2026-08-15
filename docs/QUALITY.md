@@ -27,14 +27,15 @@ updated: 2026-08-15
 
 - [x] Unit + property tests domain core (`51 passed`, branch coverage `98.01%`, 15.08.2026).
 - [x] Repository/migration tests на PostgreSQL (`9 integration`, immutable trigger included).
-- [ ] OpenAPI schema snapshot и negative API contracts.
+- [x] Canonical OpenAPI SHA-256 snapshot, generated TypeScript surface и negative API contracts.
 - [x] Frontend typecheck, component/SSR tests, axe semantic scan и desktop/mobile browser flow
   (15.08.2026).
 - [x] MCP discovery, strict arguments, structured output, stdio process, HTTP parity, expected
   errors и exact transaction replay (`6` wire tests, 15.08.2026).
-- [ ] Secret scan, dependency audit и security negative cases.
-- [ ] Clean-volume Docker smoke: health → seed/profile → propose → record → dashboard.
-- [ ] `git diff --check` и project-control audit.
+- [x] Committed-secret scan, container negative assertions и dependency audits: `0` Python/npm
+  advisories (15.08.2026).
+- [x] Clean-volume Docker smoke: health → seed/profile → propose → record → dashboard (15.08.2026).
+- [x] `git diff --check` и project-control structural audit (15.08.2026).
 
 ## GigaChat admission gate
 
@@ -70,11 +71,12 @@ unavailable-model fail-fast. Повторный admission возможен то�
 ## Verification commands
 
 ```bash
-python -m pytest
-python -m ruff check .
-python -m mypy src
+uv run pytest --cov=patientcapital --cov-branch --cov-fail-under=94
+uv run ruff check .
+uv run mypy src tests
 docker compose config
 docker compose up --build --wait
+./scripts/docker-smoke.sh
 python3 /Users/tbwtk/.codex/skills/project-control/scripts/project_control.py audit .
 git diff --check
 ```

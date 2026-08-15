@@ -7,14 +7,15 @@ PatientCapital — локальный single-user инструмент для д
 
 На этапе MVP продукт является **инструментом поддержки решения**, не отправляет поручения брокеру
 и не обещает доходность. Арифметикой и ограничениями владеет детерминированный доменный движок.
-Codex и потенциальный GigaChat могут только получать его факты и объяснять результат; модель не
-имеет права подменять сумму, инструмент, цену, комиссию или решение о возможности расчёта.
+Codex может получать факты через узкие tools и объяснять результат; модель не имеет права подменять
+сумму, инструмент, цену, комиссию или решение о возможности расчёта. Проверенный GigaChat-режим в
+runtime отсутствует, потому что модель не прошла admission eval.
 
 ## Статус
 
-Детерминированный domain core, versioned PostgreSQL/API, responsive web UI и Codex MCP проверены.
-Live-аудит `GigaChat-2` отклонил экспериментальный режим; активен Docker gate. Точная линия
-исполнения, критерии и доказательства находятся в
+Детерминированный domain core, versioned PostgreSQL/API, responsive web UI, Codex MCP и локальный
+Docker-контур проверены. Live-аудит `GigaChat-2` отклонил экспериментальный режим; активен финальный
+handoff-аудит. Точная линия исполнения, критерии и доказательства находятся в
 [docs/STATE.md](docs/STATE.md).
 
 ## Документация
@@ -37,8 +38,8 @@ TEST_DATABASE_URL=postgresql+psycopg://patientcapital:patientcapital@localhost:5
   .venv/bin/pytest -q tests
 ```
 
-На 15.08.2026 чистая Alembic migration, PostgreSQL integration и domain regression проходят:
-`67 passed`, branch coverage `95.25%`.
+На 15.08.2026 чистая Alembic migration, PostgreSQL integration и полный Python regression проходят:
+`82 passed`, branch coverage `95.45%`.
 
 ## Web UI
 
@@ -49,9 +50,22 @@ npm ci
 npm run dev
 ```
 
-Интерфейс доступен на `http://localhost:3000`, API — на `http://127.0.0.1:8000`. Полный web/API
-Compose-запуск будет добавлен на Docker gate; документация не выдаёт планируемую команду за
-работающую.
+Интерфейс доступен на `http://localhost:3000`, API — на `http://127.0.0.1:8000`.
+
+## Docker MVP
+
+```bash
+docker compose up --build --wait
+# web: http://127.0.0.1:3000, API: http://127.0.0.1:8000
+docker compose down
+```
+
+PostgreSQL data остаются в named volume после обычного `down`. Изолированный destructive smoke
+создаёт отдельный project/volume, проверяет полный flow и удаляет только свои ресурсы:
+
+```bash
+./scripts/docker-smoke.sh
+```
 
 ## Codex agent mode
 
@@ -60,6 +74,7 @@ Compose-запуск будет добавлен на Docker gate; докуме�
 
 ```bash
 docker compose up -d db
+uv sync --group dev
 codex mcp add patientcapital -- "$(pwd)/.venv/bin/patientcapital-mcp"
 codex mcp get patientcapital --json
 ```

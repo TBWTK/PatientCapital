@@ -44,6 +44,11 @@ CSRF/RBAC, tenant isolation, broker order capability или юридически
 GigaChat не прошёл quality gate и остаётся выключенным. Повторный eval разрешён только с TLS
 verification; `verify=false` запрещён.
 
+Compose публикует db/API/web только на `127.0.0.1`. API и web работают non-root с read-only root
+filesystem и отдельным `/tmp`; readiness API зависит от PostgreSQL, а web стартует после API.
+GigaChat/MCP/HTTPX вынесены из API runtime dependencies, GigaChat credentials не передаются в
+Compose. Python runtime и npm lockfile audit 15.08.2026 дали `0` известных advisories.
+
 ## Production blockers
 
 До коммерческого или многопользовательского режима необходимы legal opinion, identity/RBAC,

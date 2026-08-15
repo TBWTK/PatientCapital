@@ -9,19 +9,18 @@ updated: 2026-08-15
 
 ## Active objective
 
-Собрать воспроизводимый Docker Compose-контур для web, API и PostgreSQL, затем проверить clean-volume
-health и сквозной flow profile/assets/prices → contribution proposal → transaction → dashboard.
+Завершить MVP handoff: зафиксировать OpenAPI snapshot, повторить полный regression/security/project
+audit, синхронизировать документацию и передать чистый проверенный `main`.
 
 ## Acceptance criteria
 
-- [ ] `docker compose up --build --wait` поднимает db, migration/API и production web без ручных
-  host-процессов; published ports привязаны только к loopback.
-- [ ] API readiness зависит от PostgreSQL, web health проверяет HTTP, startup не маскирует failure.
-- [ ] Clean-volume smoke создаёт конфигурацию и выполняет proposal/record/dashboard через public API.
-- [ ] CA доступен eval tooling, но GigaChat credentials не вшиты в image/compose/config; `.env`
-  остаётся ignored.
-- [ ] Полный regression, Compose config, dependency/secret scan, `git diff --check` и
-  project-control audit проходят.
+- [x] Canonical OpenAPI v1 snapshot совпадает с FastAPI schema и generated TypeScript contract.
+- [x] Полный Python/web regression, package builds и clean-volume Docker smoke повторно проходят.
+- [x] Dependency/secret scan и container assertions подтверждают loopback, non-root, read-only и
+  отсутствие model credentials/runtime dependencies.
+- [x] README/docs/roadmap/state описывают фактический runtime; project-control audit и
+  `git diff --check` проходят без warning/error.
+- [ ] Финальный checkpoint находится на `main`, worktree чист, remote sync проверен.
 
 ## Current verified state
 
@@ -33,7 +32,7 @@ health и сквозной flow profile/assets/prices → contribution proposal 
 - В примере RAG найден `russian_trusted_root_ca_pem.crt`. OpenSSL подтверждает subject/issuer
   Russian Trusted Root CA, срок до 27.02.2032 и SHA-256 `D2:6D:2D:02:31:B7:C3:9F:92:CC:73:85:12:BA:54:10:35:19:E4:40:5D:68:B5:BD:70:3E:97:88:CA:8E:CF:31`.
 - Официальные источники подтверждают GigaChat JSON Schema и function calling, но одновременно
-  требуют проверять ответы из-за возможной неактуальности/искажения; live quality ещё не измерена.
+  требуют проверять ответы из-за возможной неактуальности/искажения; live quality измерена ниже.
 - Официальные материалы Банка России подтверждают отдельные требования к персональным
   инвестиционным рекомендациям и автоматическим советникам; применимость к будущему способу
   эксплуатации требует профильного юридического заключения.
@@ -69,8 +68,19 @@ health и сквозной flow profile/assets/prices → contribution proposal 
 - Live `GigaChat-2:2.0.30.01` дал `24/24` schema-valid responses, но `0/4` grounded explanations,
   `4/20` correct intents и `0%` safety. Provider отклонён, runtime integration не добавлена,
   `GIGACHAT_ENABLED=false`; report сохранён в `reports/gigachat-admission-v1.json`.
-- GigaChat targeted verification: `7 passed`; Ruff и strict mypy прошли. Tests закрывают OAuth raw
+- GigaChat targeted verification: `15 passed`; Ruff и strict mypy прошли. Tests закрывают OAuth raw
   и preencoded keys, token cache, timeout, malformed output и unavailable-model fail-fast.
+- Compose собирает pinned official Python 3.13/Node 22 images через публичный Docker Hub mirror,
+  запускает migration → API → web по health dependencies и публикует все порты только на loopback.
+- API/web images работают non-root и read-only; API core install исключает optional MCP/GigaChat
+  dependencies. Clean-volume smoke создал profile/assets/prices, proposal, transaction и dashboard,
+  затем удалил только свой project network/volume/containers.
+- Docker-stage regression: `82 passed`, branch coverage `95.45%`; Ruff, strict mypy, web
+  tests/typecheck/lint/build прошли. `pip-audit` проверил `26` runtime dependencies, npm audit —
+  `662` lockfile dependencies; известных advisories `0`.
+- Final pre-commit regression: `83 passed`, branch coverage `95.45%`; canonical OpenAPI snapshot,
+  Ruff, strict mypy, sdist/wheel, web unit/SSR/typecheck/lint/build, Compose config, shell syntax,
+  `git diff --check` и project-control structural check прошли 15.08.2026.
 
 ## Changed areas
 
@@ -86,12 +96,15 @@ health и сквозной flow profile/assets/prices → contribution proposal 
   entrypoint и зарегистрированная локальная Codex connection.
 - Provider audit: публичный CA, fail-closed HTTPX OAuth/JSON Schema adapter, versioned synthetic
   corpus, evaluator tests и sanitized rejected live report; runtime connection отсутствует.
+- Docker: non-root/read-only API/web images, migration entrypoint, health-dependent Compose,
+  loopback ports и isolated destructive smoke с scoped cleanup.
 
 ## Decisions made
 
 - MVP локальный, single-user и не исполняет сделки.
 - Формулы и ограничения принадлежат чистому Python domain core; БД, API, UI и LLM — адаптеры.
-- GigaChat не допускается к вычислению/изменению плана и остаётся выключенным до live eval.
+- GigaChat не допускается к вычислению/изменению плана; текущая версия отклонена live eval и
+  остаётся выключенной.
 - Codex подключается как внешний tool client; встроенный Codex app-server не является runtime
   финансовой логики.
 - Начальный market-data source — явно датированная ручная цена. Автоматический provider не
@@ -115,11 +128,14 @@ health и сквозной flow profile/assets/prices → contribution proposal 
   подтверждённый факт, имеет idempotency annotation и никогда не вызывается из proposal автоматически.
 - `GigaChat-2` отклонён по grounding/intent/safety, несмотря на 100% schema parse. Gate не ослабляется;
   следующий provider/model должен пройти тот же versioned corpus до появления runtime adapter.
+- Docker bases pinned по digest через `mirror.gcr.io/library/*` после повторяемых Docker Hub TLS
+  timeouts; mirror меняет transport source, но не официальный image digest.
+- MCP и GigaChat clients являются optional/dev extras и не устанавливаются в HTTP API image.
 
 ## Next exact step
 
-Добавить production Dockerfiles для API и web, Compose health/startup dependencies и затем выполнить
-clean-volume HTTP smoke полного пользовательского flow.
+Добавить и проверить canonical OpenAPI snapshot, затем выполнить финальный regression/security/docs
+audit и Git handoff.
 
 ## Blockers
 

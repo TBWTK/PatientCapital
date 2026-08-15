@@ -15,3 +15,7 @@ npm test
 Set `NEXT_PUBLIC_API_BASE_URL` only when the API is not available at the local
 default. `app/api-types.ts` is generated from FastAPI OpenAPI and must not be
 edited manually.
+
+The production Docker build bakes the browser-visible loopback API URL through
+`NEXT_PUBLIC_API_BASE_URL`. The runtime image is non-root/read-only and only serves the generated
+Vinext bundle; it does not receive database or GigaChat credentials.

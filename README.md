@@ -12,8 +12,8 @@ Codex и потенциальный GigaChat могут только получ�
 
 ## Статус
 
-Проект инициализирован с нуля: удалённый репозиторий пуст, бизнес-контекст проверен, активен этап
-`Foundation`. Точная линия исполнения, критерии и доказательства находятся в
+Детерминированный domain core, versioned PostgreSQL/API и responsive web UI проверены; активен этап
+`Agent surface`. Точная линия исполнения, критерии и доказательства находятся в
 [docs/STATE.md](docs/STATE.md).
 
 ## Документация
@@ -37,5 +37,17 @@ TEST_DATABASE_URL=postgresql+psycopg://patientcapital:patientcapital@localhost:5
 ```
 
 На 15.08.2026 чистая Alembic migration, PostgreSQL integration и domain regression проходят:
-`60 passed`, branch coverage `95%`. Полный web/API Compose-запуск будет добавлен после UI gate;
-документация не выдаёт планируемую команду за работающую.
+`61 passed`, branch coverage `95%`.
+
+## Web UI
+
+```bash
+uv run uvicorn patientcapital.api.app:app --host 127.0.0.1 --port 8000
+cd web
+npm ci
+npm run dev
+```
+
+Интерфейс доступен на `http://localhost:3000`, API — на `http://127.0.0.1:8000`. Полный web/API
+Compose-запуск будет добавлен на Docker gate; документация не выдаёт планируемую команду за
+работающую.

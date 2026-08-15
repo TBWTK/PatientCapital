@@ -7,6 +7,7 @@ from uuid import UUID
 
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -70,6 +71,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         },
     )
     app.state.database = database
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=resolved.cors_origin_list,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "OPTIONS"],
+        allow_headers=["Content-Type"],
+    )
 
     def session_dependency() -> Generator[Session]:
         with database.sessions() as session:

@@ -13,3 +13,8 @@ class Settings(BaseSettings):
     )
     api_host: str = "127.0.0.1"
     api_port: int = 8000
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+
+    @property
+    def cors_origin_list(self) -> list[str]:
+        return [item.strip() for item in self.cors_origins.split(",") if item.strip()]

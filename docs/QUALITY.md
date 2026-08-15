@@ -28,7 +28,8 @@ updated: 2026-08-15
 - [x] Unit + property tests domain core (`51 passed`, branch coverage `98.01%`, 15.08.2026).
 - [x] Repository/migration tests на PostgreSQL (`9 integration`, immutable trigger included).
 - [ ] OpenAPI schema snapshot и negative API contracts.
-- [ ] Frontend typecheck, component tests, accessibility scan и responsive browser flow.
+- [x] Frontend typecheck, component/SSR tests, axe semantic scan и desktop/mobile browser flow
+  (15.08.2026).
 - [ ] Secret scan, dependency audit и security negative cases.
 - [ ] Clean-volume Docker smoke: health → seed/profile → propose → record → dashboard.
 - [ ] `git diff --check` и project-control audit.

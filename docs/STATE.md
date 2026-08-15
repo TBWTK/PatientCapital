@@ -9,23 +9,21 @@ updated: 2026-08-15
 
 ## Active objective
 
-Реализовать responsive web UI с четырьмя рабочими поверхностями: dashboard аналитики, ввод нового
-пополнения и просмотр плана, ручная запись покупки, профиль/активы/цены/цели. UI использует только
-versioned API и не повторяет финансовые формулы.
+Добавить узкую agent surface для Codex поверх тех же application contracts: безопасные read,
+propose и record tools без доступа к секретам и без отдельной финансовой арифметики. Доказать
+паритет результата между HTTP/UI и tool adapter contract-тестом.
 
 ## Acceptance criteria
 
-- [ ] Первый viewport показывает состояние портфеля и главное действие «распределить пополнение»,
-  а не generic dashboard chrome.
-- [ ] Dashboard отображает total value, cost basis, unrealized P&L, allocation/target drift и явный
-  price as-of из `/v1/portfolio` без собственных вычислений.
-- [ ] Contribution flow показывает lots, quantity, gross, fee, leftover, pre/post drift и immutable
-  run id; proposal визуально не выдаётся за исполненную покупку.
-- [ ] Portfolio flow записывает BUY/SELL с idempotency key и обновляет analytics после успеха.
-- [ ] Profile flow поддерживает optimistic version, broker fee; asset flow — versions, target, lot и
-  manual price freshness с понятными conflict/domain errors.
-- [ ] Typecheck, component tests, production build, accessibility/responsive checks и browser
-  user-flow QA проходят; API contracts не дублируются вручную без generated/typed boundary.
+- [ ] Agent adapter предоставляет только перечисленные read/propose/record operations и валидирует
+  аргументы теми же Pydantic contracts, что HTTP.
+- [ ] Tool output сохраняет decimal-строки, error envelope, algorithm version, input hash и run id;
+  proposal не может быть помечен исполненным.
+- [ ] Один seeded snapshot через HTTP и agent adapter даёт один и тот же сохранённый run и числовые
+  поля; replay transaction сохраняет exactly-once semantics.
+- [ ] Codex-facing инструкция описывает permissions, unknown handling и запрет LLM-арифметики.
+- [ ] Negative contract tests закрывают неизвестные tool names, лишние поля, stale price, version и
+  idempotency conflicts; Ruff, mypy и полный regression проходят.
 
 ## Current verified state
 
@@ -41,7 +39,6 @@ versioned API и не повторяет финансовые формулы.
 - Официальные материалы Банка России подтверждают отдельные требования к персональным
   инвестиционным рекомендациям и автоматическим советникам; применимость к будущему способу
   эксплуатации требует профильного юридического заключения.
-- Схемы БД, migrations, HTTP API и запускаемого UI пока нет.
 - Foundation gate закрыт: project-control check `PASS errors=0`, `git diff --check` прошёл, `.env`
   подтверждённо ignored; единственное предупреждение исправлено до перехода этапа.
 - Domain core реализован как immutable Python package без БД/HTTP/LLM. Он валидирует currency,
@@ -53,8 +50,15 @@ versioned API и не повторяет финансовые формулы.
   immutable recommendation tables; PostgreSQL triggers запрещают UPDATE/DELETE evidence rows.
 - FastAPI `/v1` реализует profile/assets/prices/transactions/portfolio/recommendations и раздельные
   liveness/readiness. Optimistic versions, idempotency conflict и insufficient position проверены.
-- PostgreSQL/API verification: полный suite `60 passed`, branch coverage `95%`; Ruff, strict mypy,
+- PostgreSQL/API verification: полный suite `61 passed`, branch coverage `95%`; Ruff, strict mypy,
   package build, Compose config и project-control check прошли 15.08.2026. DB container healthy.
+- Responsive Vinext/React UI реализует обзор, расчёт пополнения, BUY/SELL journal и versioned
+  profile/assets/prices. TypeScript contracts генерируются из OpenAPI; денежной логики во frontend
+  нет. Известные API errors локализуются с сохранением машинного кода.
+- Web verification: TypeScript strict check, ESLint, production Vinext build, SSR test, `2`
+  component tests и axe semantic scan прошли 15.08.2026. Живой browser QA пройден на desktop и
+  `390×844`; CORS/API loading, navigation, stale-price fail-loud и четыре поверхности проверены,
+  console warnings/errors отсутствуют.
 
 ## Changed areas
 
@@ -64,6 +68,8 @@ versioned API и не повторяет финансовые формулы.
   metadata и locked dev toolchain.
 - Persistence/API: initial Alembic migration, SQLAlchemy mappings, application services, shared
   Pydantic contracts, FastAPI transport, PostgreSQL Compose service и integration suite.
+- Product UI: `web/app`, generated OpenAPI types, responsive interaction design, component/SSR/a11y
+  tests и project-bound social preview asset.
 
 ## Decisions made
 
@@ -83,11 +89,15 @@ versioned API и не повторяет финансовые формулы.
 - Transaction idempotency key владеет exactly-once intent: точный replay возвращает исходную запись,
   другой payload с тем же ключом отклоняется. Ledger evidence и recommendation snapshots immutable
   на уровне БД.
+- PostgreSQL остаётся authority для product state; Sites D1/R2 bindings не используются. Браузер
+  не сохраняет финансовые факты в local storage и не пересчитывает значения API.
+- Product не публикуется на Sites: заявленный MVP является локальным, а опубликованный web без
+  доступного частного API создаст неработающую и потенциально вводящую в заблуждение поверхность.
 
 ## Next exact step
 
-Запустить Sites web scaffold в существующем проекте, заменить starter на typed PatientCapital UI и
-сначала зафиксировать component/user-flow tests для четырёх поверхностей.
+Реализовать in-process/CLI agent adapter над application services и сначала зафиксировать contract
+tests на перечисление tool schemas, proposal parity, record replay и запрещённые аргументы.
 
 ## Blockers
 
@@ -98,16 +108,17 @@ versioned API и не повторяет финансовые формулы.
 
 ## Non-goals
 
-- Agent protocol, GigaChat и broker execution внутри Product UI stage.
+- GigaChat, broker execution и agent-driven изменение profile/asset universe внутри Agent stage.
 - Auth/RBAC/multi-user и публичный production deployment.
 - Перенос финансовых вычислений или source-of-truth состояния во frontend.
 
 ## Verification
 
 ```bash
-pnpm test
-pnpm build
-pnpm typecheck
+uv run pytest --cov=patientcapital --cov-branch --cov-fail-under=94
+uv run ruff check .
+uv run mypy src tests
+(cd web && npm test && npm run typecheck && npm run lint)
 docker compose config
 git diff --check
 python3 /Users/tbwtk/.codex/skills/project-control/scripts/project_control.py check .

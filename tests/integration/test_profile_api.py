@@ -8,6 +8,21 @@ def test_health_distinguishes_process_and_database_readiness(client: TestClient)
     assert client.get("/health/ready").json() == {"status": "ready"}
 
 
+def test_local_web_origin_receives_narrow_cors_headers(client: TestClient) -> None:
+    response = client.options(
+        "/v1/profile",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert "GET" in response.headers["access-control-allow-methods"]
+    assert "*" not in response.headers["access-control-allow-origin"]
+
+
 def test_profile_uses_optimistic_append_only_versions(client: TestClient) -> None:
     missing = client.get("/v1/profile")
     assert missing.status_code == 404

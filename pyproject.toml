@@ -10,12 +10,20 @@ readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "Proprietary" }
 authors = [{ name = "PatientCapital" }]
-dependencies = []
+dependencies = [
+  "alembic>=1.15,<2",
+  "fastapi>=0.116,<1",
+  "psycopg[binary]>=3.2,<4",
+  "pydantic-settings>=2.8,<3",
+  "sqlalchemy>=2.0.38,<3",
+  "uvicorn[standard]>=0.34,<1",
+]
 
 [dependency-groups]
 dev = [
   "build>=1.2,<2",
   "hatchling>=1.27,<2",
+  "httpx>=0.28,<1",
   "hypothesis>=6.130,<7",
   "mypy>=1.15,<2",
   "pytest>=8.3,<10",
@@ -28,6 +36,7 @@ packages = ["src/patientcapital"]
 
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers"
+pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.coverage.run]

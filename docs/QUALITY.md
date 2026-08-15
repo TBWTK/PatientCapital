@@ -20,13 +20,13 @@ updated: 2026-08-15
 - [x] `Ledger separation`: proposal не меняет positions; только transaction command создаёт event.
 - [ ] `Channel parity`: один snapshot через API, web adapter и agent tool возвращает тот же run id и
   те же числовые строки.
-- [ ] `Analytics`: allocation, cost basis, unrealized result и drift выводятся из одного ledger
+- [x] `Analytics`: allocation, cost basis, unrealized result и drift выводятся из одного ledger
   fixture без frontend-формул.
 
 ## Regression gates
 
 - [x] Unit + property tests domain core (`51 passed`, branch coverage `98.01%`, 15.08.2026).
-- [ ] Repository/migration tests на PostgreSQL.
+- [x] Repository/migration tests на PostgreSQL (`9 integration`, immutable trigger included).
 - [ ] OpenAPI schema snapshot и negative API contracts.
 - [ ] Frontend typecheck, component tests, accessibility scan и responsive browser flow.
 - [ ] Secret scan, dependency audit и security negative cases.

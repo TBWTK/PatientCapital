@@ -9,23 +9,23 @@ updated: 2026-08-15
 
 ## Active objective
 
-Реализовать versioned HTTP API и PostgreSQL persistence для профиля, assets/prices/targets,
-append-only transactions, analytics snapshot и immutable recommendation runs поверх проверенного
-domain core.
+Реализовать responsive web UI с четырьмя рабочими поверхностями: dashboard аналитики, ввод нового
+пополнения и просмотр плана, ручная запись покупки, профиль/активы/цены/цели. UI использует только
+versioned API и не повторяет финансовые формулы.
 
 ## Acceptance criteria
 
-- [ ] Alembic создаёт PostgreSQL schema с numeric money, constraints, versioned facts, append-only
-  transaction semantics и immutable recommendation snapshot.
-- [ ] API позволяет получить/изменить single-user profile, broker fee policy, assets, prices и
-  targets с optimistic versioning и stable error contracts.
-- [ ] Идемпотентная запись buy/sell/deposit/fee события обновляет analytics projection; повторный
-  idempotency key не создаёт вторую операцию.
-- [ ] `POST /v1/recommendations` строит domain input из committed snapshot, сохраняет immutable run
-  и возвращает те же numbers/reasons, что pure core.
-- [ ] Health различает process/database readiness; секреты и account identifiers не возвращаются.
-- [ ] Migration, repository, API integration и negative tests проходят на PostgreSQL в Docker;
-  Ruff, strict mypy, branch coverage и project-control check зелёные.
+- [ ] Первый viewport показывает состояние портфеля и главное действие «распределить пополнение»,
+  а не generic dashboard chrome.
+- [ ] Dashboard отображает total value, cost basis, unrealized P&L, allocation/target drift и явный
+  price as-of из `/v1/portfolio` без собственных вычислений.
+- [ ] Contribution flow показывает lots, quantity, gross, fee, leftover, pre/post drift и immutable
+  run id; proposal визуально не выдаётся за исполненную покупку.
+- [ ] Portfolio flow записывает BUY/SELL с idempotency key и обновляет analytics после успеха.
+- [ ] Profile flow поддерживает optimistic version, broker fee; asset flow — versions, target, lot и
+  manual price freshness с понятными conflict/domain errors.
+- [ ] Typecheck, component tests, production build, accessibility/responsive checks и browser
+  user-flow QA проходят; API contracts не дублируются вручную без generated/typed boundary.
 
 ## Current verified state
 
@@ -49,6 +49,12 @@ domain core.
   сохраняет SHA-256 input hash, версию алгоритма, pre/post drift и explicit reason.
 - Domain verification: `51 passed`, branch coverage `98.01%`; Ruff, strict mypy, offline sdist/wheel
   build и `git diff --check` прошли 15.08.2026.
+- Alembic head создаёт `profile_versions`, `assets/asset_versions`, append-only price/transaction и
+  immutable recommendation tables; PostgreSQL triggers запрещают UPDATE/DELETE evidence rows.
+- FastAPI `/v1` реализует profile/assets/prices/transactions/portfolio/recommendations и раздельные
+  liveness/readiness. Optimistic versions, idempotency conflict и insufficient position проверены.
+- PostgreSQL/API verification: полный suite `60 passed`, branch coverage `95%`; Ruff, strict mypy,
+  package build, Compose config и project-control check прошли 15.08.2026. DB container healthy.
 
 ## Changed areas
 
@@ -56,6 +62,8 @@ domain core.
   threat model.
 - Domain: `src/patientcapital/domain`, test fixtures/example/boundary/property suite, Python package
   metadata и locked dev toolchain.
+- Persistence/API: initial Alembic migration, SQLAlchemy mappings, application services, shared
+  Pydantic contracts, FastAPI transport, PostgreSQL Compose service и integration suite.
 
 ## Decisions made
 
@@ -70,11 +78,16 @@ domain core.
   `Money` с лишними знаками отклоняется вместо silent rounding.
 - Если ни один целый lot не улучшает drift в доступном бюджете, run получает
   `BUDGET_BELOW_ANY_LOT`; строка с нулевой покупкой не создаётся.
+- Profile и asset configuration append-only versioned; PostgreSQL advisory locks сериализуют
+  конкурирующие writes, а stale `expected_version` возвращает `VERSION_CONFLICT`.
+- Transaction idempotency key владеет exactly-once intent: точный replay возвращает исходную запись,
+  другой payload с тем же ключом отклоняется. Ledger evidence и recommendation snapshots immutable
+  на уровне БД.
 
 ## Next exact step
 
-Создать failing PostgreSQL migration/repository/API tests для идемпотентного ledger, optimistic
-profile version и сохранения deterministic recommendation run.
+Запустить Sites web scaffold в существующем проекте, заменить starter на typed PatientCapital UI и
+сначала зафиксировать component/user-flow tests для четырёх поверхностей.
 
 ## Blockers
 
@@ -85,18 +98,17 @@ profile version и сохранения deterministic recommendation run.
 
 ## Non-goals
 
-- UI, agent protocol и GigaChat provider внутри Persistence/API stage.
-- Автоматическое получение market prices и broker execution.
-- Auth/RBAC/multi-user; API bind остаётся локальным до отдельного этапа security.
+- Agent protocol, GigaChat и broker execution внутри Product UI stage.
+- Auth/RBAC/multi-user и публичный production deployment.
+- Перенос финансовых вычислений или source-of-truth состояния во frontend.
 
 ## Verification
 
 ```bash
-docker compose up -d db
-.venv/bin/alembic upgrade head
-.venv/bin/pytest --cov=patientcapital --cov-branch
-.venv/bin/ruff check src tests
-.venv/bin/mypy --strict src tests
+pnpm test
+pnpm build
+pnpm typecheck
+docker compose config
 git diff --check
 python3 /Users/tbwtk/.codex/skills/project-control/scripts/project_control.py check .
 ```

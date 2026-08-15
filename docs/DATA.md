@@ -34,6 +34,11 @@ updated: 2026-08-15
 retention и право на удаление являются отдельным requirement, а не silent cascade. Backup должен
 включать PostgreSQL; `.env` и model credentials восстанавливаются из отдельного secret store.
 
+Фактическая schema реализует `profile_versions` и `asset_versions` как append-only ряды,
+`price_snapshots`, `transactions` и `recommendation_runs` как append-only evidence. PostgreSQL
+triggers запрещают `UPDATE/DELETE`; исправление производится новой version/event. Стабильный
+`assets.id` является identity, ticker не переиспользуется как изменяемое имя.
+
 ## Provenance и чувствительность
 
 Профиль, цели, брокер, комиссии и ledger считаются конфиденциальными финансовыми данными. Они не

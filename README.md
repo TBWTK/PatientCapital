@@ -27,5 +27,15 @@ Codex и потенциальный GigaChat могут только получ�
 - [Модель угроз](docs/SECURITY.md)
 - [Технический долг](docs/DEBT.md)
 
-Команды запуска появятся только после того, как их можно будет проверить на реальном Docker
-контуре; документация не выдаёт планируемую команду за работающую.
+## Проверенный backend-контур
+
+```bash
+uv sync --group dev
+docker compose up -d db
+TEST_DATABASE_URL=postgresql+psycopg://patientcapital:patientcapital@localhost:55432/patientcapital \
+  .venv/bin/pytest -q tests
+```
+
+На 15.08.2026 чистая Alembic migration, PostgreSQL integration и domain regression проходят:
+`60 passed`, branch coverage `95%`. Полный web/API Compose-запуск будет добавлен после UI gate;
+документация не выдаёт планируемую команду за работающую.

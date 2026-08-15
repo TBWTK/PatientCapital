@@ -47,6 +47,21 @@ GigaChat — внешний экспериментальный provider, кот�
 | `agent tools` | узкие get/propose/record операции | те же схемы/permissions, что application service |
 | `GigaChat adapter` | intent/explanation после quality gate | timeout/schema/grounding failure возвращает deterministic result без model prose |
 
+## HTTP API v1
+
+| Метод | Путь | Authority / эффект |
+| --- | --- | --- |
+| `GET/PUT` | `/v1/profile` | latest/next immutable profile version; optimistic concurrency |
+| `GET/PUT` | `/v1/assets[/{id}]` | latest/next asset/target version |
+| `POST` | `/v1/assets/{id}/prices` | append-only manual price snapshot |
+| `POST` | `/v1/transactions` | idempotent append-only BUY/SELL event |
+| `GET` | `/v1/portfolio` | derived quantities, cost basis, value, P&L, allocation/drift |
+| `POST/GET` | `/v1/recommendations[/{id}]` | calculate/store or retrieve immutable domain run |
+| `GET` | `/health/live`, `/health/ready` | process health отдельно от PostgreSQL readiness |
+
+Все денежные JSON-поля сериализуются decimal-строками. Ошибка имеет один envelope
+`{"error":{"code","message"}}`; transport не превращает domain unknown в HTTP 200.
+
 ## Первичный аудит решений
 
 ### Что может работать

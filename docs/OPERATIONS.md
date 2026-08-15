@@ -110,4 +110,5 @@ downgrade удаляет tables/data и не является operational rollba
 - Capacity выше 10 000 ledger events и proposal latency на 100 assets не измерены.
 - PostgreSQL backup artifact проверен на читаемый catalog; destructive restore rehearsal не запущен.
 - Base-image/dependency audit — point-in-time evidence 15.08.2026, а не бессрочная гарантия.
-- GitHub repository остаётся пустым до явного разрешения владельца на export/push.
+- GitHub `origin/main` опубликован после явного разрешения владельца; upstream/default branch
+  проверены. Force-push, tags и release automation не входят в текущий operational contract.

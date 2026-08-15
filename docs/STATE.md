@@ -1,7 +1,7 @@
 ---
 title: Текущее состояние
 type: state
-status: active
+status: stable
 updated: 2026-08-15
 ---
 
@@ -9,9 +9,8 @@ updated: 2026-08-15
 
 ## Active objective
 
-Закрыть выявленные IMMUNE handoff gaps: сделать аудит и принципы каноническими документами,
-синхронизировать data/operations contracts с фактической schema, построить requirement→evidence
-mapping и повторно доказать releasable local `main`.
+**Idle:** локальный PatientCapital MVP реализован, проверен, сохранён на releasable `main` и
+опубликован в `origin/main`. Активного product change нет.
 
 ## Acceptance criteria
 
@@ -24,12 +23,14 @@ mapping и повторно доказать releasable local `main`.
 - [x] `QUALITY.md` отображает каждое требование/существенный риск в named evidence и честный status.
 - [x] IMMUNE/project-control handoff checks, docs links, `git diff --check` и релевантный regression
   проходят; checkpoint находится на чистом локальном `main`.
-- [x] GitHub push выполняется только после явного разрешения пользователя; до него remote state
-  остаётся видимым, а не выдаётся за synced.
+- [x] После явного разрешения владельца `origin/main` опубликован; GitHub `HEAD` указывает на
+  `refs/heads/main`, а local/upstream revisions совпадают.
 
 ## Current verified state
 
-- Указанный GitHub remote доступен, но не содержит ни одного commit/ref; локально создан `main`.
+- После явного разрешения владельца первый export выполнен командой `git push -u origin main`.
+  GitHub создал `main`, назначил его `HEAD`, upstream настроен; read-only verification показала
+  одинаковый local/remote SHA `7b0ba814b614206fd0ff289278858e2b80ae2e04` до evidence-update.
 - До инициализации в workspace находился только пользовательский `.env`; он исключён из Git и не
   читался как набор значений.
 - В `.env` подтверждено наличие имён `GIGACHAT_API_KEY`, `GIGACHAT_CLIENT_ID`,
@@ -100,8 +101,9 @@ mapping и повторно доказать releasable local `main`.
   structural check. Project-control: `PASS errors=0 warnings=0`, `13` документов и `3` Mermaid
   blocks. PostgreSQL `pg_dump -Fc` stream успешно прочитан `pg_restore --list`; destructive full
   restore rehearsal честно остаётся `not run`.
-- Completion audit сохранён в local `main` checkpoint `d6904ad`; после commit worktree clean.
-  GitHub publication не входит в этот claim и остаётся blocked в `QUALITY.md` до explicit approval.
+- Completion audit сохранён в checkpoints `d6904ad` и `7b0ba81`; после commit worktree clean.
+  Repository-owner разрешил первый export, GitHub publication проверена и больше не является
+  blocker. Текущий evidence-update обязан оставлять local `main` равным `origin/main`.
 
 ## Changed areas
 
@@ -156,9 +158,8 @@ mapping и повторно доказать releasable local `main`.
 
 ## Next exact step
 
-Получить явное решение владельца о первом экспорте repository history. При разрешении выполнить
-`git push -u origin main` и проверить remote `main`; при отказе сохранить GitHub publication как
-осознанно `blocked`, не меняя verified local handoff.
+Idle. При следующем product request восстановить состояние из этого документа и Git, определить
+новое проверяемое objective и impact map до изменения кода.
 
 ## Blockers
 
@@ -166,8 +167,6 @@ mapping и повторно доказать releasable local `main`.
   юридического анализа; это не блокирует локальный исследовательский MVP без исполнения.
 - GigaChat-2 непригоден для текущего режима по live admission; требуется другая модель/provider или
   новая версия, но это не блокирует deterministic MVP.
-- `origin` указывает на пустой GitHub repository, но первый экспорт commit history заблокирован до
-  явного разрешения владельца; локальный releasable `main` от этого не зависит.
 
 ## Non-goals
 

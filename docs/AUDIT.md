@@ -28,7 +28,7 @@ market-data licensing, identity, retention и production SLO могли бы и�
 | Broker execution/market feed | confirmed out of scope | User не требовал execution; источника котировок нет | Ошибка могла бы выглядеть как сделка/актуальная цена | Только proposal и manual price/transaction |
 | GigaChat credentials | confirmed available, secret values uninspected | Имена переменных подтверждены; `.env` ignored | Утечка или accidental runtime enablement | Env-only eval; no Compose credentials |
 | Развёртывание | confirmed | Docker constraint; `compose.yaml` | — | Local loopback Compose |
-| Git | confirmed | User-provided GitHub URL; local `main` history | Remote empty; export требует authority | Push только после explicit approval |
+| Git | confirmed | User-provided GitHub URL; explicit export approval; local/remote inspection | — | Keep verified `main` synchronized without rewriting history |
 | Public/commercial compliance | unknown | `docs/SECURITY.md`, official sources in `docs/README.md` | Может изменить product/legal boundary | Public mode blocked pending legal opinion |
 | Capacity/SLO/recovery rehearsal | unknown | `docs/QUALITY.md`, `docs/OPERATIONS.md` | Data loss or degraded large-ledger behavior | Visible limits; benchmark/restore before scope expands |
 
@@ -53,8 +53,8 @@ cross-currency/FX, taxes, margin/derivatives, auth/multi-tenancy и Internet exp
 
 ## Аудит текущего состояния
 
-- Git: verified local checkpoint history на `main`; перед текущим audit worktree был clean. `origin`
-  настроен на user-provided GitHub URL и не содержал heads; push был отклонён до explicit approval.
+- Git: verified checkpoint history на `main`; первый export выполнен после explicit approval.
+  `origin/main` создан, GitHub `HEAD` указывает на него, а local/upstream SHA проверены равными.
 - Domain: Decimal/immutable models, strict validation и deterministic discrete allocator; код не
   импортирует HTTP/DB/LLM.
 - Data/API: одна Alembic head, PostgreSQL immutable triggers, versioned profile/assets, append-only
@@ -111,7 +111,7 @@ agent side effect из пользовательской кнопки и сохр
 | PostgreSQL volume loss | low/unknown | high | Backup procedure documented; restore rehearsal `not run` | operator |
 | Ledger >10k / latency budget | unknown | medium | Explicit capacity unknown; benchmark before expansion | quality owner |
 | Public personalized advice compliance | unknown | critical | Public/commercial mode blocked pending legal opinion | product/legal |
-| GitHub export | controlled | medium | Secret scan complete; explicit user approval still required | repository owner |
+| Accidental GitHub export/history rewrite | low with controls | medium | Secret/history scan, explicit approval, normal push only; no force/rewrite | repository owner |
 
 ## Ландшафт проверок
 
@@ -127,7 +127,6 @@ E2E, secret/dependency/container inspection и controlled live GigaChat corpus. 
 - Какой provider/model проверять вместо GigaChat-2? Не блокирует deterministic local MVP.
 - Будет ли продукт доступен другим людям или использоваться коммерчески? Любой ответ «да» открывает
   legal, identity/RBAC, privacy/retention, market-data licensing и production operations этап.
-- Пользователь должен явно разрешить экспорт repository contents до первого GitHub push.
 
 ## Решение о начале реализации
 

@@ -21,12 +21,15 @@ Codex MCP и Docker-контур. Live-аудит `GigaChat-2` отклонил 
 ## Документация
 
 - [Назначение и границы](docs/README.md)
+- [Аудит идеи, контекста и рисков](docs/AUDIT.md)
+- [IMMUNE-принципы](docs/IMMUNE.md)
 - [Текущее состояние](docs/STATE.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Архитектура и первичный аудит](docs/ARCHITECTURE.md)
 - [Данные](docs/DATA.md)
 - [Качество и evals](docs/QUALITY.md)
 - [Модель угроз](docs/SECURITY.md)
+- [Эксплуатация и восстановление](docs/OPERATIONS.md)
 - [Технический долг](docs/DEBT.md)
 
 ## Проверенный backend-контур

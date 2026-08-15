@@ -40,15 +40,9 @@ def test_calculated_money_rounds_half_up_but_user_money_must_be_exact() -> None:
         lambda: TargetAllocation(asset_id="", weight=Decimal("1")),
         lambda: TargetAllocation(asset_id="A", weight=Decimal("NaN")),
         lambda: TargetAllocation(asset_id="A", weight=Decimal("1.1")),
-        lambda: FeePolicy(
-            rate=Decimal("-0.1"), minimum=Money(Decimal("0.00"), "RUB")
-        ),
-        lambda: FeePolicy(
-            rate=Decimal("1.1"), minimum=Money(Decimal("0.00"), "RUB")
-        ),
-        lambda: FeePolicy(
-            rate=Decimal("0.1"), minimum=Money(Decimal("-1.00"), "RUB")
-        ),
+        lambda: FeePolicy(rate=Decimal("-0.1"), minimum=Money(Decimal("0.00"), "RUB")),
+        lambda: FeePolicy(rate=Decimal("1.1"), minimum=Money(Decimal("0.00"), "RUB")),
+        lambda: FeePolicy(rate=Decimal("0.1"), minimum=Money(Decimal("-1.00"), "RUB")),
     ],
 )
 def test_models_reject_invalid_structural_values(build: Callable[[], object]) -> None:

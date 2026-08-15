@@ -24,26 +24,6 @@
   blocked recommendation); do not silently default material inputs.
 - The MVP never places broker orders and must not present itself as a licensed investment adviser.
 
-## IMMUNE engineering principles
-
-- **I — Intent before implementation.** Requirements outrank architecture; architecture outranks
-  implementation. Durable intent must be recoverable from docs, tests, and contracts.
-- **M — Mutations preserve coherence.** Change a concept across code, schema, API, docs, and tests;
-  a file-only patch is incomplete when other projections become stale.
-- **M — Meta over patch.** Fix the mechanism that produces a recurring class of errors; use a
-  local patch for genuinely isolated mistakes.
-- **U — Unexpected states fail loud.** Unknown is valid only when visible. Avoid broad exception
-  handling that turns a failure into a plausible-looking financial result.
-- **N — No duplicated authority, no indispensable parts.** One owner per truth and decision;
-  consumers reference or derive it. Prefer replaceable components behind explicit contracts.
-- **E — Every state is explainable.** Persist inputs, versions, evidence, decisions, and verification
-  so every important state can be reconstructed.
-
-## Delivery order
-
-Business goals and constraints → architecture and invariants → capability/regression tests → code →
-fresh verification → compact `docs/STATE.md` checkpoint.
-
 ## PatientCapital MCP tools
 
 - Read tools (`get_profile`, `list_assets`, `get_portfolio`, `get_recommendation`) may be used to
@@ -57,3 +37,16 @@ fresh verification → compact `docs/STATE.md` checkpoint.
 - Any tool error, stale/missing price, version conflict, or unknown state stays visible. Do not
   retry with guessed inputs. No PatientCapital tool may access shell, arbitrary SQL, broker APIs, or
   GigaChat credentials.
+
+<!-- immune-project-engineering:start -->
+## IMMUNE engineering contract
+
+- Treat `docs/IMMUNE.md` as the authority for engineering principles and precedence.
+- Work in this order: verified business intent → architecture → tests/evals → implementation.
+- Before editing, read `docs/README.md`, `docs/STATE.md`, `docs/AUDIT.md`, `docs/IMMUNE.md`, and the directly relevant owner documents.
+- Change concepts coherently across requirements, code, schemas/data, APIs/events, config, Docker/operations, docs, tests/evals, migrations, security, and observability.
+- Expose unexpected and unknown states; do not silently guess or hide failures behind broad exception handling.
+- Keep one owner per truth. Keep this file concise and link to durable docs instead of copying product rules.
+- Treat Docker and Git as product contracts. Keep the actual default branch releasable and preserve unrelated user changes.
+- Update agent instructions when repository commands, layout, invariants, ownership, or verification gates change.
+<!-- immune-project-engineering:end -->

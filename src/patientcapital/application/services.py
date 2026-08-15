@@ -157,9 +157,7 @@ def list_assets(session: Session) -> AssetListResponse:
     return AssetListResponse(assets=[_asset_response(item) for item in _latest_assets(session)])
 
 
-def put_asset(
-    session: Session, asset_id: str, payload: AssetPut
-) -> AssetResponse:
+def put_asset(session: Session, asset_id: str, payload: AssetPut) -> AssetResponse:
     with session.begin():
         _lock(session, _ASSET_LOCK)
         current = _latest_asset(session, asset_id)
@@ -202,9 +200,7 @@ def _price_response(record: PriceRecord) -> PriceResponse:
     )
 
 
-def create_price(
-    session: Session, asset_id: str, payload: PriceCreate
-) -> PriceResponse:
+def create_price(session: Session, asset_id: str, payload: PriceCreate) -> PriceResponse:
     with session.begin():
         asset = _latest_asset(session, asset_id)
         if asset is None:
@@ -502,9 +498,7 @@ def create_recommendation(
             positions=tuple(
                 Position(item.asset_id, quantities.get(item.asset_id, 0)) for item in assets
             ),
-            targets=tuple(
-                TargetAllocation(item.asset_id, item.target_weight) for item in assets
-            ),
+            targets=tuple(TargetAllocation(item.asset_id, item.target_weight) for item in assets),
             fee_policy=FeePolicy(
                 rate=profile.fee_rate,
                 minimum=Money(profile.minimum_fee, profile.base_currency),

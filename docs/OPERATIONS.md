@@ -1,0 +1,113 @@
+---
+title: Эксплуатация PatientCapital
+type: operations
+status: stable
+updated: 2026-08-15
+---
+
+# Эксплуатация PatientCapital
+
+## Поддерживаемый контур
+
+MVP поддерживает только локальный single-user Docker Compose на доверенном host. `db`, `api` и
+`web` публикуются на `127.0.0.1`; Internet exposure, reverse proxy и remote access не поддерживаются.
+PostgreSQL named volume — единственное persisted product state. API и web images non-root,
+read-only; `/tmp` — ephemeral tmpfs. GigaChat credentials не передаются контейнерам.
+
+Нужны Docker Compose v2. Для `scripts/docker-smoke.sh` дополнительно нужны host `curl`, `jq` и
+свободные ports `53000`, `58000`, `55433` либо соответствующие `PATIENTCAPITAL_SMOKE_*` overrides.
+
+## Конфигурация
+
+Без `.env` Compose использует local defaults. Для изменения ports/PostgreSQL credentials скопируйте
+`.env.example` в ignored `.env` и смените `POSTGRES_PASSWORD`. Значение host `DATABASE_URL` в
+example предназначено для запуска Python с host; Compose всегда передаёт API внутренний адрес `db`.
+GigaChat fields не включают runtime mode и используются только при явно запущенном future re-eval.
+
+## Startup и health
+
+```bash
+docker compose up --build --wait
+curl --fail http://127.0.0.1:8000/health/live
+curl --fail http://127.0.0.1:8000/health/ready
+curl --fail http://127.0.0.1:3000/
+docker compose ps
+```
+
+PostgreSQL должен стать healthy до API. API entrypoint выполняет idempotent `alembic upgrade head`,
+затем readiness проверяет DB query. Web стартует только после healthy API. Ошибка migration/health
+останавливает dependency chain и не должна маскироваться ручным restart loop.
+
+## Logs и диагностика
+
+```bash
+docker compose logs --tail=200 db api web
+docker compose ps
+docker compose config --quiet
+```
+
+`/health/live` доказывает только процесс API; `/health/ready` отдельно доказывает DB dependency.
+Product metrics/SLO/alerts не реализованы и обязательны до любого production/public режима.
+
+## Shutdown и очистка
+
+```bash
+docker compose down
+```
+
+Обычный `down` сохраняет named volume. `docker compose down --volumes` удаляет все product data и
+допустим только для осознанного reset после проверенного backup. Изолированный smoke безопаснее:
+
+```bash
+./scripts/docker-smoke.sh
+```
+
+Smoke создаёт уникальный Compose project, проверяет health → profile/assets/prices → proposal →
+transaction → dashboard и cleanup удаляет только его containers/network/volume.
+
+## Backup
+
+Создавайте logical dump до upgrade, destructive reset или работы с volume. Команда пишет
+конфиденциальный файл на host; хранение, encryption и access control принадлежат оператору.
+
+```bash
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' \
+  > patientcapital.dump
+docker compose exec -T db pg_restore --list < patientcapital.dump >/dev/null
+```
+
+`.env`, GigaChat credentials и Codex global registration в dump не входят.
+
+## Restore и rollback
+
+Restore **destructive** для target DB. В текущем handoff full restore rehearsal не выполнялся;
+поэтому recovery time и data-loss window являются `unknown`. Перед реальным restore остановите
+`api`/`web`, сохраните текущий dump и используйте отдельный Compose project/volume для rehearsal.
+
+```bash
+docker compose stop api web
+docker compose exec -T db sh -c 'dropdb -U "$POSTGRES_USER" --if-exists "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
+docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --exit-on-error' \
+  < patientcapital.dump
+docker compose up --wait api web
+```
+
+Application rollback безопасен только если старая версия понимает текущую DB schema. Migration
+downgrade удаляет tables/data и не является operational rollback. При несовместимой migration
+возвращайтесь к pre-upgrade dump в новом volume; не запускайте старый image поверх неизвестной schema.
+
+## Upgrade procedure
+
+1. Проверить clean Git checkpoint, changelog/decision и backup.
+2. Выполнить `docker compose build --pull` и deterministic checks из `docs/QUALITY.md`.
+3. Выполнить isolated `scripts/docker-smoke.sh`.
+4. Запустить основной `docker compose up --wait`; проверить health и UI.
+5. При failure сохранить logs и не менять данные вручную; rollback по правилам выше.
+
+## Известные operational limits
+
+- Auth, RBAC, TLS termination, remote access, HA, automated backups, monitoring и alerting отсутствуют.
+- Capacity выше 10 000 ledger events и proposal latency на 100 assets не измерены.
+- PostgreSQL backup artifact проверен на читаемый catalog; destructive restore rehearsal не запущен.
+- Base-image/dependency audit — point-in-time evidence 15.08.2026, а не бессрочная гарантия.
+- GitHub repository остаётся пустым до явного разрешения владельца на export/push.

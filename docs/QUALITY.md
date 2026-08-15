@@ -93,3 +93,42 @@ git diff --check
 - Все внешние model calls имеют timeout, request id и безопасный fallback.
 - Полное восстановление MVP требует backup PostgreSQL; recommendation runs не восстанавливаются из
   текстовых ответов LLM.
+
+<!-- immune-project-engineering:quality:start -->
+## Карта acceptance и evidence
+
+| Требование/риск | Тип evidence | Fixture/среда | Команда или inspection | Ожидаемый результат | Статус |
+| --- | --- | --- | --- | --- | --- |
+| PC-REQ-01 capital/targets/holdings/fees → exact proposal | capability + property + API E2E | deterministic domain fixtures + PostgreSQL | `uv run pytest tests/domain tests/integration/test_recommendation_api.py` | Budget/lot/fee/drift invariants и exact known plan | passing |
+| PC-REQ-02 analytics/profile/manual ledger/web | integration + component + browser | PostgreSQL, desktop и 390×844 browser | integration suite; web unit/SSR/a11y; recorded browser QA | Four product surfaces read/write same API facts | passing |
+| PC-REQ-03 proposal ≠ execution | negative contract + DB trigger | API/MCP + PostgreSQL | ledger/recommendation/MCP tests | Proposal не меняет position; only explicit idempotent BUY/SELL does | passing |
+| PC-REQ-04 Codex decision mode | MCP wire/subprocess parity + host registration | local stdio MCP + PostgreSQL + Codex config | MCP tests; `codex mcp list`; `codex mcp get patientcapital --json` | Exact allowlist/schema, HTTP parity, fail-loud errors; enabled repository entrypoint | passing |
+| PC-REQ-05 GigaChat only if adequate | versioned live admission | 24 synthetic cases, real `GigaChat-2` | report + provider/eval tests | Reject unless schema/grounding/safety 100%, intent ≥95% | passing |
+| PC-REQ-06 Dockerized local MVP | operational E2E | clean isolated Compose volume | `./scripts/docker-smoke.sh` | build/health/migrate/web/propose/record/dashboard/cleanup | passing |
+| PC-RISK-01 hidden unknown/stale/wrong currency | boundary/property/negative API | generated and explicit invalid facts | domain validation + stale API/MCP tests | Typed visible error; no plausible partial plan | passing |
+| PC-RISK-02 contract/data drift | snapshot + migration/immutability | OpenAPI, generated TS, clean PostgreSQL | full pytest + OpenAPI snapshot + project audit | Schema/client match; evidence rows reject mutation | passing |
+| PC-RISK-03 secrets/provider/container | static scan + dependency/container inspection | committed tree + built images | commands recorded in `STATE.md` | No committed secrets/model creds; loopback/non-root/read-only; 0 advisories | passing |
+| PC-OPS-01 PostgreSQL backup | artifact inspection | current local DB stream | `pg_dump -Fc` → `pg_restore --list` | Logical backup catalog readable without persisted dump | passing |
+| PC-OPS-02 PostgreSQL restore | recovery rehearsal | isolated disposable volume | destructive restore procedure in `OPERATIONS.md` | Restored facts/runs equal source; measured RTO/RPO | not run |
+| PC-NFR-01 10k ledger / 100-asset latency | performance/capacity | target host | benchmark not implemented | 10k events supported; proposal <500 ms | not run |
+| PC-COMP-01 public personalized advice | human legal review | intended jurisdiction/operating model | external legal opinion | Public/commercial boundary approved | blocked |
+| PC-GIT-01 releasable default branch | Git + full gates | local `main` | status/log + handoff checks | Verified checkpoints, clean worktree after commit | pending checkpoint |
+| PC-GIT-02 GitHub publication | external release | user-provided empty remote | `git push origin main` | Export only after repository-owner approval | blocked |
+
+## Портфель проверок
+
+Применены materially different layers: business capability fixtures; static format/type/build/link and
+secret/dependency checks; unit/boundary/Hypothesis properties; OpenAPI/MCP/provider contracts;
+PostgreSQL migration/trigger/application integration; GigaChat data/ML admission; responsive
+browser/component/SSR/a11y journeys; timeout/schema/readiness resilience; advisory lock/version and
+idempotency consistency; clean-volume Docker operational E2E; controlled live provider eval.
+
+Честно не выполнены:
+
+- stakeholder investment-domain walkthrough и legal review — обязательны до public/commercial use;
+- mutation testing — текущий risk покрыт exact capability/boundary/property layers, но mutation gate
+  нужен при замене allocation algorithm;
+- parallel-write stress — single-user scope и DB locks проверены функционально, не под нагрузкой;
+- destructive restore rehearsal — documented, но RTO/RPO остаются unknown;
+- 10k-ledger/100-asset performance и saturation — expansion gate, а не доказанный MVP property.
+<!-- immune-project-engineering:quality:end -->

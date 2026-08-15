@@ -57,4 +57,11 @@ PatientCapital помогает владельцу долгосрочного п
 - [Технический долг](DEBT.md)
 - [Данные](DATA.md)
 - [Модель угроз](SECURITY.md)
+- [Эксплуатация и восстановление](OPERATIONS.md)
 - [ADR 0001: локальная MCP agent surface](decisions/0001-local-mcp-agent-surface.md)
+- [ADR 0002: deterministic core и model admission](decisions/0002-deterministic-core-and-model-admission.md)
+
+<!-- immune-project-engineering:docs:start -->
+- [Аудит и достаточность контекста](AUDIT.md)
+- [Инженерные принципы IMMUNE](IMMUNE.md)
+<!-- immune-project-engineering:docs:end -->

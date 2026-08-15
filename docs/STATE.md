@@ -1,7 +1,7 @@
 ---
 title: Текущее состояние
 type: state
-status: stable
+status: active
 updated: 2026-08-15
 ---
 
@@ -9,18 +9,23 @@ updated: 2026-08-15
 
 ## Active objective
 
-Локальный MVP передан как воспроизводимый Docker-продукт с deterministic core, web/API/PostgreSQL,
-Codex MCP, отклонённым GigaChat admission и проверяемыми audit/eval evidence.
+Закрыть выявленные IMMUNE handoff gaps: сделать аудит и принципы каноническими документами,
+синхронизировать data/operations contracts с фактической schema, построить requirement→evidence
+mapping и повторно доказать releasable local `main`.
 
 ## Acceptance criteria
 
-- [x] Canonical OpenAPI v1 snapshot совпадает с FastAPI schema и generated TypeScript contract.
-- [x] Полный Python/web regression, package builds и clean-volume Docker smoke повторно проходят.
-- [x] Dependency/secret scan и container assertions подтверждают loopback, non-root, read-only и
-  отсутствие model credentials/runtime dependencies.
-- [x] README/docs/roadmap/state описывают фактический runtime; project-control audit и
-  `git diff --check` проходят без warning/error.
-- [x] Финальный checkpoint находится на `main`, worktree чист, remote sync проверен.
+- [x] `AUDIT.md` классифицирует исходный контекст, аудит идеи/архитектуры/рисков/GigaChat,
+  альтернативы, достаточность контекста и оставшиеся unknown по inspectable evidence.
+- [x] `IMMUNE.md` владеет принципами и mutation protocol; `AGENTS.md` ссылается на него без
+  дублированного authority.
+- [x] `DATA.md` и новый operator contract описывают только фактическую schema, Docker lifecycle,
+  persistence/recovery и явно маркированные непроверенные ограничения.
+- [x] `QUALITY.md` отображает каждое требование/существенный риск в named evidence и честный status.
+- [ ] IMMUNE/project-control handoff checks, docs links, `git diff --check` и релевантный regression
+  проходят; checkpoint находится на чистом локальном `main`.
+- [ ] GitHub push выполняется только после явного разрешения пользователя; до него remote state
+  остаётся видимым, а не выдаётся за synced.
 
 ## Current verified state
 
@@ -58,7 +63,9 @@ Codex MCP, отклонённым GigaChat admission и проверяемыми
   console warnings/errors отсутствуют.
 - Codex agent surface реализован как локальный Python MCP 2.0 stdio server с шестью allowlisted
   read/propose/record tools и structured output. Codex global config содержит enabled
-  `patientcapital` entrypoint без дополнительных env/secrets.
+  `patientcapital` entrypoint без дополнительных env/secrets. Повторная host inspection через
+  `codex mcp list` и `codex mcp get patientcapital --json` подтвердила enabled STDIO command
+  `/Users/tbwtk/Documents/CODEX_PREP/PatientCapital/.venv/bin/patientcapital-mcp` 15.08.2026.
 - MCP verification: `6` wire tests проверяют discovery/schema/annotations, реальный subprocess
   negotiation, persisted HTTP parity, exact idempotent replay, stale/extra/unknown fail-loud.
   Полный suite `67 passed`, branch coverage `95.25%`; Ruff и strict mypy прошли 15.08.2026.
@@ -81,11 +88,23 @@ Codex MCP, отклонённым GigaChat admission и проверяемыми
 - Final pre-commit regression: `83 passed`, branch coverage `95.45%`; canonical OpenAPI snapshot,
   Ruff, strict mypy, sdist/wheel, web unit/SSR/typecheck/lint/build, Compose config, shell syntax,
   `git diff --check` и project-control structural check прошли 15.08.2026.
+- Completion-audit regression по текущему дереву: `84 passed`, branch coverage `95.45%`; новый
+  contract test доказывает согласованность `.env.example` с Compose credentials/host port и
+  отсутствие включённого GigaChat runtime. Ruff format/check, strict mypy `42` source files,
+  offline sdist/wheel, web production/SSR/`2` component tests/typecheck/lint/build, Compose config,
+  shell syntax и `git diff --check` прошли 15.08.2026.
+- Повторный isolated clean-volume Docker smoke прошёл полный health → migrate → profile/assets/
+  prices → proposal → manual transaction → dashboard flow и удалил только временный Compose
+  project `patientcapital-smoke-65827` с его network/volume/containers.
+- IMMUNE implementation check: `PASS errors=0`; единственный warning объясняет ограничение
+  structural check. Project-control: `PASS errors=0 warnings=0`, `13` документов и `3` Mermaid
+  blocks. PostgreSQL `pg_dump -Fc` stream успешно прочитан `pg_restore --list`; destructive full
+  restore rehearsal честно остаётся `not run`.
 
 ## Changed areas
 
-- Foundation: root README, Git hygiene, восемь project-control документов, агентские правила и
-  threat model.
+- Foundation: root README, Git hygiene, тринадцать project-control/IMMUNE/operator документов,
+  агентские правила и threat model.
 - Domain: `src/patientcapital/domain`, test fixtures/example/boundary/property suite, Python package
   metadata и locked dev toolchain.
 - Persistence/API: initial Alembic migration, SQLAlchemy mappings, application services, shared
@@ -106,7 +125,8 @@ Codex MCP, отклонённым GigaChat admission и проверяемыми
 - GigaChat не допускается к вычислению/изменению плана; текущая версия отклонена live eval и
   остаётся выключенной.
 - Codex подключается как внешний tool client; встроенный Codex app-server не является runtime
-  финансовой логики.
+  финансовой логики. Из разрешённых objective вариантов выбран chat/sub-agent MCP path; web UI
+  не запускает агента и остаётся независимым client того же application service.
 - Начальный market-data source — явно датированная ручная цена. Автоматический provider не
   выбирается без отдельного requirements/eval этапа.
 - MVP округляет вычисленные денежные значения до `0.01` методом `ROUND_HALF_UP`; пользовательский
@@ -134,8 +154,8 @@ Codex MCP, отклонённым GigaChat admission и проверяемыми
 
 ## Next exact step
 
-Обязательной разработки для локального MVP нет. Следующий продуктовый выбор — новый LLM/provider для
-повторного admission либо отдельный legal/security этап перед любым публичным режимом.
+Создать локальный Git checkpoint, выполнить handoff-mode checks на clean `main` и отразить итоговый
+status. GitHub push остаётся отдельным внешним действием только после явного разрешения владельца.
 
 ## Blockers
 
@@ -143,6 +163,8 @@ Codex MCP, отклонённым GigaChat admission и проверяемыми
   юридического анализа; это не блокирует локальный исследовательский MVP без исполнения.
 - GigaChat-2 непригоден для текущего режима по live admission; требуется другая модель/provider или
   новая версия, но это не блокирует deterministic MVP.
+- `origin` указывает на пустой GitHub repository, но первый экспорт commit history заблокирован до
+  явного разрешения владельца; локальный releasable `main` от этого не зависит.
 
 ## Non-goals
 

@@ -9,46 +9,50 @@ updated: 2026-08-15
 
 ## Сущности и владельцы
 
-| Сущность | Назначение | Владелец | Идентификатор |
+| Фактическая таблица/проекция | Назначение | Authority | Идентификатор |
 | --- | --- | --- | --- |
-| `InvestorProfile` | горизонт, risk label, base currency, cash buffer | profile service | UUID, version |
-| `BrokerAccount` | брокер, счёт и fee policy reference | profile service | UUID |
-| `FeePolicy` | commission rules/minimums/effective interval | fee domain | UUID, version |
-| `Asset` | инструмент, currency, lot size, enabled state | asset catalog | UUID; ticker не является ключом |
-| `TargetAllocation` | желаемая доля актива и effective interval | policy domain | UUID, version |
-| `PriceSnapshot` | цена, as-of, source и freshness status | market-data boundary | UUID |
-| `Transaction` | append-only факт buy/sell/deposit/fee | ledger | UUID, idempotency key |
-| `PositionSnapshot` | производный quantity/cost/value/P&L | analytics projection | run UUID |
-| `RecommendationRun` | immutable inputs, algorithm version, lines/reasons | allocation service | UUID |
-| `ModelEvaluation` | provider/model/prompt/corpus и измеренные outcomes | quality subsystem | UUID |
+| `profile_versions` | currency, horizon, risk label, cash buffer, broker name и fee fields | profile application service | integer `version` |
+| `assets` | стабильная identity инструмента | asset application service | user-supplied string `id` |
+| `asset_versions` | name, currency, lot, target weight, active state | asset application service | (`asset_id`, integer `version`) |
+| `price_snapshots` | manual price, currency, as-of, max age и source | price boundary | UUID |
+| `transactions` | append-only фактический `BUY`/`SELL` с fee | ledger service | UUID + unique idempotency key |
+| `recommendation_runs` | immutable input/output snapshots, amount, totals, reason и algorithm evidence | recommendation service | UUID |
+| portfolio response | quantity, cost/value/P&L, allocation и drift | derived application query | не хранится отдельной таблицей |
+| GigaChat admission report | model/prompt/corpus hashes, metrics, latency/usage и case evidence | file `reports/gigachat-admission-v1.json` | report/corpus version; не DB entity |
 
 ## Lifecycle и версии
 
-Профиль, fee policy, target allocation, asset parameters и price snapshot версионируются. Изменение
-не переписывает старый `RecommendationRun`: run ссылается на версии входов или содержит их
-канонический snapshot/hash. Transaction append-only; исправление создаётся compensating event с
-ссылкой на исходное событие. Position/analytics являются projection ledger на заданное время и
-набор цен, поэтому могут быть перестроены.
+Профиль создаёт следующую integer version; broker/fee fields являются частью той же profile version,
+а не отдельными таблицами. Asset identity стабильна, а параметры/target создают следующую
+`asset_versions` row. Price, transaction и recommendation rows append-only. PostgreSQL triggers
+отклоняют `UPDATE/DELETE` для `profile_versions`, `asset_versions`, `price_snapshots`, `transactions`
+и `recommendation_runs`.
 
-В MVP удаление пользователя отсутствует из-за single-user режима. Для будущего публичного режима
-retention и право на удаление являются отдельным requirement, а не silent cascade. Backup должен
-включать PostgreSQL; `.env` и model credentials восстанавливаются из отдельного secret store.
+API поддерживает только `BUY` и `SELL`. Formal compensating-event link в schema отсутствует;
+исправление вводится новой фактической операцией с новым idempotency key и поясняющей `note`, если
+position invariant это допускает. Добавлять `DEPOSIT`, `FEE` или correction reference без новой
+migration/API decision нельзя.
 
-Фактическая schema реализует `profile_versions` и `asset_versions` как append-only ряды,
-`price_snapshots`, `transactions` и `recommendation_runs` как append-only evidence. PostgreSQL
-triggers запрещают `UPDATE/DELETE`; исправление производится новой version/event. Стабильный
-`assets.id` является identity, ticker не переиспользуется как изменяемое имя.
+В MVP delete API отсутствует. Для будущего публичного режима retention и право на удаление являются
+отдельным requirement, а не silent cascade. Backup включает named PostgreSQL volume через logical
+dump; `.env` и model credentials никогда не входят в DB backup и восстанавливаются отдельно.
+
+`RecommendationRun.input_snapshot` фиксирует использованные profile/asset/price/position facts;
+`output_snapshot` фиксирует lines и domain totals. Старый run не пересчитывается новой algorithm
+version. `assets.id` является business identity; отдельного broker security master/ticker resolver
+в MVP нет.
 
 ## Provenance и чувствительность
 
-Профиль, цели, брокер, комиссии и ledger считаются конфиденциальными финансовыми данными. Они не
-передаются GigaChat целиком: после допуска внешний provider получает минимальный redacted
-explanation payload без broker account identifiers. Каждый price хранит source, `as_of` и дату
-получения; ручной источник помечается `manual`, а не маскируется под market feed.
+Профиль, цели, брокер, комиссии и ledger считаются конфиденциальными финансовыми данными. Текущий
+runtime не вызывает GigaChat и ничего ему не передаёт; live admission использовал только synthetic
+versioned corpus. Любая будущая model integration потребует нового approved minimal-payload
+contract. Каждый price хранит source, `as_of`, `max_age_seconds` и `created_at`; manual source не
+маскируется под market feed.
 
-Каждый run сохраняет canonical input hash, algorithm version, requested amount, selected prices,
-fee policy, output и reason codes. Model explanation дополнительно хранит provider/model version,
-prompt version, latency, usage и response hash, но никогда не становится источником чисел.
+Каждый run сохраняет canonical input hash, algorithm version, requested amount, selected facts,
+output и reason. GigaChat report хранит provider/model, prompt/corpus hashes, latency, usage и raw
+response hash, но не raw prompt/output и никогда не становится источником portfolio facts.
 
 ## Data flow
 
@@ -60,7 +64,7 @@ flowchart LR
   Snapshot --> Core["Deterministic allocation"]
   Core --> Run[("Immutable recommendation run")]
   Run --> Web["Web/Codex explanation"]
-  Run -. redacted payload .-> Giga["GigaChat gated adapter"]
+  Corpus["Synthetic eval corpus"] -. admission only .-> Giga["Rejected GigaChat adapter"]
 ```
 
 ## Валюты и время
@@ -71,6 +75,7 @@ UI отображает timezone пользователя; `date` без timezon
 
 ## Восстановление
 
-Ledger, versioned policies и price snapshots — первичные факты. Positions, analytics и предложения
-перестраиваются из них указанной версией алгоритма. Если старая версия кода недоступна,
-сохранённый immutable run остаётся свидетельством, но не переисполняется молча новой версией.
+Profile/asset versions, prices и ledger — первичные DB facts. Portfolio analytics перестраиваются из
+них; recommendation run остаётся immutable evidence и не переисполняется молча новой algorithm
+version. Проверенные startup/shutdown/backup команды и честный статус restore rehearsal находятся в
+`docs/OPERATIONS.md`. Удаление named volume без backup необратимо для product data.

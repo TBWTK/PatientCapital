@@ -16,6 +16,6 @@ updated: 2026-08-15
 | Agent surface | Codex использует узкие read/propose/record tools поверх того же core | Contract test доказывает parity UI/API/tool output | done |
 | GigaChat gate | Provider проверен на фиксированном corpus и либо допущен только к объяснению, либо отклонён | 100% schema/safety/math-grounding gates + отчёт | done |
 | Docker | Web, API и PostgreSQL поднимаются одним Compose-контуром | Clean-volume smoke + health + e2e contribution flow | done |
-| MVP handoff | Реализация, docs, tests и Git описывают одну правду | Full regression, project audit, clean releasable `main` | done |
+| MVP handoff | Реализация, docs, tests и Git описывают одну правду | Full regression, IMMUNE/project audit, clean releasable `main` | active |
 
 Допустимые статусы: `planned`, `active`, `blocked`, `done`.

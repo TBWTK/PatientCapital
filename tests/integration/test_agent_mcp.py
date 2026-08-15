@@ -112,9 +112,7 @@ def test_mcp_proposal_is_the_same_immutable_run_retrieved_by_http(
         profile = await mcp_client.call_tool("get_profile", {})
         assets = await mcp_client.call_tool("list_assets", {})
         portfolio = await mcp_client.call_tool("get_portfolio", {})
-        proposal = await mcp_client.call_tool(
-            "propose_contribution", {"contribution": "10000.00"}
-        )
+        proposal = await mcp_client.call_tool("propose_contribution", {"contribution": "10000.00"})
         return profile, assets, portfolio, proposal
 
     profile_result, assets_result, portfolio_result, result = _run(propose)

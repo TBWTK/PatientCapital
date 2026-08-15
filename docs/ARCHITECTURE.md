@@ -15,7 +15,9 @@ core. Пользователь вручную вводит факты, кото�
 покупок. API сохраняет входы и доказательства calculation run; web UI и agent tools являются
 равноправными клиентами одного application service.
 
-Codex работает с приложением через ограниченные tools и может объяснять результат в чате.
+Codex работает с приложением через ограниченные tools и может объяснять результат в чате или
+sub-agent flow. Это выбранная реализация допускавшегося objective agent mode; web UI не запускает
+Codex и не зависит от доступности агента. Оба канала вызывают один application service независимо.
 GigaChat был проверен как внешний экспериментальный provider для strict intent/explanation, но не
 прошёл live quality gate и не входит в runtime. Ни один LLM не владеет данными, математикой и
 исполнением.
@@ -44,7 +46,7 @@ GigaChat был проверен как внешний эксперимента�
 | `api` | versioned HTTP contracts и input validation | 4xx для входа, 409 для version conflict, 503 для dependency |
 | `persistence` | PostgreSQL repositories и migrations | health degraded; запись не подтверждается |
 | `web` | четыре пользовательских поверхности и explanation UX | сохраняет ввод или показывает точную ошибку API |
-| `agent tools` | узкие get/propose/record операции | те же схемы/permissions, что application service |
+| `agent tools` | узкие get/propose/record операции для Codex chat/sub-agent | те же схемы/permissions, что application service |
 | `GigaChat eval adapter` | offline admission нового provider/model | любой провал оставляет runtime выключенным; deterministic result не зависит от model prose |
 
 ## HTTP API v1
@@ -111,6 +113,10 @@ flowchart LR
   Giga["GigaChat — rejected eval-only adapter"] -.-> Gate["Offline admission report"]
 ```
 
+Agent path заканчивается на MCP boundary: зарегистрированный Codex STDIO client запускает
+`patientcapital-mcp`, а adapter обращается к тому же HTTP/application contract, что web. UI не
+встраивает Codex app-server и не имеет скрытой кнопки, которая может инициировать сделку.
+
 ## Flow нового пополнения
 
 ```mermaid
@@ -139,3 +145,26 @@ sequenceDiagram
   при принятии конкретного provider/tool protocol будет создан ADR.
 - Market prices являются versioned input, а не неявным network call внутри расчёта.
 - Portfolio — производная ledger + price snapshot; recommendation никогда не мутирует ledger.
+
+<!-- immune-project-engineering:architecture:start -->
+## Технологический выбор
+
+Stack rationale принадлежит разделу `Stack decision` выше, а alternatives — `docs/AUDIT.md`.
+Ключевой trade-off: Python/Decimal/Pydantic/PostgreSQL дают компактную проверяемую financial/data
+boundary, но требуют отдельного TypeScript build и не доказывают performance без benchmark. Новая
+runtime technology не добавляется без требования, owner boundary и independent evidence.
+
+## Docker-контур
+
+| Service | Build/runtime | Dependency/health | State и exposure |
+| --- | --- | --- | --- |
+| `db` | pinned `postgres:17-alpine` | `pg_isready` | named volume; loopback port 55432 |
+| `api` | pinned Python 3.13 slim, core deps only, non-root/read-only | healthy DB → Alembic head → DB readiness query | stateless; loopback port 8000; `/tmp` tmpfs |
+| `web` | pinned Node 22 multi-stage Vinext build, non-root/read-only | healthy API → HTTP root health | generated bundle; loopback port 3000; `/tmp` tmpfs |
+
+Compose передаёт API только application/DB/CORS config и `GIGACHAT_ENABLED=false`; model keys не
+входят в images/environment. Browser-visible API URL bake-time и указывает на host loopback.
+`scripts/docker-smoke.sh` создаёт изолированный project/volume и доказывает full HTTP flow. Logs,
+startup/shutdown, backup, destructive restore caveats, upgrade/rollback и непроверенные limits
+принадлежат `docs/OPERATIONS.md`. Public rollout, SLO/alerts, HA и automatic recovery отсутствуют.
+<!-- immune-project-engineering:architecture:end -->

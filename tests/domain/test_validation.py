@@ -63,27 +63,19 @@ def test_cross_currency_input_fails_before_planning(
             "INVALID_CALCULATION_TIME",
         ),
         (
-            lambda request: replace(
-                request, contribution=Money(Decimal("-1.00"), "RUB")
-            ),
+            lambda request: replace(request, contribution=Money(Decimal("-1.00"), "RUB")),
             "NEGATIVE_CONTRIBUTION",
         ),
         (
-            lambda request: replace(
-                request, cash_buffer=Money(Decimal("-1.00"), "RUB")
-            ),
+            lambda request: replace(request, cash_buffer=Money(Decimal("-1.00"), "RUB")),
             "NEGATIVE_CASH_BUFFER",
         ),
         (
-            lambda request: replace(
-                request, cash_buffer=Money(Decimal("1.00"), "USD")
-            ),
+            lambda request: replace(request, cash_buffer=Money(Decimal("1.00"), "USD")),
             "CURRENCY_MISMATCH",
         ),
         (
-            lambda request: replace(
-                request, cash_buffer=Money(Decimal("10001.00"), "RUB")
-            ),
+            lambda request: replace(request, cash_buffer=Money(Decimal("10001.00"), "RUB")),
             "BUFFER_EXCEEDS_CONTRIBUTION",
         ),
         (
@@ -95,9 +87,7 @@ def test_cross_currency_input_fails_before_planning(
             "DUPLICATE_PRICE",
         ),
         (
-            lambda request: replace(
-                request, positions=(*request.positions, request.positions[0])
-            ),
+            lambda request: replace(request, positions=(*request.positions, request.positions[0])),
             "DUPLICATE_POSITION",
         ),
         (
@@ -105,9 +95,7 @@ def test_cross_currency_input_fails_before_planning(
             "DUPLICATE_TARGET",
         ),
         (
-            lambda request: replace(
-                request, assets=(), prices=(), positions=(), targets=()
-            ),
+            lambda request: replace(request, assets=(), prices=(), positions=(), targets=()),
             "EMPTY_ASSET_SET",
         ),
         (lambda request: replace(request, prices=(request.prices[0],)), "PRICE_ASSET_SET"),

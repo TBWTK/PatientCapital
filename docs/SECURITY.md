@@ -26,7 +26,7 @@ recommendation runs, GigaChat credentials, Codex permissions и доказате
 | Угроза | Контроль MVP | Остаточный риск |
 | --- | --- | --- |
 | Утечка ключей | `.env` ignored; secrets не логируются/API; env-only injection | администратор host/container видит env |
-| Ошибочная/выдуманная LLM рекомендация | deterministic run SSOT; schema + numeric grounding + fallback | убедительный, но неуместный prose после допуска |
+| Ошибочная/выдуманная LLM рекомендация | deterministic run SSOT; текущий Giga runtime отсутствует | future model prose остаётся недоверенным даже после gate |
 | Скрытая неполнота данных | typed `unknown`, freshness и blocked run | пользователь может ввести неверный факт |
 | Несанкционированное изменение ledger | append-only events, idempotency, DB transaction | single-user MVP без identity audit |
 | Повторная запись покупки | idempotency key и 409 conflict | ручной ввод с новым ключом остаётся возможен |

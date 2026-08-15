@@ -194,9 +194,7 @@ def build_contribution_plan(request: AllocationInput) -> RecommendationPlan:
             if improvement <= 0:
                 continue
             remaining_drift = target_values[asset_id] - before_value
-            candidates.append(
-                (remaining_drift, asset_id, incremental_spend, new_gross, new_fee)
-            )
+            candidates.append((remaining_drift, asset_id, incremental_spend, new_gross, new_fee))
 
         if not candidates:
             break

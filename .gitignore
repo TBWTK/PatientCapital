@@ -1,0 +1,34 @@
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+
+# JavaScript
+node_modules/
+.pnpm-store/
+dist/
+.vinext/
+.next/
+coverage/
+
+# Runtime data and secrets
+*.log
+tmp/
+data/
+certs/*.key
+certs/*.p12
+
+# Editors
+.idea/
+.vscode/

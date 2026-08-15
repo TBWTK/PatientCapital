@@ -33,7 +33,8 @@
   proposal, show its run id/algorithm version, and never imply that a trade happened.
 - `record_transaction` may run only when the user explicitly confirms the actual BUY/SELL facts.
   Never convert recommendation lines into transactions automatically; send a fresh idempotency key
-  with the actual quantity, unit price, fee, currency, and timezone-aware occurrence time.
+  with the actual quantity, clean unit price, total accrued interest when applicable, fee, currency,
+  and timezone-aware occurrence time.
 - Any tool error, stale/missing price, version conflict, or unknown state stays visible. Do not
   retry with guessed inputs. No PatientCapital tool may access shell, arbitrary SQL, broker APIs, or
   GigaChat credentials.

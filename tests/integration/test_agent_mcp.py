@@ -199,6 +199,7 @@ def test_mcp_record_transaction_preserves_exact_replay(client: TestClient) -> No
         "side": "BUY",
         "quantity": 3,
         "unit_price": "101.25",
+        "accrued_interest_total": "2.75",
         "fee": "1.00",
         "currency": "RUB",
         "occurred_at": "2026-08-15T09:00:00Z",
@@ -214,6 +215,7 @@ def test_mcp_record_transaction_preserves_exact_replay(client: TestClient) -> No
     assert first.is_error is False
     assert replay.is_error is False
     assert first.structured_content == replay.structured_content
+    assert first.structured_content["accrued_interest_total"] == "2.75"
     portfolio = client.get("/v1/portfolio").json()
     aaa = next(item for item in portfolio["assets"] if item["asset_id"] == "AAA")
     assert aaa["quantity"] == 3

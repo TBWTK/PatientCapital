@@ -177,8 +177,9 @@ def build_mcp_server(
         title="Record confirmed transaction",
         description=(
             "Append one user-confirmed BUY or SELL fact. Never infer this call from a proposal. "
-            "The caller must supply a unique idempotency key, actual quantity, price, fee, "
-            "currency, and timezone-aware occurrence time. This does not place a broker order."
+            "The caller must supply a unique idempotency key, actual quantity, clean price, "
+            "total accrued interest when applicable, fee, currency, and timezone-aware "
+            "occurrence time. This does not place a broker order."
         ),
         annotations=RECORD,
     )

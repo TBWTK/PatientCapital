@@ -2,7 +2,7 @@
 title: Данные
 type: data
 status: stable
-updated: 2026-08-15
+updated: 2026-08-16
 ---
 
 # Данные
@@ -15,7 +15,7 @@ updated: 2026-08-15
 | `assets` | стабильная identity инструмента | asset application service | user-supplied legacy id или validated MOEX `SECID` |
 | `asset_versions` | name, currency, lot, target weight, active state | manual legacy или automatic selection service | (`asset_id`, integer `version`) |
 | `price_snapshots` | manual legacy или MOEX-derived price, currency, as-of, max age и source | price/marketdata boundary | UUID |
-| `transactions` | append-only фактический `BUY`/`SELL` с fee | ledger service | UUID + unique idempotency key |
+| `transactions` | append-only `BUY`/`SELL`: clean unit price, total НКД и fee | ledger service | UUID + unique idempotency key |
 | `recommendation_runs` | immutable input/output snapshots, amount, totals, reason и algorithm evidence | recommendation service | UUID |
 | portfolio response | quantity, cost/value/P&L, allocation и drift | derived application query | не хранится отдельной таблицей |
 | GigaChat admission report | model/prompt/corpus hashes, metrics, latency/usage и case evidence | file `reports/gigachat-admission-v1.json` | report/corpus version; не DB entity |
@@ -32,6 +32,11 @@ API поддерживает только `BUY` и `SELL`. Formal compensating-e
 исправление вводится новой фактической операцией с новым idempotency key и поясняющей `note`, если
 position invariant это допускает. Добавлять `DEPOSIT`, `FEE` или correction reference без новой
 migration/API decision нельзя.
+
+`transactions.accrued_interest_total` — общий НКД всей операции, не значение на одну облигацию.
+Он неотрицателен, хранится отдельно от clean `unit_price` и участвует в BUY cost basis один раз.
+Additive migration заполняет старые rows значением `0.00`; отсутствие поля в legacy API payload
+также означает явный backward-compatible `0.00`, а не неизвестный bond fact.
 
 В MVP delete API отсутствует. Для будущего публичного режима retention и право на удаление являются
 отдельным requirement, а не silent cascade. Backup включает named PostgreSQL volume через logical

@@ -38,12 +38,15 @@ PostgreSQL/API, responsive web UI, Codex MCP и Docker-контур. Live-ауд
 ```bash
 uv sync --group dev
 docker compose up -d db
-TEST_DATABASE_URL=postgresql+psycopg://patientcapital:patientcapital@localhost:55432/patientcapital \
+TEST_DATABASE_URL=postgresql+psycopg://patientcapital:patientcapital@localhost:55432/patientcapital_test \
   .venv/bin/pytest -q tests
 ```
 
-На 15.08.2026 чистая Alembic migration, PostgreSQL integration и полный Python regression проходят:
-`138 passed`, branch coverage `94.45%`.
+Integration fixtures create the dedicated `patientcapital_test` database when needed and refuse to
+run destructive cleanup against a database whose name does not end in `_test`.
+
+На 16.08.2026 чистая Alembic migration, изолированный PostgreSQL integration и полный Python
+regression проходят: `141 passed`, branch coverage `94.46%`.
 
 ## Web UI
 

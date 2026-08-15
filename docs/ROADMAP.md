@@ -2,7 +2,7 @@
 title: Этапы проекта
 type: roadmap
 status: stable
-updated: 2026-08-15
+updated: 2026-08-16
 ---
 
 # Этапы проекта
@@ -18,5 +18,6 @@ updated: 2026-08-15
 | Docker | Web, API и PostgreSQL поднимаются одним Compose-контуром | Clean-volume smoke + health + e2e contribution flow | done |
 | MVP handoff | Реализация, docs, tests и Git описывают одну правду | Full regression, IMMUNE/project audit, clean releasable `main` | done |
 | Automatic discovery | Сумма и profile без ручного universe дают source-backed пяти-летний proposal | MOEX/policy/API/MCP/web capability, negative provider paths и Docker E2E | done |
+| Fixed-income ledger | Clean price, НКД и fee сохраняются раздельно и дают точный cost basis | Additive migration + screenshot capability + API/MCP/web/Docker regression | done |
 
 Допустимые статусы: `planned`, `active`, `blocked`, `done`.

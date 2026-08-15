@@ -27,7 +27,9 @@ def test_env_example_is_coherent_and_secret_free() -> None:
         assert parsed.port == int(example["POSTGRES_PORT"])
         assert parsed.username == example["POSTGRES_USER"]
         assert parsed.password == example["POSTGRES_PASSWORD"]
-        assert parsed.path.removeprefix("/") == example["POSTGRES_DB"]
+
+    assert database_url.path.removeprefix("/") == example["POSTGRES_DB"]
+    assert test_database_url.path.removeprefix("/") == f"{example['POSTGRES_DB']}_test"
 
     assert example["GIGACHAT_ENABLED"] == "false"
     assert example["GIGACHAT_API_KEY"] == ""

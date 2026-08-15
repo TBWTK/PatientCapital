@@ -3,7 +3,7 @@ title: PatientCapital
 project: PatientCapital
 type: project
 status: active
-updated: 2026-08-15
+updated: 2026-08-16
 ---
 
 # PatientCapital
@@ -30,7 +30,7 @@ PatientCapital помогает владельцу долгосрочного п
 
 В MVP входят один локальный пользователь, профиль брокера и комиссий, автоматический discovery
 рублёвых ОФЗ и фондов широкого индекса через delayed MOEX ISS, версионированная пятилетняя policy,
-журнал операций, расчёт позиций и отклонений, план нового взноса, аналитическая панель, immutable
+журнал операций с отдельным НКД для облигаций, расчёт позиций и отклонений, план нового взноса, аналитическая панель, immutable
 recommendation evidence и agent-facing инструменты. Ручной справочник остаётся advanced/legacy
 fallback, но не является prerequisite основного сценария.
 

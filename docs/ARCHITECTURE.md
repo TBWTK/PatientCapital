@@ -2,7 +2,7 @@
 title: Архитектура
 type: architecture
 status: stable
-updated: 2026-08-15
+updated: 2026-08-16
 ---
 
 # Архитектура
@@ -38,6 +38,8 @@ GigaChat был проверен как внешний эксперимента�
 - LLM не может создать/подменить asset, изменить policy/числовой результат core или пометить план
   исполненным. Материализация валидированного MOEX instrument выполняется только application service.
 - `proposed` не равно `executed`: позиция меняется только после отдельной ручной записи операции.
+- Облигационная BUY хранит clean unit price, общий НКД и fee раздельно; cost-basis projection
+  складывает их детерминированно и не подменяет clean price синтетической dirty unit price.
 - MVP не вызывает broker order API и не обещает доходность.
 - Секреты не хранятся в БД, не возвращаются API и не попадают в logs/commits.
 
@@ -62,7 +64,7 @@ GigaChat был проверен как внешний эксперимента�
 | `GET/PUT` | `/v1/profile` | latest/next immutable profile version; optimistic concurrency |
 | `GET/PUT` | `/v1/assets[/{id}]` | latest/next asset/target version |
 | `POST` | `/v1/assets/{id}/prices` | append-only manual price snapshot |
-| `POST` | `/v1/transactions` | idempotent append-only BUY/SELL event |
+| `POST` | `/v1/transactions` | idempotent append-only BUY/SELL с отдельным total НКД |
 | `GET` | `/v1/portfolio` | derived quantities, cost basis, value, P&L, allocation/drift |
 | `POST/GET` | `/v1/recommendations[/{id}]` | calculate/store or retrieve immutable domain run |
 | `POST` | `/v1/discovery/recommendations` | fetch/validate MOEX candidates, apply policy and persist deterministic proposal |

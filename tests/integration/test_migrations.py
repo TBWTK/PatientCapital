@@ -2,7 +2,14 @@ import pytest
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import DBAPIError
 
-from tests.integration.conftest import TEST_DATABASE_URL
+from tests.integration.conftest import TEST_DATABASE_URL, _validate_test_database_url
+
+
+def test_destructive_fixture_rejects_non_test_database() -> None:
+    with pytest.raises(RuntimeError, match="dedicated database"):
+        _validate_test_database_url(
+            "postgresql+psycopg://patientcapital:patientcapital@localhost:55432/patientcapital"
+        )
 
 
 def test_head_migration_creates_required_authorities() -> None:
@@ -18,7 +25,13 @@ def test_head_migration_creates_required_authorities() -> None:
         "recommendation_runs",
     }.issubset(set(inspector.get_table_names()))
     assert inspector.get_unique_constraints("transactions")
+    transaction_columns = {item["name"]: item for item in inspector.get_columns("transactions")}
+    assert transaction_columns["accrued_interest_total"]["nullable"] is False
     assert inspector.get_check_constraints("asset_versions")
+    assert any(
+        "accrued_interest_total" in str(item.get("sqltext"))
+        for item in inspector.get_check_constraints("transactions")
+    )
     engine.dispose()
 
 

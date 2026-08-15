@@ -2,19 +2,31 @@
 title: Текущее состояние
 type: state
 status: stable
-updated: 2026-08-15
+updated: 2026-08-16
 ---
 
 # Текущее состояние
 
 ## Active objective
 
-**Completed:** заменить ручной asset-first поток на `budget-first` автоматический подбор для
-пятилетнего горизонта: MOEX discovery → versioned policy → deterministic lot/fee proposal →
-source-backed объяснение в web/Codex без broker execution.
+**Completed:** покупка облигации сохранена без искажения подтверждённых фактов: clean unit price,
+общий НКД и комиссия хранятся отдельно, а cost basis включает все три компонента. Screenshot-backed
+BUY `SU26226RMFS9` от 13.08.2026 записан после backward-compatible migration и полного gate.
 
 ## Acceptance criteria
 
+- [x] `TransactionCreate/Response`, PostgreSQL и MCP имеют явный `accrued_interest_total >= 0`;
+  старые payload/rows совместимы через доказанный default `0.00`.
+- [x] BUY cost basis равен `clean price × quantity + accrued_interest_total + fee`; clean price и
+  НКД не сворачиваются в выдуманную unit price.
+- [x] Screenshot fixture `7 × 992.04 + 195.16 + 3.47` даёт cost basis `7 142.91 RUB`, quantity `7`
+  и сохраняет timestamp `2026-08-13T13:34:00Z` без автоматического broker execution.
+- [x] Web manual-ledger form и generated OpenAPI client принимают НКД отдельно; idempotency hash
+  различает операции с разным НКД.
+- [x] Migration на существующем Docker volume, full Python/web regression, MCP/API contracts,
+  project/IMMUNE checks и локальная portfolio inspection проходят до записи факта.
+- [x] PostgreSQL integration tests fail closed unless the database name ends with `_test`; their
+  cleanup cannot truncate the persistent local `patientcapital` database.
 - [x] Пользователь с настроенным profile вводит только сумму (reference case `8 000 RUB`) и получает
   proposal без предварительного ручного создания assets/prices/targets.
 - [x] Default horizon в новом UI — 5 лет; risk/fees/holdings берутся из profile, неизвестные
@@ -40,6 +52,23 @@ source-backed объяснение в web/Codex без broker execution.
 
 ## Current verified state
 
+- Screenshot inspection подтвердил две сделки `2 + 5` шт. по clean price `992.04 RUB`, общий НКД
+  `195.16 RUB`, debit до комиссии `7 139.44 RUB`, fee `3.47 RUB` и время 13.08.2026 16:34 МСК.
+- Additive migration `20260816_0002` прошла на существующем named volume. Transaction
+  `cbf1d309-0597-4415-aa35-675bc2fce3df` сохранён с idempotency key
+  `t-invest-20260813-su26226-buy-7-1634`; API portfolio inspection вернул quantity `7`, cost basis
+  `7 142.91 RUB`, clean-price market value `6 964.09 RUB` при подтверждённой цене `994.87 RUB`.
+- Финальный Python regression: `141 passed`, branch coverage `94.46%`; Ruff format/check, strict
+  mypy (`51` source files), offline sdist/wheel и canonical OpenAPI snapshot прошли 16.08.2026.
+- Web: `4` component tests, TypeScript, ESLint, SSR и production build прошли локально и в pinned
+  Node container. Desktop и `390×844` browser inspection подтвердили отдельный `НКД всего`, только
+  active asset в ledger selector и итоговый dashboard; console warnings/errors отсутствуют.
+- Clean-volume Docker smoke `patientcapital-smoke-10952` прошёл и удалил scoped containers/network/
+  volume. Main Compose после rebuild healthy; profile восстановлен как 5 лет / growth /
+  Т-Инвестиции / `0.05%` после обнаруженного прежнего test-data contamination.
+- Причина contamination устранена на уровне генератора: destructive integration fixture создаёт
+  `patientcapital_test` и fail closed для database name без `_test`. Проверка на отдельной БД прошла;
+  inactive fixtures больше не показываются в ledger selector.
 - Исходный product gap был воспроизведён: legacy `/v1/recommendations` требовал ручной universe, а
   web Settings просил ticker/name/lot/target/price/source. Основной UI теперь amount-only и 5-летний.
 - Controlled read-only MOEX ISS inspection 15.08.2026 подтвердил active boards `TQOB`/`TQBR`,
@@ -142,6 +171,8 @@ source-backed объяснение в web/Codex без broker execution.
 
 ## Changed areas
 
+- Fixed-income ledger: transaction schema/contract, cost-basis projection, migration, API/MCP/web
+  adapters, test-database isolation, tests and owner docs.
 - Foundation: root README, Git hygiene, тринадцать project-control/IMMUNE/operator документов,
   агентские правила и threat model.
 - Domain: `src/patientcapital/domain`, test fixtures/example/boundary/property suite, Python package
@@ -159,6 +190,11 @@ source-backed объяснение в web/Codex без broker execution.
 
 ## Decisions made
 
+- Для облигаций `unit_price` означает подтверждённую clean price, а `accrued_interest_total` — общий
+  НКД всей операции. BUY cost basis добавляет оба значения и fee; поле не выводится из тарифа или
+  текста модели. Для non-bond/backward-compatible events НКД равен `0.00`.
+- Destructive PostgreSQL integration cleanup разрешён только для отдельной базы с именем `_test`;
+  постоянная local product database никогда не является тестовой fixture.
 - MVP локальный, single-user и не исполняет сделки.
 - Формулы и ограничения принадлежат чистому Python domain core; БД, API, UI и LLM — адаптеры.
 - GigaChat не допускается к вычислению/изменению плана; текущая версия отклонена live eval и
@@ -193,8 +229,8 @@ source-backed объяснение в web/Codex без broker execution.
 
 ## Next exact step
 
-Получить пользовательскую оценку локального amount-only сценария; любое расширение universe
-(например, выбор отдельных акций) начинать с отдельного suitability/quality gate, не с LLM-подбора.
+При следующем пополнении пользователь сообщает только сумму; выполнить deterministic proposal на
+текущем profile/portfolio и показать run id, algorithm/policy versions и source evidence.
 
 ## Blockers
 
@@ -205,6 +241,7 @@ source-backed объяснение в web/Codex без broker execution.
 
 ## Non-goals
 
+- Полный coupon schedule, налоговый учёт НКД, realized P&L и автоматическая broker reconciliation.
 - Вычисление allocation, broker execution и отправка полного portfolio/ledger во внешний provider.
 - Свободный подбор отдельных акций по LLM-тексту, прогноз доходности и real-time quotation claim.
 - Auth/RBAC/multi-user и публичный production deployment.

@@ -107,6 +107,7 @@ class TransactionRecord(Base):
         CheckConstraint("side IN ('BUY', 'SELL')"),
         CheckConstraint("quantity > 0"),
         CheckConstraint("unit_price > 0"),
+        CheckConstraint("accrued_interest_total >= 0"),
         CheckConstraint("fee >= 0"),
     )
 
@@ -119,6 +120,9 @@ class TransactionRecord(Base):
     side: Mapped[str] = mapped_column(String(4), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_price: Mapped[Decimal] = mapped_column(Numeric(20, 8), nullable=False)
+    accrued_interest_total: Mapped[Decimal] = mapped_column(
+        Numeric(20, 2), nullable=False, server_default="0"
+    )
     fee: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
     currency: Mapped[str] = mapped_column(String(3), nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

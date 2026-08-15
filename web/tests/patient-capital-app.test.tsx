@@ -102,4 +102,44 @@ describe("PatientCapitalApp", () => {
     const discoveryCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/v1/discovery/recommendations"));
     expect(discoveryCall?.[1]?.body).toBe(JSON.stringify({ contribution: "8000" }));
   });
+
+  it("submits bond accrued interest separately from clean price and fee", async () => {
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/v1/profile")) return json({ version: 4, base_currency: "RUB", investment_horizon_years: 5, risk_level: "growth", cash_buffer: "1000.00", broker_name: "Т-Инвестиции", fee_rate: "0.0005", minimum_fee: "1.00", created_at: "2026-08-15T22:03:40Z" });
+      if (path.endsWith("/v1/assets")) return json({ assets: [
+        { asset_id: "AAA", version: 2, name: "Asset A", currency: "RUB", lot_size: 1, target_weight: "0.00000000", is_active: false, created_at: "2026-08-15T22:04:47Z" },
+        { asset_id: "SU26226RMFS9", version: 1, name: "ОФЗ 26226", currency: "RUB", lot_size: 1, target_weight: "0.00000000", is_active: true, created_at: "2026-08-15T22:04:48Z" },
+      ] });
+      if (path.endsWith("/v1/portfolio")) return json({ currency: "RUB", total_market_value: "0.00", total_cost_basis: "0.00", total_unrealized_pnl: "0.00", assets: [] });
+      if (path.endsWith("/v1/transactions") && init?.method === "POST") return json({ id: "00000000-0000-0000-0000-000000000002", idempotency_key: "generated", asset_id: "SU26226RMFS9", side: "BUY", quantity: 7, unit_price: "992.04000000", accrued_interest_total: "195.16", fee: "3.47", currency: "RUB", occurred_at: "2026-08-13T13:34:00Z", note: null, created_at: "2026-08-16T00:00:00Z" }, 201);
+      return json({ error: { code: "UNEXPECTED", message: path } }, 500);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<PatientCapitalApp />);
+    await screen.findByText("Т-Инвестиции");
+    fireEvent.click(screen.getAllByRole("button", { name: /Операции/ })[0]);
+    expect(screen.queryByRole("option", { name: /Asset A/ })).toBeNull();
+    fireEvent.change(screen.getByLabelText("Количество"), { target: { value: "7" } });
+    fireEvent.change(screen.getByLabelText("Цена за единицу"), { target: { value: "992.04" } });
+    fireEvent.change(screen.getByLabelText("НКД всего"), { target: { value: "195.16" } });
+    fireEvent.change(screen.getByLabelText("Комиссия"), { target: { value: "3.47" } });
+    fireEvent.change(screen.getByLabelText("Дата и время"), { target: { value: "2026-08-13T16:34" } });
+    fireEvent.click(screen.getByRole("button", { name: "Записать операцию" }));
+
+    await waitFor(() => {
+      const call = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/v1/transactions") && init?.method === "POST");
+      expect(call).toBeTruthy();
+      const payload = JSON.parse(String(call?.[1]?.body));
+      expect(payload).toMatchObject({
+        asset_id: "SU26226RMFS9",
+        quantity: 7,
+        unit_price: "992.04",
+        accrued_interest_total: "195.16",
+        fee: "3.47",
+        occurred_at: new Date("2026-08-13T16:34").toISOString(),
+      });
+    });
+  });
 });

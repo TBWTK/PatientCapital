@@ -247,6 +247,7 @@ def _transaction_response(record: TransactionRecord) -> TransactionResponse:
         side=record.side,
         quantity=record.quantity,
         unit_price=record.unit_price.quantize(Decimal("0.00000001")),
+        accrued_interest_total=quantize_minor(record.accrued_interest_total),
         fee=quantize_minor(record.fee),
         currency=record.currency,
         occurred_at=record.occurred_at,
@@ -317,6 +318,7 @@ def create_transaction(
             side=payload.side,
             quantity=payload.quantity,
             unit_price=payload.unit_price,
+            accrued_interest_total=payload.accrued_interest_total,
             fee=payload.fee,
             currency=payload.currency,
             occurred_at=payload.occurred_at,
@@ -351,7 +353,7 @@ def _ledger_state(
         cost = cost_basis.get(event.asset_id, Decimal("0.00"))
         if event.side == "BUY":
             quantity += event.quantity
-            cost += event.unit_price * event.quantity + event.fee
+            cost += event.unit_price * event.quantity + event.accrued_interest_total + event.fee
         else:
             if quantity < event.quantity:
                 raise ApplicationError(

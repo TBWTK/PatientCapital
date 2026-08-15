@@ -84,6 +84,7 @@ class TransactionCreate(ContractModel):
     side: Literal["BUY", "SELL"]
     quantity: int = Field(gt=0)
     unit_price: Decimal = Field(gt=0, decimal_places=8)
+    accrued_interest_total: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2)
     fee: Decimal = Field(ge=0, decimal_places=2)
     currency: str = Field(pattern=r"^[A-Z]{3}$")
     occurred_at: datetime
@@ -97,6 +98,7 @@ class TransactionResponse(ContractModel):
     side: str
     quantity: int
     unit_price: Decimal
+    accrued_interest_total: Decimal
     fee: Decimal
     currency: str
     occurred_at: datetime

@@ -315,24 +315,28 @@ function Contribution({
 }
 
 function Ledger({ assets, onSaved }: { assets: Asset[]; onSaved: () => Promise<void> }) {
+  const activeAssets = assets.filter((asset) => asset.is_active);
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({
-    asset_id: assets[0]?.asset_id ?? "",
+    asset_id: activeAssets[0]?.asset_id ?? "",
     side: "BUY",
     quantity: "1",
     unit_price: "",
+    accrued_interest_total: "0",
     fee: "0",
-    currency: assets[0]?.currency ?? "RUB",
+    currency: activeAssets[0]?.currency ?? "RUB",
     occurred_at: nowLocal(),
     note: "",
   });
 
-  const selectedAssetId = form.asset_id || assets[0]?.asset_id || "";
-  const selectedCurrency = form.asset_id ? form.currency : assets[0]?.currency ?? form.currency;
+  const selectedAssetId = form.asset_id || activeAssets[0]?.asset_id || "";
+  const selectedCurrency = form.asset_id
+    ? form.currency
+    : activeAssets[0]?.currency ?? form.currency;
 
   const updateAsset = (assetId: string) => {
-    const asset = assets.find((item) => item.asset_id === assetId);
+    const asset = activeAssets.find((item) => item.asset_id === assetId);
     setForm((current) => ({ ...current, asset_id: assetId, currency: asset?.currency ?? current.currency }));
   };
 
@@ -370,17 +374,18 @@ function Ledger({ assets, onSaved }: { assets: Asset[]; onSaved: () => Promise<v
         <p>PatientCapital не подключён к брокеру и не исполняет заявки.</p>
       </section>
       <form className="form-card two-column" onSubmit={submit}>
-        <label>Актив<select required value={selectedAssetId} onChange={(e) => updateAsset(e.target.value)}><option value="">Выберите актив</option>{assets.map((asset) => <option key={asset.asset_id} value={asset.asset_id}>{asset.asset_id} · {asset.name}</option>)}</select></label>
+        <label>Актив<select required value={selectedAssetId} onChange={(e) => updateAsset(e.target.value)}><option value="">Выберите актив</option>{activeAssets.map((asset) => <option key={asset.asset_id} value={asset.asset_id}>{asset.asset_id} · {asset.name}</option>)}</select></label>
         <label>Сторона<select value={form.side} onChange={(e) => setForm({ ...form, side: e.target.value })}><option value="BUY">Покупка</option><option value="SELL">Продажа</option></select></label>
         <label>Количество<input required type="number" min="1" step="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></label>
         <label>Цена за единицу<input required type="number" min="0.00000001" step="any" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} /></label>
+        <label>НКД всего<input required type="number" min="0" step="0.01" value={form.accrued_interest_total} onChange={(e) => setForm({ ...form, accrued_interest_total: e.target.value })} /></label>
         <label>Комиссия<input required type="number" min="0" step="0.01" value={form.fee} onChange={(e) => setForm({ ...form, fee: e.target.value })} /></label>
         <label>Валюта<input required pattern="[A-Z]{3}" value={selectedCurrency} onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })} /></label>
         <label>Дата и время<input required type="datetime-local" value={form.occurred_at} onChange={(e) => setForm({ ...form, occurred_at: e.target.value })} /></label>
         <label>Заметка<input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Необязательно" /></label>
-        <div className="form-actions"><button className="button primary" disabled={busy || assets.length === 0}>{busy ? "Сохраняем…" : "Записать операцию"}</button></div>
+        <div className="form-actions"><button className="button primary" disabled={busy || activeAssets.length === 0}>{busy ? "Сохраняем…" : "Записать операцию"}</button></div>
       </form>
-      {assets.length === 0 && <div className="notice error">Сначала создайте автоматическое предложение в разделе «Пополнение» — выбранные инструменты появятся здесь.</div>}
+      {activeAssets.length === 0 && <div className="notice error">Сначала создайте автоматическое предложение в разделе «Пополнение» — выбранные инструменты появятся здесь.</div>}
       {notice && <div className={`notice ${notice.kind}`}>{notice.text}</div>}
     </div>
   );

@@ -527,6 +527,11 @@ export interface components {
             quantity: number;
             /** Unit Price */
             unit_price: number | string;
+            /**
+             * Accrued Interest Total
+             * @default 0.00
+             */
+            accrued_interest_total: number | string;
             /** Fee */
             fee: number | string;
             /** Currency */
@@ -556,6 +561,8 @@ export interface components {
             quantity: number;
             /** Unit Price */
             unit_price: string;
+            /** Accrued Interest Total */
+            accrued_interest_total: string;
             /** Fee */
             fee: string;
             /** Currency */

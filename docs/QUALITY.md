@@ -2,13 +2,19 @@
 title: Качество
 type: quality
 status: stable
-updated: 2026-08-15
+updated: 2026-08-16
 ---
 
 # Качество
 
 ## Capability evals
 
+- [x] `Bond purchase evidence`: clean unit price, total accrued interest and fee remain separate
+  immutable facts; exact screenshot fixture produces the broker cash cost without hidden inference.
+- [x] `Bond backward compatibility`: legacy transaction payload/rows default НКД to `0.00`, while
+  idempotency rejects reuse of a key with a different accrued-interest fact.
+- [x] `Integration isolation`: destructive PostgreSQL fixture accepts only an explicit `_test`
+  database and cannot truncate the persistent local product database.
 - [x] `Budget-first discovery`: profile + `8 000 RUB` без assets возвращает source-backed proposal
   для пятилетнего горизонта и материализует только валидированные instrument/price facts.
 - [x] `MOEX boundary`: active/RUB/type/lot/price/as-of обязательны; timeout, malformed blocks,
@@ -34,17 +40,18 @@ updated: 2026-08-15
 ## Regression gates
 
 - [x] Unit + property tests domain core (`51 passed`, branch coverage `98.01%`, 15.08.2026).
-- [x] Repository/migration tests на PostgreSQL (`9 integration`, immutable trigger included).
+- [x] Repository/migration tests на dedicated PostgreSQL `_test` database, включая immutable
+  trigger и fail-closed защиту от product database cleanup (16.08.2026).
 - [x] Canonical OpenAPI SHA-256 snapshot, generated TypeScript surface и negative API contracts.
-- [x] Frontend typecheck, component/SSR tests, axe semantic scan и desktop/mobile browser flow
-  (15.08.2026).
+- [x] Frontend typecheck, `4` component tests, SSR, axe semantic scan и desktop/mobile browser flow
+  (16.08.2026).
 - [x] MCP discovery, strict arguments, structured output, stdio process, HTTP parity, expected
   errors и exact transaction replay (`6` wire tests, 15.08.2026).
 - [x] Committed-secret scan, container negative assertions и dependency audits: `0` Python/npm
   advisories (15.08.2026).
 - [x] Clean-volume Docker smoke: health → profile → live discovery/proposal → separately confirmed
-  simulated record → dashboard → scoped cleanup (15.08.2026).
-- [x] `git diff --check` и project-control structural audit (15.08.2026).
+  simulated record → dashboard → scoped cleanup (16.08.2026).
+- [x] `git diff --check` и project-control structural audit (16.08.2026).
 
 ## GigaChat admission gate
 
@@ -115,6 +122,7 @@ git diff --check
 | PC-REQ-05 GigaChat only if adequate | versioned live admission | 24 synthetic cases, real `GigaChat-2` | report + provider/eval tests | Reject unless schema/grounding/safety 100%, intent ≥95% | passing |
 | PC-REQ-06 Dockerized local MVP | operational E2E | clean isolated Compose volume | `./scripts/docker-smoke.sh` | build/health/migrate/web/propose/record/dashboard/cleanup | passing |
 | PC-REQ-07 amount-only automatic discovery | capability + provider contract + API/MCP/web E2E | fixed MOEX payloads + controlled live ISS | discovery unit/integration/MCP/web tests; live schema inspection | `8 000 RUB`, 5 years, no pre-seeded assets → sourced deterministic proposal | passing |
+| PC-REQ-08 fixed-income ledger evidence | migration + API/MCP/web contract + portfolio capability | screenshot facts: 7 × 992.04, НКД 195.16, fee 3.47 | ledger/migration/MCP/web tests + local portfolio inspection | Separate immutable facts; quantity 7; cost basis 7 142.91 RUB | passing |
 | PC-RISK-04 market/provider unknown | timeout/schema/freshness negative tests | malformed/stale/non-RUB/empty MOEX fixtures | marketdata and API error contracts | Visible typed failure; no cache/model/manual silent fallback | passing |
 | PC-RISK-01 hidden unknown/stale/wrong currency | boundary/property/negative API | generated and explicit invalid facts | domain validation + stale API/MCP tests | Typed visible error; no plausible partial plan | passing |
 | PC-RISK-02 contract/data drift | snapshot + migration/immutability | OpenAPI, generated TS, clean PostgreSQL | full pytest + OpenAPI snapshot + project audit | Schema/client match; evidence rows reject mutation | passing |

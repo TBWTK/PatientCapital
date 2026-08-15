@@ -1,7 +1,7 @@
 ---
 title: Архитектура
 type: architecture
-status: draft
+status: stable
 updated: 2026-08-15
 ---
 

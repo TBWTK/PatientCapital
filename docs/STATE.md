@@ -1,7 +1,7 @@
 ---
 title: Текущее состояние
 type: state
-status: active
+status: stable
 updated: 2026-08-15
 ---
 
@@ -9,8 +9,8 @@ updated: 2026-08-15
 
 ## Active objective
 
-Завершить MVP handoff: зафиксировать OpenAPI snapshot, повторить полный regression/security/project
-audit, синхронизировать документацию и передать чистый проверенный `main`.
+Локальный MVP передан как воспроизводимый Docker-продукт с deterministic core, web/API/PostgreSQL,
+Codex MCP, отклонённым GigaChat admission и проверяемыми audit/eval evidence.
 
 ## Acceptance criteria
 
@@ -20,7 +20,7 @@ audit, синхронизировать документацию и переда
   отсутствие model credentials/runtime dependencies.
 - [x] README/docs/roadmap/state описывают фактический runtime; project-control audit и
   `git diff --check` проходят без warning/error.
-- [ ] Финальный checkpoint находится на `main`, worktree чист, remote sync проверен.
+- [x] Финальный checkpoint находится на `main`, worktree чист, remote sync проверен.
 
 ## Current verified state
 
@@ -134,8 +134,8 @@ audit, синхронизировать документацию и переда
 
 ## Next exact step
 
-Добавить и проверить canonical OpenAPI snapshot, затем выполнить финальный regression/security/docs
-audit и Git handoff.
+Обязательной разработки для локального MVP нет. Следующий продуктовый выбор — новый LLM/provider для
+повторного admission либо отдельный legal/security этап перед любым публичным режимом.
 
 ## Blockers
 

@@ -13,9 +13,9 @@ runtime отсутствует, потому что модель не прошл
 
 ## Статус
 
-Детерминированный domain core, versioned PostgreSQL/API, responsive web UI, Codex MCP и локальный
-Docker-контур проверены. Live-аудит `GigaChat-2` отклонил экспериментальный режим; активен финальный
-handoff-аудит. Точная линия исполнения, критерии и доказательства находятся в
+Локальный MVP проверен: deterministic domain core, versioned PostgreSQL/API, responsive web UI,
+Codex MCP и Docker-контур. Live-аудит `GigaChat-2` отклонил экспериментальный режим. Точная линия
+исполнения, критерии и доказательства находятся в
 [docs/STATE.md](docs/STATE.md).
 
 ## Документация

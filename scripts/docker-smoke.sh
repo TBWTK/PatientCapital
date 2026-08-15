@@ -27,36 +27,27 @@ curl --fail --silent --show-error "$web_base" \
 curl --fail --silent --show-error \
   --request PUT "$api_base/v1/profile" \
   --header 'Content-Type: application/json' \
-  --data '{"expected_version":null,"base_currency":"RUB","investment_horizon_years":15,"risk_level":"balanced","cash_buffer":"1000.00","broker_name":"Docker Smoke Broker","fee_rate":"0.001","minimum_fee":"1.00"}' \
+  --data '{"expected_version":null,"base_currency":"RUB","investment_horizon_years":5,"risk_level":"balanced","cash_buffer":"0.00","broker_name":"Docker Smoke Broker","fee_rate":"0.001","minimum_fee":"1.00"}' \
   | jq -e '.version == 1' >/dev/null
 
-for asset_id in AAA BBB; do
-  curl --fail --silent --show-error \
-    --request PUT "$api_base/v1/assets/$asset_id" \
-    --header 'Content-Type: application/json' \
-    --data "{\"expected_version\":null,\"name\":\"Asset $asset_id\",\"currency\":\"RUB\",\"lot_size\":1,\"target_weight\":\"0.5\",\"is_active\":true}" \
-    | jq -e '.version == 1' >/dev/null
-
-  curl --fail --silent --show-error \
-    --request POST "$api_base/v1/assets/$asset_id/prices" \
-    --header 'Content-Type: application/json' \
-    --data "{\"price\":\"100.00\",\"currency\":\"RUB\",\"as_of\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"max_age_seconds\":86400,\"source\":\"docker-smoke\"}" \
-    | jq -e --arg asset_id "$asset_id" '.asset_id == $asset_id' >/dev/null
-done
-
-curl --fail --silent --show-error \
-  --request POST "$api_base/v1/recommendations" \
+proposal="$(curl --fail --silent --show-error \
+  --request POST \
   --header 'Content-Type: application/json' \
-  --data '{"contribution":"10000.00"}' \
-  | jq -e '.reason == "ALLOCATED" and (.lines | length == 2) and .spent == "8908.90"' >/dev/null
+  --data '{"contribution":"8000.00"}' \
+  --url "$api_base/v1/discovery/recommendations")"
+
+printf '%s' "$proposal" \
+  | jq -e '.mode == "automatic" and .horizon_years == 5 and .policy_version == "five-year-moex-v1" and (.candidates | length >= 1) and (.lines | length >= 1) and ((.spent | tonumber) <= 8000)' >/dev/null
+
+asset_id="$(printf '%s' "$proposal" | jq -r '.candidates[0].asset_id')"
 
 curl --fail --silent --show-error \
   --request POST "$api_base/v1/transactions" \
   --header 'Content-Type: application/json' \
-  --data "{\"idempotency_key\":\"docker-smoke-buy-aaa\",\"asset_id\":\"AAA\",\"side\":\"BUY\",\"quantity\":10,\"unit_price\":\"100.00\",\"fee\":\"1.00\",\"currency\":\"RUB\",\"occurred_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"note\":\"isolated clean-volume smoke\"}" \
-  | jq -e '.asset_id == "AAA" and .quantity == 10' >/dev/null
+  --data "{\"idempotency_key\":\"docker-smoke-confirmed-buy\",\"asset_id\":\"$asset_id\",\"side\":\"BUY\",\"quantity\":1,\"unit_price\":\"1.00\",\"fee\":\"0.00\",\"currency\":\"RUB\",\"occurred_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"note\":\"simulated separately confirmed smoke fact\"}" \
+  | jq -e --arg asset_id "$asset_id" '.asset_id == $asset_id and .quantity == 1' >/dev/null
 
 curl --fail --silent --show-error "$api_base/v1/portfolio" \
-  | jq -e '.total_market_value == "1000.00" and (.assets | map(select(.asset_id == "AAA" and .quantity == 10)) | length == 1)' >/dev/null
+  | jq -e --arg asset_id "$asset_id" '(.assets | map(select(.asset_id == $asset_id and .quantity == 1)) | length == 1)' >/dev/null
 
 echo "PASS: clean-volume Docker flow completed for $project_name"

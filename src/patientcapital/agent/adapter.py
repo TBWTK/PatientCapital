@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from patientcapital.application.errors import ApplicationError
 from patientcapital.application.services import (
+    create_discovery_recommendation,
     create_recommendation,
     create_transaction,
     get_portfolio,
@@ -20,6 +21,7 @@ from patientcapital.application.services import (
 )
 from patientcapital.contracts import (
     AssetListResponse,
+    DiscoveryRecommendationCreate,
     ErrorDetail,
     ErrorResponse,
     PortfolioResponse,
@@ -30,6 +32,7 @@ from patientcapital.contracts import (
     TransactionResponse,
 )
 from patientcapital.domain.errors import InvalidAllocationInput
+from patientcapital.marketdata.models import MarketDataProvider
 from patientcapital.persistence.database import Database
 
 ResultT = TypeVar("ResultT")
@@ -51,8 +54,11 @@ class AgentToolError(RuntimeError):
 class AgentTools:
     """Narrow read/propose/record use cases; no SQL, secrets, or broker execution."""
 
-    def __init__(self, database: Database) -> None:
+    def __init__(
+        self, database: Database, market_data_provider: MarketDataProvider | None = None
+    ) -> None:
         self._database = database
+        self._market_data_provider = market_data_provider
 
     def _call(self, operation: Callable[[Session], ResultT]) -> ResultT:
         try:
@@ -74,6 +80,18 @@ class AgentTools:
 
     def propose_contribution(self, contribution: RecommendationCreate) -> RecommendationResponse:
         return self._call(lambda session: create_recommendation(session, contribution))
+
+    def discover_contribution(
+        self, contribution: DiscoveryRecommendationCreate
+    ) -> RecommendationResponse:
+        provider = self._market_data_provider
+        if provider is None:
+            raise AgentToolError(
+                "MARKET_DATA_NOT_CONFIGURED", "market data provider is unavailable"
+            )
+        return self._call(
+            lambda session: create_discovery_recommendation(session, contribution, provider)
+        )
 
     def get_recommendation(self, run_id: UUID) -> RecommendationResponse:
         return self._call(lambda session: get_recommendation(session, run_id))

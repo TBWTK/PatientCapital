@@ -9,7 +9,8 @@ updated: 2026-08-15
 
 ## Поддерживаемый контур
 
-MVP поддерживает только локальный single-user Docker Compose на доверенном host. `db`, `api` и
+MVP поддерживает только локальный single-user Docker Compose на доверенном host. `api` делает
+исходящие HTTPS-запросы только к allowlisted delayed MOEX ISS endpoint; `db`, `api` и
 `web` публикуются на `127.0.0.1`; Internet exposure, reverse proxy и remote access не поддерживаются.
 PostgreSQL named volume — единственное persisted product state. API и web images non-root,
 read-only; `/tmp` — ephemeral tmpfs. GigaChat credentials не передаются контейнерам.
@@ -23,6 +24,8 @@ read-only; `/tmp` — ephemeral tmpfs. GigaChat credentials не передаю�
 `.env.example` в ignored `.env` и смените `POSTGRES_PASSWORD`. Значение host `DATABASE_URL` в
 example предназначено для запуска Python с host; Compose всегда передаёт API внутренний адрес `db`.
 GigaChat fields не включают runtime mode и используются только при явно запущенном future re-eval.
+`MOEX_ISS_BASE_URL` allowlisted кодом и не может быть перенаправлен на произвольный host;
+`MOEX_TIMEOUT_SECONDS` и `MOEX_MAX_AGE_SECONDS` задают fail-closed transport/freshness границы.
 
 ## Startup и health
 
@@ -62,8 +65,9 @@ docker compose down
 ./scripts/docker-smoke.sh
 ```
 
-Smoke создаёт уникальный Compose project, проверяет health → profile/assets/prices → proposal →
-transaction → dashboard и cleanup удаляет только его containers/network/volume.
+Smoke создаёт уникальный Compose project, проверяет health → profile → live automatic proposal →
+отдельный явно помеченный simulated transaction fact → dashboard и cleanup удаляет только его
+containers/network/volume. Числа proposal не преобразуются в transaction автоматически.
 
 ## Backup
 

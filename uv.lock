@@ -970,6 +970,7 @@ source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
     { name = "sqlalchemy" },
@@ -979,9 +980,6 @@ dependencies = [
 [package.optional-dependencies]
 agent = [
     { name = "mcp" },
-]
-gigachat = [
-    { name = "httpx" },
 ]
 
 [package.dev-dependencies]
@@ -1001,7 +999,7 @@ dev = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.15,<2" },
     { name = "fastapi", specifier = ">=0.116,<1" },
-    { name = "httpx", marker = "extra == 'gigachat'", specifier = ">=0.28,<1" },
+    { name = "httpx", specifier = ">=0.28,<1" },
     { name = "mcp", marker = "extra == 'agent'", specifier = ">=2,<3" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.2,<4" },
     { name = "pydantic-settings", specifier = ">=2.8,<3" },

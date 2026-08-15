@@ -38,6 +38,13 @@ const errorText = (error: unknown) => {
       INSUFFICIENT_POSITION: "Для продажи недостаточно бумаг в журнале.",
       IDEMPOTENCY_CONFLICT: "Эта операция уже была записана с другими данными.",
       BUDGET_BELOW_ANY_LOT: "Доступной суммы недостаточно для покупки целого лота.",
+      UNSUPPORTED_DISCOVERY_HORIZON: "Автоподбор сейчас рассчитан на горизонт ровно 5 лет. Измените горизонт в профиле.",
+      UNSUPPORTED_DISCOVERY_CURRENCY: "Автоподбор сейчас работает только для рублёвого профиля.",
+      UNSUPPORTED_MARKET_HOLDING: "Один из купленных инструментов нельзя обновить через текущий источник MOEX.",
+      NO_AFFORDABLE_MARKET_CANDIDATE: "В проверенном списке MOEX нет целого лота, который помещается в сумму.",
+      MOEX_UNAVAILABLE: "MOEX ISS сейчас недоступен. Предложение не создано и старая цена не подставлена.",
+      MOEX_INVALID_RESPONSE: "MOEX вернул неполные данные. Предложение остановлено.",
+      MOEX_INSTRUMENT_UNAVAILABLE: "Один из проверяемых инструментов сейчас недоступен на MOEX.",
     };
     return `${localized[error.code] ?? error.message} · ${error.code}`;
   }
@@ -72,11 +79,10 @@ function EmptyState({ onStart }: { onStart: () => void }) {
       </div>
       <div>
         <p className="eyebrow">Начало маршрута</p>
-        <h2 id="empty-title">Соберите основу портфеля</h2>
+        <h2 id="empty-title">Настройте профиль инвестора</h2>
         <p>
-          Укажите брокера и комиссии, добавьте активы с целевыми долями и
-          зафиксируйте актуальные цены. После этого план пополнения станет
-          воспроизводимым и проверяемым.
+          Укажите брокера, комиссии и риск-профиль. Активы, цены, лоты и
+          целевые доли PatientCapital подберёт сам, когда вы введёте сумму.
         </p>
         <button className="button primary" onClick={onStart}>
           Настроить профиль <span aria-hidden="true">→</span>
@@ -184,24 +190,29 @@ function Contribution({
   currency,
   result,
   onResult,
+  onSaved,
 }: {
   currency: string;
   result: Recommendation | null;
   onResult: (value: Recommendation) => void;
+  onSaved: () => Promise<void>;
 }) {
-  const [amount, setAmount] = useState("100000");
+  const [amount, setAmount] = useState("8000");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const candidates = result?.candidates ?? [];
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setNotice(null);
     try {
-      onResult(await request<Recommendation>("/v1/recommendations", {
+      const run = await request<Recommendation>("/v1/discovery/recommendations", {
         method: "POST",
         body: JSON.stringify({ contribution: amount }),
-      }));
+      });
+      onResult(run);
+      await onSaved();
     } catch (error) {
       setNotice({ kind: "error", text: errorText(error) });
     } finally {
@@ -212,9 +223,16 @@ function Contribution({
   return (
     <div className="workspace-stack">
       <section className="page-intro">
-        <p className="eyebrow">Новый взнос</p>
-        <h1>Куда направить пополнение</h1>
-        <p>Расчёт учитывает текущие позиции, целевые доли, лоты и комиссию брокера.</p>
+        <p className="eyebrow">Автоподбор · 5 лет</p>
+        <h1>Скажите только сумму</h1>
+        <p>PatientCapital сам проверит доступные ОФЗ и фонд акций на MOEX, а затем рассчитает целые лоты, комиссию и остаток.</p>
+      </section>
+      <section className="chat-panel" aria-label="Диалог подбора">
+        <div className="chat-avatar" aria-hidden="true">PC</div>
+        <div className="chat-bubble assistant">
+          <b>PatientCapital</b>
+          <p>Сколько рублей вы готовы направить сейчас? Я использую ваш риск-профиль и горизонт 5 лет. Предложение не совершит сделку.</p>
+        </div>
       </section>
       <form className="contribution-form" onSubmit={submit}>
         <label>
@@ -233,16 +251,38 @@ function Contribution({
           </span>
         </label>
         <button className="button primary large" disabled={busy}>
-          {busy ? "Считаем…" : "Собрать план"}
+          {busy ? "Ищу и считаю…" : "Подобрать активы"}
         </button>
       </form>
       {notice && <div className={`notice ${notice.kind}`}>{notice.text}</div>}
       {result && (
         <section className="result-card" aria-live="polite">
+          <div className="user-query"><span>Вы</span><p>У меня есть {money(result.contribution, result.currency)}. Что можно купить на {result.horizon_years ?? 5} лет?</p></div>
           <header className="section-heading">
-            <div><p className="eyebrow">План готов</p><h2>{money(result.spent, result.currency)} к покупке</h2></div>
+            <div><p className="eyebrow">Проверяемое предложение</p><h2>{money(result.spent, result.currency)} к покупке</h2></div>
             <span className="status-pill">Предложение · не исполнено</span>
           </header>
+          {candidates.length > 0 && (
+            <div className="candidate-grid" aria-label="Подобранные инструменты">
+              {candidates.map((candidate) => (
+                <article key={candidate.asset_id}>
+                  <header><i>{candidate.instrument_type === "ofz" ? "ОФЗ" : "ФОНД"}</i><b>{percent(candidate.target_weight)}</b></header>
+                  <h3>{candidate.name}</h3>
+                  <p>{candidate.rationale}</p>
+                  <dl>
+                    <div><dt>Код</dt><dd>{candidate.asset_id}</dd></div>
+                    <div><dt>Цена / пай</dt><dd>{money(candidate.unit_price, result.currency)}</dd></div>
+                    <div><dt>Лот</dt><dd>{candidate.lot_size} · {money(candidate.lot_cost, result.currency)}</dd></div>
+                    {candidate.maturity_date && <div><dt>Погашение</dt><dd>{new Intl.DateTimeFormat("ru-RU").format(new Date(`${candidate.maturity_date}T00:00:00Z`))}</dd></div>}
+                    {candidate.yield_percent != null && <div><dt>Доходность MOEX</dt><dd>{candidate.yield_percent}%</dd></div>}
+                    <div><dt>Цена на</dt><dd>{shortDateTime(candidate.price_as_of)}</dd></div>
+                  </dl>
+                  <footer><a href={candidate.source_url} target="_blank" rel="noreferrer">Котировка MOEX ↗</a><a href={candidate.classification_url} target="_blank" rel="noreferrer">Класс инструмента ↗</a></footer>
+                </article>
+              ))}
+            </div>
+          )}
+          <div className="market-warning">Данные MOEX задержанные. Перед фактической покупкой проверьте цену у брокера. Это предложение, не заявка и не обещание доходности.</div>
           <div className="result-summary">
             <span>Активы <b>{money(result.gross, result.currency)}</b></span>
             <span>Комиссии <b>{money(result.fees, result.currency)}</b></span>
@@ -255,8 +295,8 @@ function Contribution({
               {result.lines.map((line, index) => (
                 <article key={line.asset_id}>
                   <span className="line-number">{String(index + 1).padStart(2, "0")}</span>
-                  <div><h3>{line.asset_id}</h3><p>{line.lots} лот. · {line.quantity} шт. × {money(line.unit_price, result.currency)}</p></div>
-                  <div className="drift-change"><span>{percent(line.pre_drift)}</span><i>→</i><b>{percent(line.post_drift)}</b><small>отклонение</small></div>
+                  <div><h3>{candidates.find((item) => item.asset_id === line.asset_id)?.name ?? line.asset_id}</h3><p>{line.asset_id} · {line.lots} лот. · {line.quantity} шт. × {money(line.unit_price, result.currency)}</p></div>
+                  <div className="drift-change"><span>{money(line.pre_drift, result.currency)}</span><i>→</i><b>{money(line.post_drift, result.currency)}</b><small>отклонение от цели</small></div>
                   <strong>{money(line.total, result.currency)}</strong>
                 </article>
               ))}
@@ -264,6 +304,7 @@ function Contribution({
           )}
           <footer className="audit-line">
             <span>Алгоритм {result.algorithm_version}</span>
+            {result.policy_version && <span>Policy {result.policy_version}</span>}
             <span>Run {result.id.slice(0, 8)}</span>
             <span>Hash {result.input_hash.slice(0, 10)}</span>
           </footer>
@@ -339,7 +380,7 @@ function Ledger({ assets, onSaved }: { assets: Asset[]; onSaved: () => Promise<v
         <label>Заметка<input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Необязательно" /></label>
         <div className="form-actions"><button className="button primary" disabled={busy || assets.length === 0}>{busy ? "Сохраняем…" : "Записать операцию"}</button></div>
       </form>
-      {assets.length === 0 && <div className="notice error">Сначала добавьте хотя бы один актив в профиле.</div>}
+      {assets.length === 0 && <div className="notice error">Сначала создайте автоматическое предложение в разделе «Пополнение» — выбранные инструменты появятся здесь.</div>}
       {notice && <div className={`notice ${notice.kind}`}>{notice.text}</div>}
     </div>
   );
@@ -357,14 +398,13 @@ function Settings({
   const [notice, setNotice] = useState<Notice>(null);
   const [profileForm, setProfileForm] = useState({
     base_currency: profile?.base_currency ?? "RUB",
-    investment_horizon_years: String(profile?.investment_horizon_years ?? 15),
+    investment_horizon_years: "5",
     risk_level: profile?.risk_level ?? "balanced",
     cash_buffer: profile?.cash_buffer ?? "0",
     broker_name: profile?.broker_name ?? "",
     fee_rate: profile?.fee_rate ?? "0.0005",
     minimum_fee: profile?.minimum_fee ?? "0",
   });
-  const [assetForm, setAssetForm] = useState({ asset_id: "", name: "", currency: profile?.base_currency ?? "RUB", lot_size: "1", target_weight: "", price: "", source: "manual" });
 
   const saveProfile = async (event: FormEvent) => {
     event.preventDefault();
@@ -376,29 +416,15 @@ function Settings({
     } catch (error) { setNotice({ kind: "error", text: errorText(error) }); }
   };
 
-  const saveAsset = async (event: FormEvent) => {
-    event.preventDefault();
-    setNotice(null);
-    const assetId = assetForm.asset_id.trim().toUpperCase();
-    const existing = assets.find((asset) => asset.asset_id === assetId);
-    try {
-      await request(`/v1/assets/${encodeURIComponent(assetId)}`, { method: "PUT", body: JSON.stringify({ expected_version: existing?.version ?? null, name: assetForm.name, currency: assetForm.currency, lot_size: Number(assetForm.lot_size), target_weight: assetForm.target_weight, is_active: true }) });
-      if (assetForm.price) await request(`/v1/assets/${encodeURIComponent(assetId)}/prices`, { method: "POST", body: JSON.stringify({ price: assetForm.price, currency: assetForm.currency, as_of: new Date().toISOString(), max_age_seconds: 604800, source: assetForm.source }) });
-      await onRefresh();
-      setAssetForm({ ...assetForm, asset_id: "", name: "", target_weight: "", price: "" });
-      setNotice({ kind: "success", text: existing ? "Новая версия актива сохранена" : "Актив и цена сохранены" });
-    } catch (error) { setNotice({ kind: "error", text: errorText(error) }); }
-  };
-
   return (
     <div className="workspace-stack">
-      <section className="page-intro"><p className="eyebrow">Параметры</p><h1>Профиль и модель портфеля</h1><p>Все изменения версионируются. Старые рекомендации сохраняют исходный контекст.</p></section>
+      <section className="page-intro"><p className="eyebrow">Параметры</p><h1>Профиль инвестора</h1><p>Вы задаёте риск и реальные издержки. Активы, цены и лоты подбираются автоматически и сохраняются вместе с источниками.</p></section>
       {notice && <div className={`notice ${notice.kind}`}>{notice.text}</div>}
       <div className="settings-grid">
         <form className="form-card two-column" onSubmit={saveProfile}>
           <div className="form-title"><span>01</span><div><h2>Инвестор</h2><p>Брокер, горизонт и издержки</p></div></div>
           <label>Базовая валюта<input required pattern="[A-Z]{3}" value={profileForm.base_currency} onChange={(e) => setProfileForm({ ...profileForm, base_currency: e.target.value.toUpperCase() })} /></label>
-          <label>Горизонт, лет<input required type="number" min="1" max="100" value={profileForm.investment_horizon_years} onChange={(e) => setProfileForm({ ...profileForm, investment_horizon_years: e.target.value })} /></label>
+          <label>Горизонт, лет<input required readOnly type="number" min="5" max="5" value={profileForm.investment_horizon_years} /><small className="field-note">Текущая policy поддерживает 5 лет</small></label>
           <label>Риск-профиль<select value={profileForm.risk_level} onChange={(e) => setProfileForm({ ...profileForm, risk_level: e.target.value })}><option value="conservative">Консервативный</option><option value="balanced">Сбалансированный</option><option value="growth">Рост</option></select></label>
           <label>Денежный резерв<input required type="number" min="0" step="0.01" value={profileForm.cash_buffer} onChange={(e) => setProfileForm({ ...profileForm, cash_buffer: e.target.value })} /></label>
           <label>Брокер<input required value={profileForm.broker_name} onChange={(e) => setProfileForm({ ...profileForm, broker_name: e.target.value })} /></label>
@@ -407,19 +433,17 @@ function Settings({
           <div className="form-actions"><button className="button primary">Сохранить профиль</button>{profile && <small>Текущая версия: {profile.version}</small>}</div>
         </form>
 
-        <form className="form-card two-column" onSubmit={saveAsset}>
-          <div className="form-title"><span>02</span><div><h2>Актив и цена</h2><p>Целевая доля от 0 до 1</p></div></div>
-          <label>Код актива<input required maxLength={64} value={assetForm.asset_id} onChange={(e) => setAssetForm({ ...assetForm, asset_id: e.target.value.toUpperCase() })} placeholder="Например, BOND" /></label>
-          <label>Название<input required value={assetForm.name} onChange={(e) => setAssetForm({ ...assetForm, name: e.target.value })} /></label>
-          <label>Валюта<input required pattern="[A-Z]{3}" value={assetForm.currency} onChange={(e) => setAssetForm({ ...assetForm, currency: e.target.value.toUpperCase() })} /></label>
-          <label>Размер лота<input required type="number" min="1" step="1" value={assetForm.lot_size} onChange={(e) => setAssetForm({ ...assetForm, lot_size: e.target.value })} /></label>
-          <label>Целевая доля<input required type="number" min="0" max="1" step="0.00000001" value={assetForm.target_weight} onChange={(e) => setAssetForm({ ...assetForm, target_weight: e.target.value })} placeholder="0.40" /></label>
-          <label>Текущая цена<input type="number" min="0.00000001" step="any" value={assetForm.price} onChange={(e) => setAssetForm({ ...assetForm, price: e.target.value })} /></label>
-          <label>Источник цены<input required value={assetForm.source} onChange={(e) => setAssetForm({ ...assetForm, source: e.target.value })} /></label>
-          <div className="form-actions"><button className="button primary">Сохранить актив</button></div>
-        </form>
+        <section className="form-card discovery-info">
+          <div className="form-title"><span>02</span><div><h2>Автоматический подбор</h2><p>MOEX ISS + deterministic policy</p></div></div>
+          <ol>
+            <li><b>Поиск.</b><span>Проверяем активные рублёвые ОФЗ и фонды широкого индекса.</span></li>
+            <li><b>Контроль.</b><span>Цена, лот, валюта, дата и источник проходят строгую валидацию.</span></li>
+            <li><b>Расчёт.</b><span>Движок учитывает риск, бюджет, резерв, комиссии и текущие позиции.</span></li>
+          </ol>
+          <p className="advanced-note">Ручное редактирование universe больше не требуется в основном интерфейсе. Legacy API сохранён для диагностики и миграции старых данных.</p>
+        </section>
       </div>
-      {assets.length > 0 && <section className="configured-assets"><header className="section-heading"><div><p className="eyebrow">Модель</p><h2>Настроенные активы</h2></div><span>Сумма целей должна быть 100%</span></header><div>{assets.map((asset) => <article key={asset.asset_id}><i>{asset.asset_id.slice(0, 2)}</i><span><b>{asset.asset_id} · {asset.name}</b><small>лот {asset.lot_size} · версия {asset.version}</small></span><strong>{percent(asset.target_weight)}</strong></article>)}</div></section>}
+      {assets.length > 0 && <section className="configured-assets"><header className="section-heading"><div><p className="eyebrow">Каталог</p><h2>Инструменты из последних подборов</h2></div><span>Проверенные данные сохранены локально</span></header><div>{assets.filter((asset) => asset.is_active).map((asset) => <article key={asset.asset_id}><i>{asset.asset_id.slice(0, 2)}</i><span><b>{asset.asset_id} · {asset.name}</b><small>лот {asset.lot_size} · версия {asset.version}</small></span><strong>{percent(asset.target_weight)}</strong></article>)}</div></section>}
     </div>
   );
 }
@@ -471,7 +495,7 @@ export function PatientCapitalApp() {
           {loading ? <div className="loading-state" role="status"><span />Загружаем ваш капитал…</div> : (
             <>
               {view === "overview" && <Overview portfolio={portfolio} profile={profile} onContribution={() => setView("contribution")} onSettings={() => setView("settings")} />}
-              {view === "contribution" && <Contribution currency={profile?.base_currency ?? "RUB"} result={recommendation} onResult={setRecommendation} />}
+              {view === "contribution" && <Contribution currency={profile?.base_currency ?? "RUB"} result={recommendation} onResult={setRecommendation} onSaved={refresh} />}
               {view === "ledger" && <Ledger assets={assets} onSaved={refresh} />}
               {view === "settings" && <Settings profile={profile} assets={assets} onRefresh={refresh} />}
             </>

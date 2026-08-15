@@ -16,6 +16,8 @@ from patientcapital.contracts import (
     AssetListResponse,
     AssetPut,
     AssetResponse,
+    DiscoveryCandidateResponse,
+    DiscoveryRecommendationCreate,
     PortfolioAssetResponse,
     PortfolioResponse,
     PriceCreate,
@@ -28,6 +30,7 @@ from patientcapital.contracts import (
     TransactionCreate,
     TransactionResponse,
 )
+from patientcapital.domain.discovery import MarketSelection, select_market_candidates
 from patientcapital.domain.models import (
     AllocationInput,
     Asset,
@@ -38,6 +41,8 @@ from patientcapital.domain.models import (
 )
 from patientcapital.domain.money import Money, quantize_minor
 from patientcapital.domain.planner import build_contribution_plan
+from patientcapital.marketdata.errors import MarketDataError
+from patientcapital.marketdata.models import MarketCandidate, MarketDataProvider
 from patientcapital.persistence.models import (
     AssetIdentity,
     AssetVersion,
@@ -454,6 +459,264 @@ def _recommendation_response(
             for line in plan.lines
         ],
     )
+
+
+def _discovery_candidate_response(
+    item: MarketCandidate, *, target_weight: Decimal, rationale: str
+) -> DiscoveryCandidateResponse:
+    return DiscoveryCandidateResponse(
+        asset_id=item.asset_id,
+        name=item.name,
+        instrument_type=item.kind.value,
+        target_weight=target_weight,
+        rationale=rationale,
+        unit_price=item.unit_price,
+        lot_size=item.lot_size,
+        lot_cost=quantize_minor(item.unit_price * item.lot_size),
+        price_as_of=item.price_as_of,
+        quote_kind=item.quote_kind,
+        turnover=item.turnover,
+        maturity_date=item.maturity_date,
+        yield_percent=item.yield_percent,
+        source_url=item.source_url,
+        classification_url=item.classification_url,
+    )
+
+
+def _materialize_discovery_universe(
+    session: Session,
+    *,
+    candidates: dict[str, MarketCandidate],
+    selection: MarketSelection,
+    quantities: dict[str, int],
+) -> dict[str, PriceRecord]:
+    selected_targets = {item.candidate.asset_id: item.target_weight for item in selection.items}
+    universe_ids = set(selected_targets) | {
+        asset_id for asset_id, quantity in quantities.items() if quantity > 0
+    }
+    latest = {item.asset_id: item for item in _latest_assets(session)}
+
+    for asset_id, current in latest.items():
+        if asset_id in universe_ids:
+            continue
+        if current.is_active or current.target_weight != 0:
+            session.add(
+                AssetVersion(
+                    asset_id=asset_id,
+                    version=current.version + 1,
+                    name=current.name,
+                    currency=current.currency,
+                    lot_size=current.lot_size,
+                    target_weight=Decimal("0.00000000"),
+                    is_active=False,
+                )
+            )
+
+    price_records: dict[str, PriceRecord] = {}
+    for asset_id in sorted(universe_ids):
+        candidate = candidates[asset_id]
+        target = selected_targets.get(asset_id, Decimal("0.00000000"))
+        existing = latest.get(asset_id)
+        if existing is None:
+            session.add(AssetIdentity(id=asset_id))
+            version = 1
+        else:
+            version = existing.version + 1
+        if existing is None or (
+            existing.name != candidate.name
+            or existing.currency != candidate.currency
+            or existing.lot_size != candidate.lot_size
+            or existing.target_weight != target
+            or not existing.is_active
+        ):
+            session.add(
+                AssetVersion(
+                    asset_id=asset_id,
+                    version=version,
+                    name=candidate.name,
+                    currency=candidate.currency,
+                    lot_size=candidate.lot_size,
+                    target_weight=target,
+                    is_active=True,
+                )
+            )
+        price = PriceRecord(
+            id=uuid4(),
+            asset_id=asset_id,
+            price=candidate.unit_price,
+            currency=candidate.currency,
+            as_of=candidate.price_as_of,
+            max_age_seconds=int(candidate.max_age.total_seconds()),
+            source=candidate.source_url,
+        )
+        session.add(price)
+        price_records[asset_id] = price
+    return price_records
+
+
+def create_discovery_recommendation(
+    session: Session,
+    payload: DiscoveryRecommendationCreate,
+    provider: MarketDataProvider,
+) -> RecommendationResponse:
+    requested_at = datetime.now(UTC)
+    try:
+        discovered = provider.discover(calculated_at=requested_at)
+    except MarketDataError as error:
+        status = 503 if error.code == "MOEX_UNAVAILABLE" else 502
+        raise ApplicationError(status, error.code, error.detail) from error
+
+    calculated_at = datetime.now(UTC)
+    discovered_by_id: dict[str, MarketCandidate] = {}
+    for candidate in discovered:
+        if candidate.asset_id in discovered_by_id:
+            raise ApplicationError(
+                502,
+                "MOEX_INVALID_RESPONSE",
+                f"duplicate market candidate {candidate.asset_id}",
+            )
+        discovered_by_id[candidate.asset_id] = candidate
+
+    with session.begin():
+        _lock(session, _PROFILE_LOCK)
+        _lock(session, _ASSET_LOCK)
+        _lock(session, _LEDGER_LOCK)
+        profile = _latest_profile_record(session)
+        if profile is None:
+            raise ApplicationError(
+                404, "PROFILE_NOT_CONFIGURED", "investor profile is not configured"
+            )
+        if profile.base_currency != "RUB":
+            raise ApplicationError(
+                422,
+                "UNSUPPORTED_DISCOVERY_CURRENCY",
+                "automatic MOEX discovery currently supports RUB profiles only",
+            )
+        events = _transactions(session)
+        quantities, _ = _ledger_state(events)
+        unsupported = sorted(
+            asset_id
+            for asset_id, quantity in quantities.items()
+            if quantity > 0 and asset_id not in discovered_by_id
+        )
+        if unsupported:
+            raise ApplicationError(
+                422,
+                "UNSUPPORTED_MARKET_HOLDING",
+                "automatic discovery cannot refresh held instruments: " + ", ".join(unsupported),
+            )
+
+        selection = select_market_candidates(
+            discovered,
+            contribution=payload.contribution,
+            horizon_years=profile.investment_horizon_years,
+            risk_level=profile.risk_level,
+            calculated_at=calculated_at,
+        )
+        selected_ids = {item.candidate.asset_id for item in selection.items}
+        universe_ids = selected_ids | {
+            asset_id for asset_id, quantity in quantities.items() if quantity > 0
+        }
+        universe = tuple(discovered_by_id[asset_id] for asset_id in sorted(universe_ids))
+        targets = {item.candidate.asset_id: item.target_weight for item in selection.items}
+        price_records = _materialize_discovery_universe(
+            session,
+            candidates=discovered_by_id,
+            selection=selection,
+            quantities=quantities,
+        )
+        domain_request = AllocationInput(
+            contribution=Money(payload.contribution, profile.base_currency),
+            cash_buffer=Money(profile.cash_buffer, profile.base_currency),
+            assets=tuple(
+                Asset(item.asset_id, item.name, item.currency, item.lot_size) for item in universe
+            ),
+            prices=tuple(
+                PriceSnapshot(
+                    asset_id=item.asset_id,
+                    price=item.unit_price,
+                    currency=item.currency,
+                    as_of=item.price_as_of,
+                    max_age=item.max_age,
+                    source=item.source_url,
+                )
+                for item in universe
+            ),
+            positions=tuple(
+                Position(item.asset_id, quantities.get(item.asset_id, 0)) for item in universe
+            ),
+            targets=tuple(
+                TargetAllocation(item.asset_id, targets.get(item.asset_id, Decimal("0")))
+                for item in universe
+            ),
+            fee_policy=FeePolicy(
+                rate=profile.fee_rate,
+                minimum=Money(profile.minimum_fee, profile.base_currency),
+            ),
+            calculated_at=calculated_at,
+        )
+        run_id = uuid4()
+        base_response = _recommendation_response(run_id, payload.contribution, domain_request)
+        response = base_response.model_copy(
+            update={
+                "mode": "automatic",
+                "policy_version": selection.policy_version,
+                "horizon_years": profile.investment_horizon_years,
+                "risk_level": profile.risk_level,
+                "candidates": [
+                    _discovery_candidate_response(
+                        item.candidate,
+                        target_weight=item.target_weight,
+                        rationale=item.rationale,
+                    )
+                    for item in selection.items
+                ],
+            }
+        )
+        input_snapshot: dict[str, object] = {
+            "mode": "automatic",
+            "profile_version": profile.version,
+            "provider": provider.name,
+            "policy_version": selection.policy_version,
+            "horizon_years": profile.investment_horizon_years,
+            "risk_level": profile.risk_level,
+            "fee_rate": str(profile.fee_rate),
+            "minimum_fee": str(profile.minimum_fee),
+            "assets": [
+                {
+                    "asset_id": item.asset_id,
+                    "kind": item.kind.value,
+                    "target_weight": str(targets.get(item.asset_id, Decimal("0"))),
+                    "quantity": quantities.get(item.asset_id, 0),
+                    "unit_price": str(item.unit_price),
+                    "lot_size": item.lot_size,
+                    "price_as_of": item.price_as_of.isoformat(),
+                    "price_snapshot_id": str(price_records[item.asset_id].id),
+                    "source_url": item.source_url,
+                }
+                for item in universe
+            ],
+        }
+        session.add(
+            RecommendationRunRecord(
+                id=run_id,
+                input_hash=response.input_hash,
+                algorithm_version=response.algorithm_version,
+                calculated_at=response.calculated_at,
+                currency=response.currency,
+                contribution=response.contribution,
+                cash_buffer=response.cash_buffer,
+                gross=response.gross,
+                fees=response.fees,
+                spent=response.spent,
+                leftover=response.leftover,
+                reason=response.reason,
+                input_snapshot=input_snapshot,
+                output_snapshot=response.model_dump(mode="json"),
+            )
+        )
+        session.flush()
+        return response
 
 
 def create_recommendation(

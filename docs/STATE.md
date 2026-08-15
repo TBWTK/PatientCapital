@@ -9,11 +9,23 @@ updated: 2026-08-15
 
 ## Active objective
 
-**Idle:** локальный PatientCapital MVP реализован, проверен, сохранён на releasable `main` и
-опубликован в `origin/main`. Активного product change нет.
+**Completed:** заменить ручной asset-first поток на `budget-first` автоматический подбор для
+пятилетнего горизонта: MOEX discovery → versioned policy → deterministic lot/fee proposal →
+source-backed объяснение в web/Codex без broker execution.
 
 ## Acceptance criteria
 
+- [x] Пользователь с настроенным profile вводит только сумму (reference case `8 000 RUB`) и получает
+  proposal без предварительного ручного создания assets/prices/targets.
+- [x] Default horizon в новом UI — 5 лет; risk/fees/holdings берутся из profile, неизвестные
+  material inputs блокируют расчёт, а не получают hidden defaults.
+- [x] MOEX adapter валидирует RUB, active status, type, lot, price, timestamp и источники; для ОФЗ
+  dirty unit cost и maturity evidence воспроизводимы, provider/network failure виден.
+- [x] Versioned policy выбирает source-backed ОФЗ и broad-index equity fund; LLM не владеет
+  universe/weights/prices/lots/totals и не создаёт transaction.
+- [x] HTTP, web и MCP возвращают один сохранённый run с source/policy evidence; предложение явно
+  отличается от исполнения, а выбранный инструмент доступен для отдельного manual ledger record.
+- [x] Unit/contract/integration/web/MCP/Docker/live-provider проверки проходят и записаны ниже.
 - [x] `AUDIT.md` классифицирует исходный контекст, аудит идеи/архитектуры/рисков/GigaChat,
   альтернативы, достаточность контекста и оставшиеся unknown по inspectable evidence.
 - [x] `IMMUNE.md` владеет принципами и mutation protocol; `AGENTS.md` ссылается на него без
@@ -28,6 +40,28 @@ updated: 2026-08-15
 
 ## Current verified state
 
+- Исходный product gap был воспроизведён: legacy `/v1/recommendations` требовал ручной universe, а
+  web Settings просил ticker/name/lot/target/price/source. Основной UI теперь amount-only и 5-летний.
+- Controlled read-only MOEX ISS inspection 15.08.2026 подтвердил active boards `TQOB`/`TQBR`,
+  RUB OFZ price/face/accrued-interest/maturity/yield/turnover fields и active index-fund candidates
+  `TMOS`, `SBMX`, `EQMX` с lot/price/turnover timestamps; adapter воспроизводит эти поля fixtures.
+- Requirements/architecture checkpoint записан в README/AUDIT/ARCHITECTURE/QUALITY и ADR 0003;
+  project-control structural check: `PASS errors=0 warnings=0`, 14 документов, 3 Mermaid blocks.
+- Backend discovery checkpoint: versioned `five-year-moex-v1` policy, strict MOEX ISS adapter,
+  amount-only HTTP use case, market evidence materialization и MCP method реализованы. Targeted
+  evidence: `12 passed`; Ruff и strict mypy (`31` source files) прошли 15.08.2026.
+- Финальный automatic-discovery regression: `138 passed`, branch coverage `94.45%`; Ruff
+  format/check, strict mypy (`51` source files), offline sdist/wheel и canonical OpenAPI snapshot
+  прошли 15.08.2026. Boundary suite проверяет malformed/empty MOEX blocks, invalid decimal/lot/time,
+  stale/non-RUB/unsupported facts и отсутствие silent fallback.
+- Web production build, SSR, `3` component/a11y tests, TypeScript и ESLint прошли. Живой browser QA
+  на desktop и `390×844` выполнил amount-only `8 000 RUB` flow; console errors/warnings отсутствуют.
+- Контролируемый live run на delayed MOEX data от 14.08.2026 выбрал `SU26218RMFS6` и `EQMX`, сохранил
+  policy/source/as-of evidence и предложение: spent `6 914,36 RUB`, leftover `85,64 RUB`; число
+  transactions после proposal осталось `0`.
+- Isolated clean-volume smoke `patientcapital-smoke-86380` прошёл build/health/migrate/profile →
+  live discovery → proposal → отдельно подтверждённый simulated ledger fact → dashboard; все его
+  containers/network/volume удалены scoped cleanup.
 - После явного разрешения владельца первый export выполнен командой `git push -u origin main`.
   GitHub создал `main`, назначил его `HEAD`, upstream настроен; read-only verification показала
   одинаковый local/remote SHA `7b0ba814b614206fd0ff289278858e2b80ae2e04` до evidence-update.
@@ -62,7 +96,7 @@ updated: 2026-08-15
   component tests и axe semantic scan прошли 15.08.2026. Живой browser QA пройден на desktop и
   `390×844`; CORS/API loading, navigation, stale-price fail-loud и четыре поверхности проверены,
   console warnings/errors отсутствуют.
-- Codex agent surface реализован как локальный Python MCP 2.0 stdio server с шестью allowlisted
+- Codex agent surface реализован как локальный Python MCP 2.0 stdio server с семью allowlisted
   read/propose/record tools и structured output. Codex global config содержит enabled
   `patientcapital` entrypoint без дополнительных env/secrets. Повторная host inspection через
   `codex mcp list` и `codex mcp get patientcapital --json` подтвердила enabled STDIO command
@@ -103,7 +137,8 @@ updated: 2026-08-15
   restore rehearsal честно остаётся `not run`.
 - Completion audit сохранён в checkpoints `d6904ad` и `7b0ba81`; после commit worktree clean.
   Repository-owner разрешил первый export, GitHub publication проверена и больше не является
-  blocker. Текущий evidence-update обязан оставлять local `main` равным `origin/main`.
+  blocker. Новый automatic-discovery checkpoint остаётся локальным до отдельного решения владельца
+  о публикации; это не ослабляет требование clean/releasable `main`.
 
 ## Changed areas
 
@@ -131,8 +166,8 @@ updated: 2026-08-15
 - Codex подключается как внешний tool client; встроенный Codex app-server не является runtime
   финансовой логики. Из разрешённых objective вариантов выбран chat/sub-agent MCP path; web UI
   не запускает агента и остаётся независимым client того же application service.
-- Начальный market-data source — явно датированная ручная цена. Автоматический provider не
-  выбирается без отдельного requirements/eval этапа.
+- Основной market-data source — delayed MOEX ISS через allowlisted HTTPS adapter; ручная цена
+  остаётся legacy/advanced surface и не является prerequisite amount-only сценария.
 - MVP округляет вычисленные денежные значения до `0.01` методом `ROUND_HALF_UP`; пользовательский
   `Money` с лишними знаками отклоняется вместо silent rounding.
 - Если ни один целый lot не улучшает drift в доступном бюджете, run получает
@@ -158,8 +193,8 @@ updated: 2026-08-15
 
 ## Next exact step
 
-Idle. При следующем product request восстановить состояние из этого документа и Git, определить
-новое проверяемое objective и impact map до изменения кода.
+Получить пользовательскую оценку локального amount-only сценария; любое расширение universe
+(например, выбор отдельных акций) начинать с отдельного suitability/quality gate, не с LLM-подбора.
 
 ## Blockers
 
@@ -171,6 +206,7 @@ Idle. При следующем product request восстановить сос�
 ## Non-goals
 
 - Вычисление allocation, broker execution и отправка полного portfolio/ledger во внешний provider.
+- Свободный подбор отдельных акций по LLM-тексту, прогноз доходности и real-time quotation claim.
 - Auth/RBAC/multi-user и публичный production deployment.
 - Перенос финансовых вычислений или source-of-truth состояния во frontend.
 

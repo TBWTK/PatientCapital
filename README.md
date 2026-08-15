@@ -1,9 +1,9 @@
 # PatientCapital
 
 PatientCapital — локальный single-user инструмент для долгосрочного портфеля. Пользователь задаёт
-сумму нового пополнения, целевые доли, текущие позиции, цены, лоты и комиссии; система строит
-воспроизводимый план покупок, показывает отклонение портфеля от целей и сохраняет фактически
-совершённые операции.
+только сумму нового пополнения; система использует пятилетний профиль, проверяет доступные ОФЗ и
+фонд широкого индекса через delayed MOEX ISS и строит воспроизводимый план целых лотов с учётом
+комиссии, резерва и текущего портфеля. Фактически совершённые операции вносятся отдельно вручную.
 
 На этапе MVP продукт является **инструментом поддержки решения**, не отправляет поручения брокеру
 и не обещает доходность. Арифметикой и ограничениями владеет детерминированный доменный движок.
@@ -13,8 +13,9 @@ runtime отсутствует, потому что модель не прошл
 
 ## Статус
 
-Локальный MVP проверен: deterministic domain core, versioned PostgreSQL/API, responsive web UI,
-Codex MCP и Docker-контур. Live-аудит `GigaChat-2` отклонил экспериментальный режим. Точная линия
+Локальный MVP проверен: automatic MOEX discovery, deterministic domain core, versioned
+PostgreSQL/API, responsive web UI, Codex MCP и Docker-контур. Live-аудит `GigaChat-2` отклонил
+экспериментальный режим. Точная линия
 исполнения, критерии и доказательства находятся в
 [docs/STATE.md](docs/STATE.md).
 
@@ -42,7 +43,7 @@ TEST_DATABASE_URL=postgresql+psycopg://patientcapital:patientcapital@localhost:5
 ```
 
 На 15.08.2026 чистая Alembic migration, PostgreSQL integration и полный Python regression проходят:
-`82 passed`, branch coverage `95.45%`.
+`138 passed`, branch coverage `94.45%`.
 
 ## Web UI
 
@@ -72,8 +73,8 @@ PostgreSQL data остаются в named volume после обычного `do
 
 ## Codex agent mode
 
-Локальный MCP server предоставляет шесть allowlisted tools: чтение профиля/активов/аналитики/run,
-создание неизменяемого proposal и отдельная идемпотентная запись подтверждённой сделки.
+Локальный MCP server предоставляет семь allowlisted tools: чтение профиля/активов/аналитики/run,
+amount-only discovery, legacy proposal и отдельную идемпотентную запись подтверждённой сделки.
 
 ```bash
 docker compose up -d db

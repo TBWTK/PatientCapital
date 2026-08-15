@@ -9,11 +9,12 @@ updated: 2026-08-15
 
 ## Контекст
 
-PatientCapital — локальное приложение с web-клиентом, Python API, PostgreSQL и общим чистым domain
-core. Пользователь вручную вводит факты, которые система не может надёжно получить: цели, операции,
-цены/дату цены, лоты и комиссионную схему. Domain core рассчитывает snapshot, drift и предложение
-покупок. API сохраняет входы и доказательства calculation run; web UI и agent tools являются
-равноправными клиентами одного application service.
+PatientCapital — локальное приложение с web-клиентом, Python API, PostgreSQL, MOEX ISS adapter и
+общим чистым domain core. В основном потоке пользователь вводит сумму, а система сама получает
+source-backed security/price/lot facts и применяет версионированную пятилетнюю policy. Пользователь
+по-прежнему владеет broker fees, risk profile и фактическими BUY/SELL. Domain core рассчитывает
+snapshot, drift и предложение покупок. API сохраняет входы и доказательства calculation run; web UI
+и agent tools являются равноправными клиентами одного application service.
 
 Codex работает с приложением через ограниченные tools и может объяснять результат в чате или
 sub-agent flow. Это выбранная реализация допускавшегося objective agent mode; web UI не запускает
@@ -27,12 +28,15 @@ GigaChat был проверен как внешний эксперимента�
 - Денежные значения используют `Decimal` и явную валюту; binary float запрещён в domain/DB/API.
 - План не расходует больше доступного взноса с учётом всех комиссий и cash buffer.
 - Количество покупаемого актива кратно lot size; цена, lot и fee обязаны иметь источник/версию.
+- Automatic discovery принимает market facts только от allowlisted MOEX HTTPS adapter; LLM output
+  не может стать security master или price snapshot.
 - Target weights должны быть неотрицательны и составлять ровно 100% в пределах заданного допуска.
 - Отсутствующая/просроченная цена, неизвестная валюта, неполная fee policy или неоднозначная цель
   блокирует затронутый расчёт видимой ошибкой; система не подставляет удобный default.
 - Один calculation run является immutable snapshot: входы, версия алгоритма, результат, причины
   пропуска и время сохраняются вместе.
-- LLM не может создать новый asset, изменить числовой результат core или пометить план исполненным.
+- LLM не может создать/подменить asset, изменить policy/числовой результат core или пометить план
+  исполненным. Материализация валидированного MOEX instrument выполняется только application service.
 - `proposed` не равно `executed`: позиция меняется только после отдельной ручной записи операции.
 - MVP не вызывает broker order API и не обещает доходность.
 - Секреты не хранятся в БД, не возвращаются API и не попадают в logs/commits.
@@ -45,6 +49,8 @@ GigaChat был проверен как внешний эксперимента�
 | `application` | use cases и транзакционные границы | rollback и явный failure result |
 | `api` | versioned HTTP contracts и input validation | 4xx для входа, 409 для version conflict, 503 для dependency |
 | `persistence` | PostgreSQL repositories и migrations | health degraded; запись не подтверждается |
+| `marketdata` | allowlisted MOEX ISS transport и strict mapping в immutable candidate facts | timeout/schema/stale/unknown блокирует automatic run typed-ошибкой |
+| `selection policy` | versioned eligibility, maturity/liquidity ranking и class targets | пустой eligible set блокирует proposal; LLM fallback запрещён |
 | `web` | четыре пользовательских поверхности и explanation UX | сохраняет ввод или показывает точную ошибку API |
 | `agent tools` | узкие get/propose/record операции для Codex chat/sub-agent | те же схемы/permissions, что application service |
 | `GigaChat eval adapter` | offline admission нового provider/model | любой провал оставляет runtime выключенным; deterministic result не зависит от model prose |
@@ -59,6 +65,7 @@ GigaChat был проверен как внешний эксперимента�
 | `POST` | `/v1/transactions` | idempotent append-only BUY/SELL event |
 | `GET` | `/v1/portfolio` | derived quantities, cost basis, value, P&L, allocation/drift |
 | `POST/GET` | `/v1/recommendations[/{id}]` | calculate/store or retrieve immutable domain run |
+| `POST` | `/v1/discovery/recommendations` | fetch/validate MOEX candidates, apply policy and persist deterministic proposal |
 | `GET` | `/health/live`, `/health/ready` | process health отдельно от PostgreSQL readiness |
 
 Все денежные JSON-поля сериализуются decimal-строками. Ошибка имеет один envelope
@@ -70,8 +77,8 @@ GigaChat был проверен как внешний эксперимента�
 
 - Долгосрочное пополнение хорошо раскладывается на детерминированную задачу сведения target drift с
   дискретными лотами и комиссиями; результат можно проверить независимо.
-- Ручной журнал операций и price snapshot позволяет начать без хрупкой брокерской/market-data
-  интеграции и сохраняет provenance.
+- Delayed MOEX ISS позволяет убрать обязательный ручной ticker/price/lot input и сохранить
+  provenance без broker credentials; availability/licensing остаются отдельными ограничениями.
 - GigaChat технически поддерживает JSON Schema, но live eval показал, что schema compliance не
   гарантирует grounded intent/explanation. Текущая версия отклонена как runtime adapter.
 
@@ -105,6 +112,9 @@ flowchart LR
   Codex["Codex chat / sub-agent"] --> Tools["PatientCapital tools"]
   Web --> App["Application service"]
   Tools --> App
+  App --> MOEX["MOEX ISS delayed facts"]
+  MOEX --> Policy["Versioned discovery policy"]
+  Policy --> App
   App --> Core["Deterministic allocation core"]
   App --> DB[("PostgreSQL ledger + snapshots")]
   Core --> Run["Immutable recommendation run"]
@@ -127,8 +137,10 @@ sequenceDiagram
   participant D as Domain core
   participant P as PostgreSQL
   U->>C: сумма пополнения
-  C->>A: propose(snapshot version, amount)
-  A->>P: profile + targets + positions + prices + fees
+  C->>A: discover_and_propose(amount)
+  A->>P: profile + positions + fees
+  A->>A: validate MOEX facts + apply policy
+  A->>P: append instrument/price evidence
   A->>D: immutable validated input
   D-->>A: lines + leftover + reasons + algorithm version
   A->>P: save recommendation run
@@ -143,7 +155,8 @@ sequenceDiagram
 - Принята дорогая межкомпонентная граница: deterministic core — единственный владелец финансовой
   арифметики; LLM — недоверенный adapter. До стабилизации интерфейсов rationale хранится здесь;
   при принятии конкретного provider/tool protocol будет создан ADR.
-- Market prices являются versioned input, а не неявным network call внутри расчёта.
+- Market lookup происходит до domain calculation; валидированный ответ материализуется как
+  versioned input snapshot, а network call никогда не скрыт внутри чистого allocator.
 - Portfolio — производная ledger + price snapshot; recommendation никогда не мутирует ledger.
 
 <!-- immune-project-engineering:architecture:start -->
@@ -162,8 +175,9 @@ runtime technology не добавляется без требования, owne
 | `api` | pinned Python 3.13 slim, core deps only, non-root/read-only | healthy DB → Alembic head → DB readiness query | stateless; loopback port 8000; `/tmp` tmpfs |
 | `web` | pinned Node 22 multi-stage Vinext build, non-root/read-only | healthy API → HTTP root health | generated bundle; loopback port 3000; `/tmp` tmpfs |
 
-Compose передаёт API только application/DB/CORS config и `GIGACHAT_ENABLED=false`; model keys не
-входят в images/environment. Browser-visible API URL bake-time и указывает на host loopback.
+Compose передаёт API application/DB/CORS и allowlisted MOEX timeout/base URL config, а также
+`GIGACHAT_ENABLED=false`; model keys не входят в images/environment. Browser-visible API URL
+bake-time и указывает на host loopback.
 `scripts/docker-smoke.sh` создаёт изолированный project/volume и доказывает full HTTP flow. Logs,
 startup/shutdown, backup, destructive restore caveats, upgrade/rollback и непроверенные limits
 принадлежат `docs/OPERATIONS.md`. Public rollout, SLO/alerts, HA и automatic recovery отсутствуют.

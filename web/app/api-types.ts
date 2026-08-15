@@ -158,6 +158,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/discovery/recommendations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discovery Recommendation Post */
+        post: operations["discovery_recommendation_post_v1_discovery_recommendations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/recommendations/{run_id}": {
         parameters: {
             query?: never;
@@ -223,6 +240,50 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** DiscoveryCandidateResponse */
+        DiscoveryCandidateResponse: {
+            /** Asset Id */
+            asset_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Instrument Type
+             * @enum {string}
+             */
+            instrument_type: "ofz" | "equity_index_fund";
+            /** Target Weight */
+            target_weight: string;
+            /** Rationale */
+            rationale: string;
+            /** Unit Price */
+            unit_price: string;
+            /** Lot Size */
+            lot_size: number;
+            /** Lot Cost */
+            lot_cost: string;
+            /**
+             * Price As Of
+             * Format: date-time
+             */
+            price_as_of: string;
+            /** Quote Kind */
+            quote_kind: string;
+            /** Turnover */
+            turnover: string;
+            /** Maturity Date */
+            maturity_date?: string | null;
+            /** Yield Percent */
+            yield_percent?: string | null;
+            /** Source Url */
+            source_url: string;
+            /** Classification Url */
+            classification_url: string;
+        };
+        /** DiscoveryRecommendationCreate */
+        DiscoveryRecommendationCreate: {
+            /** Contribution */
+            contribution: number | string;
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -436,6 +497,20 @@ export interface components {
             reason: string;
             /** Lines */
             lines: components["schemas"]["RecommendationLineResponse"][];
+            /**
+             * Mode
+             * @default manual
+             * @enum {string}
+             */
+            mode: "manual" | "automatic";
+            /** Policy Version */
+            policy_version?: string | null;
+            /** Horizon Years */
+            horizon_years?: number | null;
+            /** Risk Level */
+            risk_level?: string | null;
+            /** Candidates */
+            candidates?: components["schemas"]["DiscoveryCandidateResponse"][];
         };
         /** TransactionCreate */
         TransactionCreate: {
@@ -881,6 +956,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["RecommendationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecommendationResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    discovery_recommendation_post_v1_discovery_recommendations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiscoveryRecommendationCreate"];
             };
         };
         responses: {

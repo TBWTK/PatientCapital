@@ -1,6 +1,6 @@
 """Versioned API contracts shared by HTTP and future agent adapters."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
@@ -131,6 +131,28 @@ class RecommendationCreate(ContractModel):
     contribution: Decimal = Field(ge=0, decimal_places=2)
 
 
+class DiscoveryRecommendationCreate(ContractModel):
+    contribution: Decimal = Field(gt=0, decimal_places=2)
+
+
+class DiscoveryCandidateResponse(ContractModel):
+    asset_id: str
+    name: str
+    instrument_type: Literal["ofz", "equity_index_fund"]
+    target_weight: Decimal
+    rationale: str
+    unit_price: Decimal
+    lot_size: int
+    lot_cost: Decimal
+    price_as_of: datetime
+    quote_kind: str
+    turnover: Decimal
+    maturity_date: date | None = None
+    yield_percent: Decimal | None = None
+    source_url: str
+    classification_url: str
+
+
 class RecommendationLineResponse(ContractModel):
     asset_id: str
     lots: int
@@ -161,6 +183,11 @@ class RecommendationResponse(ContractModel):
     leftover: Decimal
     reason: str
     lines: list[RecommendationLineResponse]
+    mode: Literal["manual", "automatic"] = "manual"
+    policy_version: str | None = None
+    horizon_years: int | None = None
+    risk_level: str | None = None
+    candidates: list[DiscoveryCandidateResponse] = Field(default_factory=list)
 
 
 class ErrorDetail(ContractModel):

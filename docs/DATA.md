@@ -12,9 +12,9 @@ updated: 2026-08-15
 | Фактическая таблица/проекция | Назначение | Authority | Идентификатор |
 | --- | --- | --- | --- |
 | `profile_versions` | currency, horizon, risk label, cash buffer, broker name и fee fields | profile application service | integer `version` |
-| `assets` | стабильная identity инструмента | asset application service | user-supplied string `id` |
-| `asset_versions` | name, currency, lot, target weight, active state | asset application service | (`asset_id`, integer `version`) |
-| `price_snapshots` | manual price, currency, as-of, max age и source | price boundary | UUID |
+| `assets` | стабильная identity инструмента | asset application service | user-supplied legacy id или validated MOEX `SECID` |
+| `asset_versions` | name, currency, lot, target weight, active state | manual legacy или automatic selection service | (`asset_id`, integer `version`) |
+| `price_snapshots` | manual legacy или MOEX-derived price, currency, as-of, max age и source | price/marketdata boundary | UUID |
 | `transactions` | append-only фактический `BUY`/`SELL` с fee | ledger service | UUID + unique idempotency key |
 | `recommendation_runs` | immutable input/output snapshots, amount, totals, reason и algorithm evidence | recommendation service | UUID |
 | portfolio response | quantity, cost/value/P&L, allocation и drift | derived application query | не хранится отдельной таблицей |
@@ -37,10 +37,11 @@ migration/API decision нельзя.
 отдельным requirement, а не silent cascade. Backup включает named PostgreSQL volume через logical
 dump; `.env` и model credentials никогда не входят в DB backup и восстанавливаются отдельно.
 
-`RecommendationRun.input_snapshot` фиксирует использованные profile/asset/price/position facts;
-`output_snapshot` фиксирует lines и domain totals. Старый run не пересчитывается новой algorithm
-version. `assets.id` является business identity; отдельного broker security master/ticker resolver
-в MVP нет.
+`RecommendationRun.input_snapshot` фиксирует mode, provider/policy versions и использованные
+profile/asset/price/position facts;
+`output_snapshot` фиксирует source-backed candidates, rationale, lines и domain totals. Старый run
+не пересчитывается новой algorithm или policy version. `assets.id` является business identity;
+automatic mode materialизует только валидированный MOEX `SECID`, отдельного broker resolver нет.
 
 ## Provenance и чувствительность
 
@@ -58,7 +59,8 @@ response hash, но не raw prompt/output и никогда не станови
 
 ```mermaid
 flowchart LR
-  Manual["Профиль · цели · операции · цены"] --> Validate["Typed validation"]
+  Manual["Профиль · операции"] --> Validate["Typed validation"]
+  MOEX["MOEX ISS instrument/price facts"] --> Validate
   Validate --> Ledger[("Versioned PostgreSQL facts")]
   Ledger --> Snapshot["Canonical portfolio snapshot"]
   Snapshot --> Core["Deterministic allocation"]

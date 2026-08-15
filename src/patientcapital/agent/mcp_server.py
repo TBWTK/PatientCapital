@@ -12,6 +12,7 @@ from patientcapital.agent.adapter import AgentTools
 from patientcapital.config import Settings
 from patientcapital.contracts import (
     AssetListResponse,
+    DiscoveryRecommendationCreate,
     PortfolioResponse,
     ProfileResponse,
     RecommendationCreate,
@@ -19,6 +20,8 @@ from patientcapital.contracts import (
     TransactionCreate,
     TransactionResponse,
 )
+from patientcapital.marketdata.models import MarketDataProvider
+from patientcapital.marketdata.moex import MoexIssProvider
 from patientcapital.persistence.database import Database
 
 READ_ONLY = ToolAnnotations(
@@ -32,6 +35,12 @@ PROPOSE = ToolAnnotations(
     destructive_hint=False,
     idempotent_hint=False,
     open_world_hint=False,
+)
+DISCOVER_PROPOSE = ToolAnnotations(
+    read_only_hint=False,
+    destructive_hint=False,
+    idempotent_hint=False,
+    open_world_hint=True,
 )
 RECORD = ToolAnnotations(
     read_only_hint=False,
@@ -79,10 +88,12 @@ class StrictMCPServer(MCPServer):
         tool.parameters = argument_model.model_json_schema()
 
 
-def build_mcp_server(database: Database) -> MCPServer:
+def build_mcp_server(
+    database: Database, market_data_provider: MarketDataProvider | None = None
+) -> MCPServer:
     """Build an MCP server around an injected database for runtime or contract tests."""
 
-    tools = AgentTools(database)
+    tools = AgentTools(database, market_data_provider or MoexIssProvider())
     server = StrictMCPServer(
         name="patientcapital",
         title="PatientCapital",
@@ -139,6 +150,20 @@ def build_mcp_server(database: Database) -> MCPServer:
         return tools.propose_contribution(RecommendationCreate(contribution=contribution))
 
     @server.tool(
+        name="discover_contribution",
+        title="Discover instruments and propose contribution purchases",
+        description=(
+            "Fetch and validate delayed MOEX instrument facts, apply the versioned five-year "
+            "selection policy, and persist a deterministic purchase proposal. The user supplies "
+            "only the contribution; this never records or places a trade. Return run, policy, "
+            "source, timestamp, and candidate fields verbatim."
+        ),
+        annotations=DISCOVER_PROPOSE,
+    )
+    def discover_contribution_tool(contribution: Decimal) -> RecommendationResponse:
+        return tools.discover_contribution(DiscoveryRecommendationCreate(contribution=contribution))
+
+    @server.tool(
         name="get_recommendation",
         title="Get saved recommendation",
         description="Retrieve one immutable recommendation run by UUID without recalculation.",
@@ -168,7 +193,13 @@ def main() -> None:
 
     database = Database(Settings().database_url)
     try:
-        build_mcp_server(database).run(transport="stdio")
+        settings = Settings()
+        provider = MoexIssProvider(
+            base_url=settings.moex_iss_base_url,
+            timeout_seconds=settings.moex_timeout_seconds,
+            max_age_seconds=settings.moex_max_age_seconds,
+        )
+        build_mcp_server(database, provider).run(transport="stdio")
     finally:
         database.close()
 

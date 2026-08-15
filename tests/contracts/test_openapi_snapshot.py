@@ -19,10 +19,12 @@ PUBLIC_PATHS = {
     "/v1/portfolio",
     "/v1/recommendations",
     "/v1/recommendations/{run_id}",
+    "/v1/discovery/recommendations",
 }
 
 PUBLIC_SCHEMAS = {
     "AssetResponse",
+    "DiscoveryCandidateResponse",
     "PortfolioResponse",
     "PriceResponse",
     "ProfileResponse",

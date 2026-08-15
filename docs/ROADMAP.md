@@ -17,5 +17,6 @@ updated: 2026-08-15
 | GigaChat gate | Provider проверен на фиксированном corpus и либо допущен только к объяснению, либо отклонён | 100% schema/safety/math-grounding gates + отчёт | done |
 | Docker | Web, API и PostgreSQL поднимаются одним Compose-контуром | Clean-volume smoke + health + e2e contribution flow | done |
 | MVP handoff | Реализация, docs, tests и Git описывают одну правду | Full regression, IMMUNE/project audit, clean releasable `main` | done |
+| Automatic discovery | Сумма и profile без ручного universe дают source-backed пяти-летний proposal | MOEX/policy/API/MCP/web capability, negative provider paths и Docker E2E | done |
 
 Допустимые статусы: `planned`, `active`, `blocked`, `done`.

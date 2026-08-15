@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from patientcapital.application.errors import ApplicationError
 from patientcapital.application.services import (
+    create_discovery_recommendation,
     create_price,
     create_recommendation,
     create_transaction,
@@ -30,6 +31,7 @@ from patientcapital.contracts import (
     AssetListResponse,
     AssetPut,
     AssetResponse,
+    DiscoveryRecommendationCreate,
     ErrorResponse,
     PortfolioResponse,
     PriceCreate,
@@ -42,6 +44,8 @@ from patientcapital.contracts import (
     TransactionResponse,
 )
 from patientcapital.domain.errors import InvalidAllocationInput
+from patientcapital.marketdata.models import MarketDataProvider
+from patientcapital.marketdata.moex import MoexIssProvider
 from patientcapital.persistence.database import Database
 
 
@@ -52,9 +56,17 @@ def _error(status_code: int, code: str, message: str) -> JSONResponse:
     )
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    market_data_provider: MarketDataProvider | None = None,
+) -> FastAPI:
     resolved = settings or Settings()
     database = Database(resolved.database_url)
+    provider = market_data_provider or MoexIssProvider(
+        base_url=resolved.moex_iss_base_url,
+        timeout_seconds=resolved.moex_timeout_seconds,
+        max_age_seconds=resolved.moex_max_age_seconds,
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -151,6 +163,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         payload: RecommendationCreate, session: SessionDependency
     ) -> RecommendationResponse:
         return create_recommendation(session, payload)
+
+    @app.post(
+        "/v1/discovery/recommendations",
+        response_model=RecommendationResponse,
+        status_code=201,
+    )
+    def discovery_recommendation_post(
+        payload: DiscoveryRecommendationCreate,
+        session: SessionDependency,
+    ) -> RecommendationResponse:
+        return create_discovery_recommendation(session, payload, provider)
 
     @app.get("/v1/recommendations/{run_id}", response_model=RecommendationResponse)
     def recommendation_get(run_id: UUID, session: SessionDependency) -> RecommendationResponse:

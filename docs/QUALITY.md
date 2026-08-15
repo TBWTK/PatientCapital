@@ -9,6 +9,14 @@ updated: 2026-08-15
 
 ## Capability evals
 
+- [x] `Budget-first discovery`: profile + `8 000 RUB` без assets возвращает source-backed proposal
+  для пятилетнего горизонта и материализует только валидированные instrument/price facts.
+- [x] `MOEX boundary`: active/RUB/type/lot/price/as-of обязательны; timeout, malformed blocks,
+  unsupported currency, stale quote и пустой eligible set дают typed visible error.
+- [x] `Selection policy`: fixed fixtures воспроизводят policy version, risk class weights, ближайшее
+  к горизонту liquid OFZ и наиболее liquid affordable approved broad-index fund.
+- [x] `Discovery separation`: external/model text не входит в calculation input; automatic proposal
+  не создаёт ledger event и одинаков через HTTP/web/MCP.
 - [x] `Contribution plan`: известный portfolio fixture и взнос дают ожидаемые lots, fees, leftover и
   reasons; итог можно пересчитать вручную.
 - [x] `Budget safety`: property tests доказывают `gross + fees <= contribution - buffer` для всех
@@ -34,7 +42,8 @@ updated: 2026-08-15
   errors и exact transaction replay (`6` wire tests, 15.08.2026).
 - [x] Committed-secret scan, container negative assertions и dependency audits: `0` Python/npm
   advisories (15.08.2026).
-- [x] Clean-volume Docker smoke: health → seed/profile → propose → record → dashboard (15.08.2026).
+- [x] Clean-volume Docker smoke: health → profile → live discovery/proposal → separately confirmed
+  simulated record → dashboard → scoped cleanup (15.08.2026).
 - [x] `git diff --check` и project-control structural audit (15.08.2026).
 
 ## GigaChat admission gate
@@ -105,6 +114,8 @@ git diff --check
 | PC-REQ-04 Codex decision mode | MCP wire/subprocess parity + host registration | local stdio MCP + PostgreSQL + Codex config | MCP tests; `codex mcp list`; `codex mcp get patientcapital --json` | Exact allowlist/schema, HTTP parity, fail-loud errors; enabled repository entrypoint | passing |
 | PC-REQ-05 GigaChat only if adequate | versioned live admission | 24 synthetic cases, real `GigaChat-2` | report + provider/eval tests | Reject unless schema/grounding/safety 100%, intent ≥95% | passing |
 | PC-REQ-06 Dockerized local MVP | operational E2E | clean isolated Compose volume | `./scripts/docker-smoke.sh` | build/health/migrate/web/propose/record/dashboard/cleanup | passing |
+| PC-REQ-07 amount-only automatic discovery | capability + provider contract + API/MCP/web E2E | fixed MOEX payloads + controlled live ISS | discovery unit/integration/MCP/web tests; live schema inspection | `8 000 RUB`, 5 years, no pre-seeded assets → sourced deterministic proposal | passing |
+| PC-RISK-04 market/provider unknown | timeout/schema/freshness negative tests | malformed/stale/non-RUB/empty MOEX fixtures | marketdata and API error contracts | Visible typed failure; no cache/model/manual silent fallback | passing |
 | PC-RISK-01 hidden unknown/stale/wrong currency | boundary/property/negative API | generated and explicit invalid facts | domain validation + stale API/MCP tests | Typed visible error; no plausible partial plan | passing |
 | PC-RISK-02 contract/data drift | snapshot + migration/immutability | OpenAPI, generated TS, clean PostgreSQL | full pytest + OpenAPI snapshot + project audit | Schema/client match; evidence rows reject mutation | passing |
 | PC-RISK-03 secrets/provider/container | static scan + dependency/container inspection | committed tree + built images | commands recorded in `STATE.md` | No committed secrets/model creds; loopback/non-root/read-only; 0 advisories | passing |

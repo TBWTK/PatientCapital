@@ -32,6 +32,9 @@ def test_env_example_is_coherent_and_secret_free() -> None:
     assert example["GIGACHAT_ENABLED"] == "false"
     assert example["GIGACHAT_API_KEY"] == ""
     assert example["GIGACHAT_CLIENT_ID"] == ""
+    assert example["MOEX_ISS_BASE_URL"] == "https://iss.moex.com/iss"
+    assert 0 < int(example["MOEX_TIMEOUT_SECONDS"]) <= 30
+    assert 0 < int(example["MOEX_MAX_AGE_SECONDS"]) <= 604_800
     ca_bundle = Path(example["GIGACHAT_CA_BUNDLE"])
     assert not ca_bundle.is_absolute()
     assert (PROJECT_ROOT / ca_bundle).is_file()

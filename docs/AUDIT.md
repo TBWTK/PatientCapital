@@ -9,12 +9,13 @@ updated: 2026-08-15
 
 ## Вывод о достаточности контекста
 
-**Sufficient для локального single-user MVP без broker execution и внешних model decisions.**
+**Sufficient для локального single-user automatic-discovery MVP без broker execution и внешних
+model decisions.**
 Пользователь задал outcome, четыре обязательные поверхности, Docker/Git/Python preference,
 Codex-режим, условный GigaChat-режим, credentials names и IMMUNE precedence. Неизвестные legal,
 market-data licensing, identity, retention и production SLO могли бы изменить публичный продукт,
 поэтому такой режим исключён, а не угадан. Контекста недостаточно для commercial/multi-user SaaS,
-автоматического broker/market-data подключения или допуска другой LLM.
+broker execution, real-time feed или допуска другой LLM.
 
 ## Источники и доступность контекста
 
@@ -24,8 +25,9 @@ market-data licensing, identity, retention и production SLO могли бы и�
 | Пользователь и operator model | confirmed | Local web tool, profile/manual ledger requirements | — | Single-user/loopback boundary сохраняется |
 | Codex decision mode | confirmed | User objective; `codex mcp get patientcapital --json`; ADR 0001/0002 | — | Allowlisted MCP поверх application services; выбран chat/sub-agent path |
 | GigaChat mode | confirmed | Условие «только если аудит пригодности»; live report | — | Текущую модель не подключать |
-| Финансовые inputs | confirmed | Capital, targets, holdings, broker/fees из objective | — | Manual versioned facts, strict freshness |
-| Broker execution/market feed | confirmed out of scope | User не требовал execution; источника котировок нет | Ошибка могла бы выглядеть как сделка/актуальная цена | Только proposal и manual price/transaction |
+| Финансовые inputs | confirmed | Capital, five-year horizon, holdings, broker/fees из objective | — | Automatic source-backed universe; versioned policy; strict freshness |
+| Market discovery | confirmed | Уточнение пользователя; controlled MOEX ISS inspection; ADR 0003 | Provider/schema/licensing failure | Delayed MOEX facts, allowlist, typed fail-closed boundary |
+| Broker execution | confirmed out of scope | User не требовал execution | Proposal мог бы выглядеть как сделка | Только proposal и separate manual transaction |
 | GigaChat credentials | confirmed available, secret values uninspected | Имена переменных подтверждены; `.env` ignored | Утечка или accidental runtime enablement | Env-only eval; no Compose credentials |
 | Развёртывание | confirmed | Docker constraint; `compose.yaml` | — | Local loopback Compose |
 | Git | confirmed | User-provided GitHub URL; explicit export approval; local/remote inspection | — | Keep verified `main` synchronized without rewriting history |
@@ -38,17 +40,20 @@ market-data licensing, identity, retention и production SLO могли бы и�
 
 ### Проблема и желаемый исход
 
-Владельцу долгосрочного портфеля нужен воспроизводимый ответ на вопрос, как распределить очередное
-пополнение с учётом целевых долей, текущих BUY/SELL facts, целых лотов, свежих цен, cash buffer и
-комиссии брокера. Outcome — не текстовый совет, а immutable calculation run с amount, lines, fees,
-leftover, reason, input hash и algorithm version, который одинаково доступен в web и Codex tools.
+Владельцу долгосрочного портфеля нужен воспроизводимый ответ на вопрос «у меня есть сумма X и пять
+лет — какие инструменты подходят и что купить с учётом портфеля?». Система, а не пользователь,
+ищет доступные security facts и собирает source-backed universe; затем учитывает текущие BUY/SELL,
+целые лоты, delayed prices, cash buffer и комиссию. Outcome — не свободный текстовый совет, а
+immutable calculation run с amount, lines, evidence, fees, leftover, reason, input hash и версиями
+policy/algorithm, одинаковый в web и Codex tools.
 Фактическая покупка вводится отдельно и никогда не следует автоматически из proposal.
 
 ### Границы и non-goals
 
-В scope: локальный пользователь, профиль/комиссии, assets/targets/manual prices, BUY/SELL ledger,
-portfolio analytics, contribution proposal, responsive web и Codex MCP. GigaChat входит только как
-admission experiment. Не входят broker orders, custody, return forecasts, automatic quotes,
+В scope: локальный пользователь, профиль/комиссии, automatic MOEX discovery для RUB ОФЗ и
+broad-index funds, versioned five-year target policy, BUY/SELL ledger, portfolio analytics,
+contribution proposal, responsive web и Codex MCP. Manual asset/price entry — advanced fallback.
+GigaChat входит только как admission experiment. Не входят broker orders, custody, return forecasts, real-time quotes,
 cross-currency/FX, taxes, margin/derivatives, auth/multi-tenancy и Internet exposure.
 
 ## Аудит текущего состояния
@@ -80,13 +85,16 @@ cross-currency/FX, taxes, margin/derivatives, auth/multi-tenancy и Internet exp
 | Детерминированный Python core + PostgreSQL/API/web/MCP adapters | Exact money, explainability, one math authority, channel parity | Больше contract/migration работы, manual inputs | **Выбран**; покрывает local MVP |
 | LLM самостоятельно выбирает покупки | Быстрый conversational prototype | Hallucination, non-reproducible math, prompt injection, no evidence | Отклонён: нарушает IMMUNE/financial invariants |
 | Spreadsheet-only | Низкий startup cost, понятная ручная модель | Слабая versioning/idempotency/audit/tool integration | Недостаточно для requested web/agent/runtime |
-| Broker/market-data integration сразу | Меньше manual entry | Credentials, licensing, availability, execution/regulatory risk | Отклонён до отдельного requirements/audit этапа |
+| Allowlisted delayed MOEX ISS + deterministic selection policy | Нет обязательного manual universe; official machine-readable provenance | Network/schema/licensing risk, policy needs evidence | **Выбран** для local MVP; execution отсутствует |
+| Broker API/full real-time feed | Точнее execution facts | Credentials, licensing, availability, execution/regulatory risk | Отклонён; не нужен для proposal MVP |
 | General optimizer вместо greedy baseline | Потенциально лучше для сложных constraints | Новая authority/complexity без disconfirming evidence | Отложен; текущий algorithm проходит defined capability |
 | Public Sites deployment | Удобный URL | Private API недоступен, no auth, misleading financial surface | Отклонён для local-only product |
 
 ## Рекомендация и обоснование
 
-Сохранять local deterministic product. Python выбран из-за `Decimal`, Pydantic/FastAPI,
+Развивать local deterministic product через ADR 0003. MOEX ISS получает только рыночные facts,
+versioned policy владеет eligible universe/targets, а старый allocator — деньгами/лотами/fees.
+Python выбран из-за `Decimal`, Pydantic/FastAPI,
 SQLAlchemy/Alembic, Hypothesis и компактной реализации проверяемой financial logic; trade-off —
 отдельный TypeScript web build и ограниченная raw CPU производительность, которая для MVP не
 доказана проблемой. PostgreSQL владеет ledger/version/run evidence. Vinext/React даёт typed
@@ -94,15 +102,16 @@ responsive UI, но OpenAPI остаётся source contract. Docker Compose ф�
 Codex подключается только через MCP allowlist. GigaChat-2 не использовать; следующую модель
 пропускать через неизменённый versioned admission corpus.
 
-Из допускавшихся objective вариантов выбран **Codex chat/sub-agent → MCP tools**, а не запуск
-агента из web UI. Web и Codex остаются независимыми равноправными clients: это исключает скрытый
-agent side effect из пользовательской кнопки и сохраняет одно application/domain authority.
+Codex chat/sub-agent и web остаются независимыми равноправными clients одного automatic-proposal
+use case. Codex может расширять исследование источниками, но его текст не материализуется как price,
+lot, target или transaction. Coding-focused Codex runtime в web не встраивается.
 
 ## Риски и неизвестные
 
 | Риск/unknown | Вероятность | Влияние | Проверка или mitigation | Владелец |
 | --- | --- | --- | --- | --- |
-| Неверный manual price/target | medium | high | Source/as-of/freshness, strict weights, visible blocked run | domain + data owner |
+| Неверный/изменённый MOEX payload | medium | high | Allowlisted TLS, strict schema/type/currency/status/freshness, snapshot evidence | marketdata + domain owner |
+| Ошибочная selection policy | medium | high | Explicit version, small source-backed universe, capability fixtures, visible rationale | product + policy owner |
 | Overspend/rounding/lot error | medium without controls | high | Decimal, property/boundary/capability tests | domain |
 | Proposal принят за исполненную сделку | medium | high | Separate append-only command, UI/tool wording, idempotency | application/API/MCP |
 | Concurrent or repeated writes | low in single-user | medium | Advisory locks, expected version, request hash/idempotency | application/DB |
@@ -125,11 +134,13 @@ E2E, secret/dependency/container inspection и controlled live GigaChat corpus. 
 ## Открытые вопросы и блокеры
 
 - Какой provider/model проверять вместо GigaChat-2? Не блокирует deterministic local MVP.
+- Допустима ли бесплатная delayed MOEX ISS лицензия для будущего commercial use? Не блокирует
+  local single-user prototype, но блокирует публичную эксплуатацию.
 - Будет ли продукт доступен другим людям или использоваться коммерчески? Любой ответ «да» открывает
   legal, identity/RBAC, privacy/retention, market-data licensing и production operations этап.
 
 ## Решение о начале реализации
 
 `approved for local MVP only`. Context/intent/architecture/verification gates достаточны для
-single-user loopback tool без execution. Public/commercial, broker/market integrations и новый LLM
-остаются `blocked` до отдельных requirements и evidence.
+single-user loopback tool с delayed MOEX discovery без execution. Public/commercial, broker/order,
+real-time feed и новый LLM остаются `blocked` до отдельных requirements и evidence.

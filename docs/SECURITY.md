@@ -18,6 +18,8 @@ recommendation runs, GigaChat credentials, Codex permissions и доказате
 - API → PostgreSQL: транзакционная граница и least-privilege credentials.
 - Application → GigaChat eval: внешняя сеть; live-аудит использует только synthetic corpus.
   Runtime connection отклонён и отсутствует.
+- Application → MOEX ISS: единственный runtime outbound HTTPS host для delayed public market facts;
+  портфель/ledger/profile не отправляются, request содержит только публичные board/security IDs.
 - Codex/agent → tools: модельный клиент не получает произвольный SQL, shell или broker capability.
 - Host → Docker: `.env`, CA bundle, volumes и published ports принадлежат оператору.
 
@@ -31,6 +33,7 @@ recommendation runs, GigaChat credentials, Codex permissions и доказате
 | Несанкционированное изменение ledger | append-only events, idempotency, DB transaction | single-user MVP без identity audit |
 | Повторная запись покупки | idempotency key и 409 conflict | ручной ввод с новым ключом остаётся возможен |
 | Подмена цены/fee | versioned source/effective date, immutable run snapshot | manual source не подтверждает рыночную истинность |
+| Подмена/отказ MOEX payload | fixed HTTPS host, strict status/type/currency/schema/as-of validation, no fallback | DNS/TLS/provider availability и delayed nature feed |
 | Prompt/tool injection | allowlisted typed tools; no shell/SQL/broker tool; output validation | социальная инженерия пользователя |
 | TLS downgrade GigaChat | CA bundle и verify=true; fail closed | ротация CA требует обновления |
 | Публикация локального MVP | bind localhost по умолчанию; docs запрещают Internet exposure | оператор может изменить Compose |
@@ -46,8 +49,9 @@ verification; `verify=false` запрещён.
 
 Compose публикует db/API/web только на `127.0.0.1`. API и web работают non-root с read-only root
 filesystem и отдельным `/tmp`; readiness API зависит от PostgreSQL, а web стартует после API.
-GigaChat/MCP/HTTPX вынесены из API runtime dependencies, GigaChat credentials не передаются в
-Compose. Python runtime и npm lockfile audit 15.08.2026 дали `0` известных advisories.
+MCP/GigaChat credentials не передаются в Compose. HTTPX входит в API только для allowlisted MOEX
+adapter; URL нельзя переопределить на другой host. Python runtime и npm lockfile audit 15.08.2026
+дали `0` известных advisories до этого product change; повторный audit обязателен перед handoff.
 
 ## Production blockers
 

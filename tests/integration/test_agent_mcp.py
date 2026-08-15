@@ -12,6 +12,7 @@ from patientcapital.agent.mcp_server import build_mcp_server
 from patientcapital.persistence.database import Database
 from tests.integration.conftest import TEST_DATABASE_URL
 from tests.integration.helpers import seed_two_assets
+from tests.integration.test_discovery_recommendation_api import StaticMarketDataProvider
 
 
 async def _with_mcp[ResultT](operation: Callable[[Client], Awaitable[ResultT]]) -> ResultT:
@@ -40,6 +41,7 @@ def test_mcp_discovery_is_allowlisted_typed_and_permission_annotated() -> None:
 
     assert set(by_name) == {
         "get_profile",
+        "discover_contribution",
         "list_assets",
         "get_portfolio",
         "propose_contribution",
@@ -56,6 +58,10 @@ def test_mcp_discovery_is_allowlisted_typed_and_permission_annotated() -> None:
     assert by_name["record_transaction"].annotations.idempotent_hint is True
     assert by_name["record_transaction"].input_schema["additionalProperties"] is False
     assert by_name["propose_contribution"].output_schema is not None
+    assert by_name["discover_contribution"].annotations is not None
+    assert by_name["discover_contribution"].annotations.open_world_hint is True
+    assert by_name["discover_contribution"].annotations.destructive_hint is False
+    assert by_name["discover_contribution"].input_schema["additionalProperties"] is False
 
 
 def test_real_stdio_entrypoint_negotiates_and_lists_tools() -> None:
@@ -71,10 +77,52 @@ def test_real_stdio_entrypoint_negotiates_and_lists_tools() -> None:
 
     discovered = asyncio.run(discover_from_process())
     assert {tool.name for tool in discovered.tools} >= {
+        "discover_contribution",
         "get_portfolio",
         "propose_contribution",
         "record_transaction",
     }
+
+
+def test_mcp_amount_only_discovery_persists_the_same_run_as_http(client: TestClient) -> None:
+    profile = client.put(
+        "/v1/profile",
+        json={
+            "expected_version": None,
+            "base_currency": "RUB",
+            "investment_horizon_years": 5,
+            "risk_level": "balanced",
+            "cash_buffer": "0.00",
+            "broker_name": "Test Broker",
+            "fee_rate": "0.001",
+            "minimum_fee": "1.00",
+        },
+    )
+    assert profile.status_code == 200
+
+    async def propose() -> CallToolResult:
+        database = Database(TEST_DATABASE_URL)
+        try:
+            server = build_mcp_server(database, StaticMarketDataProvider())
+            async with Client(server) as mcp_client:
+                return await mcp_client.call_tool(
+                    "discover_contribution", {"contribution": "8000.00"}
+                )
+        finally:
+            database.close()
+
+    result = asyncio.run(propose())
+    assert result.is_error is False
+    run = cast(dict[str, Any], result.structured_content)
+    assert run["mode"] == "automatic"
+    assert run["policy_version"] == "five-year-moex-v1"
+    assert {item["asset_id"] for item in cast(list[dict[str, Any]], run["candidates"])} == {
+        "SU26218RMFS6",
+        "EQMX",
+    }
+    persisted = client.get(f"/v1/recommendations/{run['id']}")
+    assert persisted.status_code == 200
+    assert persisted.json() == run
 
 
 def test_mcp_missing_profile_is_a_machine_coded_tool_error() -> None:

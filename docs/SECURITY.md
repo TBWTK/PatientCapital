@@ -23,6 +23,10 @@ recommendation runs, GigaChat credentials, Codex permissions и доказате
 - Codex/agent → tools: модельный клиент не получает произвольный SQL, shell или broker capability.
 - Host → Docker: `.env`, CA bundle, volumes и published ports принадлежат оператору.
 
+PC2 добавляет trust boundaries: browser → bounded upload parser; extractor/resolver → unconfirmed
+draft; research adapters → typed evidence; scheduler → monitor policy. Ни одна из них не получает
+broker order capability.
+
 ## Угрозы и обязательные контроли
 
 | Угроза | Контроль MVP | Остаточный риск |
@@ -38,6 +42,11 @@ recommendation runs, GigaChat credentials, Codex permissions и доказате
 | TLS downgrade GigaChat | CA bundle и verify=true; fail closed | ротация CA требует обновления |
 | Публикация локального MVP | bind localhost по умолчанию; docs запрещают Internet exposure | оператор может изменить Compose |
 | Регуляторный/consumer harm | no execution, no return forecast, explicit scope, legal gate | disclaimer не гарантирует выход из регулирования |
+| Malicious/oversized image | MIME/magic-byte/dimension/size limits, generated filename, private tmpfs, timeout | parser/library vulnerability |
+| OCR/vision hallucination | output is unconfirmed draft, field confidence/unknowns, exact human confirmation | пользователь может подтвердить неверный draft |
+| Sensitive screenshot retention | raw file never in DB/Git/backup; delete on decision or 24h expiry | host administrator can inspect live tmpfs |
+| Research/source injection | allowlisted typed adapters, provenance/freshness, prose cannot materialize facts | issuer/public source can be misleading |
+| Monitoring churn or duplicate alert | versioned thresholds, idempotent run/alert keys, no transaction/order tool | noisy but non-executing recommendations |
 
 ## Условия эксплуатации MVP
 
@@ -52,6 +61,11 @@ filesystem и отдельным `/tmp`; readiness API зависит от Postg
 MCP/GigaChat credentials не передаются в Compose. HTTPX входит в API только для allowlisted MOEX
 adapter; URL нельзя переопределить на другой host. Python runtime и npm lockfile audit 15.08.2026
 дали `0` известных advisories до этого product change; повторный audit обязателен перед handoff.
+
+PC2 upload/extractor остаётся local-only, пока отдельный admission и data-flow review не разрешат
+конкретного внешнего provider. Upload parser должен ограничивать bytes, pixels, media types и время,
+не доверять filename/metadata, не исполнять embedded content и очищать temp artifacts по retention.
+Monitor получает только read/evidence capabilities и технически не импортирует ledger/order command.
 
 ## Production blockers
 

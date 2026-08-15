@@ -1,21 +1,42 @@
 ---
 title: Аудит PatientCapital
 type: audit
-status: stable
-updated: 2026-08-15
+status: active
+updated: 2026-08-16
 ---
 
 # Аудит PatientCapital
 
 ## Вывод о достаточности контекста
 
-**Sufficient для локального single-user automatic-discovery MVP без broker execution и внешних
-model decisions.**
-Пользователь задал outcome, четыре обязательные поверхности, Docker/Git/Python preference,
-Codex-режим, условный GigaChat-режим, credentials names и IMMUNE precedence. Неизвестные legal,
-market-data licensing, identity, retention и production SLO могли бы изменить публичный продукт,
-поэтому такой режим исключён, а не угадан. Контекста недостаточно для commercial/multi-user SaaS,
-broker execution, real-time feed или допуска другой LLM.
+**Sufficient для начала локального single-user Assistant-first MVP v2 без broker execution.**
+Пользователь подтвердил amount-only interaction, стратегические карточки, progressive disclosure,
+text/image transaction intake, richer overview, более широкий research universe и регулярное
+наблюдение. ADR 0004 ограничивает опасные интерпретации: модель не владеет финансовыми фактами,
+extraction не равен confirmation, наблюдение не равно сделке, а новый asset class требует policy.
+
+Конкретный screenshot extractor и dividend-stock selection policy пока не admitted. Это не блокирует
+первый product-shell checkpoint: core-карточка строится на проверенном v1. Соответствующие stages
+останавливаются fail-loud, если admission/evidence не пройдены. Контекста по-прежнему недостаточно
+для commercial/multi-user SaaS, broker execution, real-time feed или допуска внешней модели.
+
+## Аудит уточнённого продуктового направления
+
+| Предложение владельца | Решение | Ограничение реализации |
+| --- | --- | --- |
+| В обычном пополнении вводится только сумма | принято | профиль/holdings/fees должны быть известны; material unknown блокирует |
+| Показать предложения `1..3` карточками | принято как strategy set | не генерировать три случайных ответа; одна core-карточка допустима |
+| Убрать технические детали с первого слоя | принято | exact evidence остаётся доступным и accessible в details |
+| Записывать операции текстом/скриншотом | принято | extraction создаёт draft; exact user confirmation обязателен |
+| Удалить ручной ledger | отклонено как полное удаление | убрать из primary IA, сохранить advanced/recovery fallback |
+| Искать акции и дополнительный контекст | принято по классам | typed sources + versioned policy/eval, не LLM stock picking |
+| Проверять рынок `3..4` раза в день | принято как observation | alerts только по threshold/event, без auto SELL/order |
+| Перекладываться ради ближайшего дивиденда | отклонено как core default | только отдельная tactical policy после cost/tax/gap/backtest/risk gate |
+
+Основной gap не является ошибкой пользователя: текущий web действительно выдаёт один подробный run,
+показывает служебные candidate fields сразу, требует dropdown ledger и ограничивает automatic policy
+ОФЗ/широкими индексными фондами. Это подтверждённое расхождение v1 с новым product intent, а не
+визуальный дефект одного экрана.
 
 ## Источники и доступность контекста
 
@@ -48,13 +69,17 @@ immutable calculation run с amount, lines, evidence, fees, leftover, reason, in
 policy/algorithm, одинаковый в web и Codex tools.
 Фактическая покупка вводится отдельно и никогда не следует автоматически из proposal.
 
-### Границы и non-goals
+### Реализованные и целевые границы
 
-В scope: локальный пользователь, профиль/комиссии, automatic MOEX discovery для RUB ОФЗ и
+В реализованном v1: локальный пользователь, профиль/комиссии, automatic MOEX discovery для RUB ОФЗ и
 broad-index funds, versioned five-year target policy, BUY/SELL ledger, portfolio analytics,
 contribution proposal, responsive web и Codex MCP. Manual asset/price entry — advanced fallback.
-GigaChat входит только как admission experiment. Не входят broker orders, custody, return forecasts, real-time quotes,
-cross-currency/FX, taxes, margin/derivatives, auth/multi-tenancy и Internet exposure.
+GigaChat входит только как admission experiment.
+
+Целевой PC2-MVP добавляет proposal sets/cards, transaction drafts/confirmation, richer derived
+analytics, admitted dividend-stock research policy и event/threshold monitoring. Не входят broker
+orders, custody, return forecasts, real-time quotes, cross-currency/FX, taxes, margin/derivatives,
+auth/multi-tenancy и Internet exposure.
 
 ## Аудит текущего состояния
 
@@ -92,7 +117,8 @@ cross-currency/FX, taxes, margin/derivatives, auth/multi-tenancy и Internet exp
 
 ## Рекомендация и обоснование
 
-Развивать local deterministic product через ADR 0003. MOEX ISS получает только рыночные facts,
+Развивать local deterministic product через ADR 0003 и assistant-first loop ADR 0004. MOEX ISS
+получает только рыночные facts,
 versioned policy владеет eligible universe/targets, а старый allocator — деньгами/лотами/fees.
 Python выбран из-за `Decimal`, Pydantic/FastAPI,
 SQLAlchemy/Alembic, Hypothesis и компактной реализации проверяемой financial logic; trade-off —
@@ -102,9 +128,9 @@ responsive UI, но OpenAPI остаётся source contract. Docker Compose ф�
 Codex подключается только через MCP allowlist. GigaChat-2 не использовать; следующую модель
 пропускать через неизменённый versioned admission corpus.
 
-Codex chat/sub-agent и web остаются независимыми равноправными clients одного automatic-proposal
-use case. Codex может расширять исследование источниками, но его текст не материализуется как price,
-lot, target или transaction. Coding-focused Codex runtime в web не встраивается.
+Codex chat/sub-agent и web остаются независимыми clients общих proposal/draft/ledger use cases.
+Codex может расширять исследование источниками, но его текст не materialизуется как price, lot,
+target или transaction. Coding-focused Codex runtime в web не встраивается.
 
 ## Риски и неизвестные
 
@@ -121,6 +147,10 @@ lot, target или transaction. Coding-focused Codex runtime в web не вст�
 | Ledger >10k / latency budget | unknown | medium | Explicit capacity unknown; benchmark before expansion | quality owner |
 | Public personalized advice compliance | unknown | critical | Public/commercial mode blocked pending legal opinion | product/legal |
 | Accidental GitHub export/history rewrite | low with controls | medium | Secret/history scan, explicit approval, normal push only; no force/rewrite | repository owner |
+| Screenshot extraction ошибается | high before admission | high | Versioned corpus, confidence/unknowns, explicit full-field confirmation | transaction intake owner |
+| Research prose подменяет security fact | medium | high | Typed adapters/provenance; policy consumes only validated evidence | research/policy owner |
+| Частый monitor создаёт churn | medium | medium | Threshold/event rules, idempotent alerts, no transaction/order capability | monitor owner |
+| Analytics смешивает market move и cash flow | medium | high | Server-owned cashflow/income fixtures; unsupported metrics explicit | portfolio query owner |
 
 ## Ландшафт проверок
 
@@ -133,6 +163,12 @@ E2E, secret/dependency/container inspection и controlled live GigaChat corpus. 
 
 ## Открытые вопросы и блокеры
 
+- Какой local/external extractor проходит screenshot corpus? До admission image draft unavailable;
+  text draft и PC2-1 не блокируются.
+- Какие дополнительные стратегии и dividend-stock policy проходят domain review? До этого registry
+  честно возвращает только существующую core strategy.
+- Целевая сумма капитала и предпочтение cash income не заданы. Goal-progress/income-preference UI
+  показывает `not configured` и не влияет на core proposal скрытым default.
 - Какой provider/model проверять вместо GigaChat-2? Не блокирует deterministic local MVP.
 - Допустима ли бесплатная delayed MOEX ISS лицензия для будущего commercial use? Не блокирует
   local single-user prototype, но блокирует публичную эксплуатацию.
@@ -141,6 +177,6 @@ E2E, secret/dependency/container inspection и controlled live GigaChat corpus. 
 
 ## Решение о начале реализации
 
-`approved for local MVP only`. Context/intent/architecture/verification gates достаточны для
-single-user loopback tool с delayed MOEX discovery без execution. Public/commercial, broker/order,
-real-time feed и новый LLM остаются `blocked` до отдельных requirements и evidence.
+`approved to start PC2-MVP locally`. Product shell можно строить поверх verified v1 немедленно;
+extractor, новые strategies и monitor переходят свои gates последовательно. Public/commercial,
+broker/order, real-time feed и новый LLM остаются `blocked` до отдельных requirements и evidence.

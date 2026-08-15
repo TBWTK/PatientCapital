@@ -19,10 +19,13 @@
 - Keep `main` releasable: every checkpoint must leave its in-scope verification green.
 - Never commit `.env`, credentials, access tokens, broker identifiers, or private certificate keys.
 - Never let an LLM invent or mutate an amount, asset, price, target, fee, lot size, or trade. Models
-  may explain only validated output owned by the deterministic allocation engine.
+  may extract a transaction draft or explain/research a proposal, but only validated source facts,
+  versioned policies and the deterministic engine may materialize instruments or numeric results.
 - Unexpected or incomplete financial state must be explicit (`unknown`, validation error, or a
   blocked recommendation); do not silently default material inputs.
 - The MVP never places broker orders and must not present itself as a licensed investment adviser.
+- For the assistant-first MVP v2, treat `docs/decisions/0004-assistant-first-product-loop.md` as the
+  cross-boundary interaction contract and execute the active stages from `docs/STATE.md`/`ROADMAP.md`.
 
 ## PatientCapital MCP tools
 
@@ -35,6 +38,8 @@
   Never convert recommendation lines into transactions automatically; send a fresh idempotency key
   with the actual quantity, clean unit price, total accrued interest when applicable, fee, currency,
   and timezone-aware occurrence time.
+- Text, OCR or vision output is always an unconfirmed draft. A user-visible confirmation containing
+  every material transaction field is required before `record_transaction` may run.
 - Any tool error, stale/missing price, version conflict, or unknown state stays visible. Do not
   retry with guessed inputs. No PatientCapital tool may access shell, arbitrary SQL, broker APIs, or
   GigaChat credentials.

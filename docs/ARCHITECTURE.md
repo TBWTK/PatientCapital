@@ -23,6 +23,11 @@ GigaChat был проверен как внешний эксперимента�
 прошёл live quality gate и не входит в runtime. Ни один LLM не владеет данными, математикой и
 исполнением.
 
+Assistant-first MVP v2 расширяет этот контур без замены core: strategy registry собирает от одного
+до трёх независимых deterministic runs в proposal set; research adapters поставляют типизированное
+evidence; transaction intake создаёт подтверждаемый draft; monitor отделяет регулярное наблюдение от
+редких alerts. Контракты и порядок перехода принадлежат ADR 0004 и `docs/ROADMAP.md`.
+
 ## Инварианты
 
 - Денежные значения используют `Decimal` и явную валюту; binary float запрещён в domain/DB/API.
@@ -38,6 +43,13 @@ GigaChat был проверен как внешний эксперимента�
 - LLM не может создать/подменить asset, изменить policy/числовой результат core или пометить план
   исполненным. Материализация валидированного MOEX instrument выполняется только application service.
 - `proposed` не равно `executed`: позиция меняется только после отдельной ручной записи операции.
+- `extracted` не равно `confirmed`: текст, OCR или vision никогда напрямую не меняют ledger.
+- Proposal set содержит только зарегистрированные и прошедшие policy gates стратегии; количество
+  карточек не является целевым показателем и не дополняется LLM-вариантами.
+- Research evidence имеет source URI/provider, observed/fetched time, schema/policy version и
+  freshness. Непроверенный текст не материализует security fact.
+- Scheduled observation не равно advisory action: monitor не создаёт transaction и не вызывает
+  broker/order capability.
 - Облигационная BUY хранит clean unit price, общий НКД и fee раздельно; cost-basis projection
   складывает их детерминированно и не подменяет clean price синтетической dirty unit price.
 - MVP не вызывает broker order API и не обещает доходность.
@@ -53,7 +65,11 @@ GigaChat был проверен как внешний эксперимента�
 | `persistence` | PostgreSQL repositories и migrations | health degraded; запись не подтверждается |
 | `marketdata` | allowlisted MOEX ISS transport и strict mapping в immutable candidate facts | timeout/schema/stale/unknown блокирует automatic run typed-ошибкой |
 | `selection policy` | versioned eligibility, maturity/liquidity ranking и class targets | пустой eligible set блокирует proposal; LLM fallback запрещён |
-| `web` | четыре пользовательских поверхности и explanation UX | сохраняет ввод или показывает точную ошибку API |
+| `strategy registry` *(PC2)* | упорядоченный набор admitted policies и выбор единственной recommended | недоступная policy исключается с видимой причиной; случайная замена запрещена |
+| `research` *(PC2)* | typed source adapters и immutable evidence для новых классов активов | stale/conflict/provider failure блокирует затронутую policy |
+| `transaction intake` *(PC2)* | text/image extraction, resolver, unknowns и explicit confirmation | draft остаётся unconfirmed; ledger write запрещён |
+| `monitor` *(PC2)* | scheduled evidence refresh и threshold/event alerts | idempotent no-op без trigger; transactions/orders недоступны |
+| `web` | Обзор, Пополнить, Ассистент, Профиль и progressive-disclosure UX | сохраняет draft или показывает точную ошибку API |
 | `agent tools` | узкие get/propose/record операции для Codex chat/sub-agent | те же схемы/permissions, что application service |
 | `GigaChat eval adapter` | offline admission нового provider/model | любой провал оставляет runtime выключенным; deterministic result не зависит от model prose |
 
@@ -72,6 +88,23 @@ GigaChat был проверен как внешний эксперимента�
 
 Все денежные JSON-поля сериализуются decimal-строками. Ошибка имеет один envelope
 `{"error":{"code","message"}}`; transport не превращает domain unknown в HTTP 200.
+
+## Планируемые additive API contracts PC2
+
+Существующий `/v1` остаётся совместимым. Имена уточняются canonical OpenAPI contract test до
+implementation, но capability boundaries фиксированы:
+
+| Capability | Команда/запрос | Authority / эффект |
+| --- | --- | --- |
+| Proposal set | create/get by id | сохраняет amount, portfolio/evidence snapshot и `1..3` run refs; ledger не меняется |
+| Transaction draft | create from text/image; get by id | сохраняет extraction, resolver evidence, confidence/unknowns; transaction не создаёт |
+| Draft decision | confirm/reject with expected draft version | confirm принимает полный exact payload и единственный вызывает idempotent ledger command |
+| Analytics overview | read current derived view | только server-derived cashflow/result/income/drift/freshness; unsupported facts explicit |
+| Alerts | list/acknowledge | immutable monitor evidence и user acknowledgement; trade side effects отсутствуют |
+
+Transport для image — bounded multipart upload. OpenAPI, generated TypeScript и MCP schemas должны
+проецировать одни application contracts; ни один transport не реализует собственную extraction или
+financial logic.
 
 ## Первичный аудит решений
 
@@ -150,6 +183,23 @@ sequenceDiagram
   U->>C: фактически купленные quantities/prices
   C->>A: record transaction (separate command)
   A->>P: append ledger event
+```
+
+## Целевой assistant-first flow PC2
+
+```mermaid
+flowchart LR
+  Amount["Сумма"] --> Evidence["Validated market + research evidence"]
+  Evidence --> Registry["Admitted strategy registry"]
+  Registry --> Runs["1..3 deterministic runs"]
+  Runs --> Cards["Compact proposal cards + evidence details"]
+  Cards --> Choice["Выбор стратегии"]
+  Choice --> Draft["Text/image transaction draft"]
+  Draft --> Confirm["Exact user confirmation"]
+  Confirm --> Ledger["Immutable ledger event"]
+  Ledger --> Analytics["Explainable overview"]
+  Monitor["3..4 observations/day"] --> Evidence
+  Monitor --> Alerts["Threshold/event alerts only"]
 ```
 
 ## Значимые решения

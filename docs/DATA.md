@@ -20,6 +20,16 @@ updated: 2026-08-16
 | portfolio response | quantity, cost/value/P&L, allocation и drift | derived application query | не хранится отдельной таблицей |
 | GigaChat admission report | model/prompt/corpus hashes, metrics, latency/usage и case evidence | file `reports/gigachat-admission-v1.json` | report/corpus version; не DB entity |
 
+### Планируемые PC2 authorities
+
+| Сущность | Назначение | Authority / invariant |
+| --- | --- | --- |
+| proposal set | один amount/snapshot и ordered refs на `1..3` admitted recommendation runs | proposal application service; immutable, не execution |
+| research evidence | normalized issuer/market/corporate-action/dividend facts и provenance | typed source adapter; source/fetched/observed/freshness/schema обязательны |
+| transaction draft | исходный text/image hash, extraction, resolved instrument, confidence и unknowns | transaction-intake service; immutable и unconfirmed |
+| draft decision | explicit confirm/reject и exact confirmed payload/version | append-only; только confirm может вызвать существующий transaction command |
+| monitor run / alert | schedule/policy/input/result и trigger/no-op evidence | monitor service; immutable, без transaction/order side effect |
+
 ## Lifecycle и версии
 
 Профиль создаёт следующую integer version; broker/fee fields являются частью той же profile version,
@@ -48,6 +58,11 @@ profile/asset/price/position facts;
 не пересчитывается новой algorithm или policy version. `assets.id` является business identity;
 automatic mode materialизует только валидированный MOEX `SECID`, отдельного broker resolver нет.
 
+PC2 migrations additive: существующие profile/assets/prices/transactions/runs не переписываются.
+Proposal set ссылается на runs; transaction draft не меняет position. Resolver может предложить
+identity только из typed instrument source и сохраняет кандидатов/причину выбора. Неоднозначный
+resolver result остаётся `unknown` до пользовательского выбора.
+
 ## Provenance и чувствительность
 
 Профиль, цели, брокер, комиссии и ledger считаются конфиденциальными финансовыми данными. Текущий
@@ -59,6 +74,12 @@ contract. Каждый price хранит source, `as_of`, `max_age_seconds` и 
 Каждый run сохраняет canonical input hash, algorithm version, requested amount, selected facts,
 output и reason. GigaChat report хранит provider/model, prompt/corpus hashes, latency, usage и raw
 response hash, но не raw prompt/output и никогда не становится источником portfolio facts.
+
+Raw image является временными конфиденциальными данными: принимается в bounded private temp storage,
+не входит в PostgreSQL backup и Git, удаляется сразу после confirm/reject и не позднее 24 часов для
+незавершённого draft. Постоянно сохраняются content hash, media metadata, extractor/version,
+extracted fields, confidence/unknowns и решение пользователя. Передача raw image внешнему provider
+запрещена без отдельного approved minimal-data/retention contract.
 
 ## Data flow
 
@@ -73,6 +94,10 @@ flowchart LR
   Run --> Web["Web/Codex explanation"]
   Corpus["Synthetic eval corpus"] -. admission only .-> Giga["Rejected GigaChat adapter"]
 ```
+
+В PC2 research evidence входит в validated input стратегии, а text/image сначала создаёт draft.
+Только отдельный draft decision создаёт существующий ledger event; monitor сохраняет run/alert
+evidence, но не имеет write path к `transactions`.
 
 ## Валюты и время
 

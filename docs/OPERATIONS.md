@@ -15,6 +15,11 @@ MVP поддерживает только локальный single-user Docker 
 PostgreSQL named volume — единственное persisted product state. API и web images non-root,
 read-only; `/tmp` — ephemeral tmpfs. GigaChat credentials не передаются контейнерам.
 
+PC2 планирует отдельный `worker` process из того же Python image для scheduled read-only evidence
+refresh и alert evaluation. Он не получает broker/order capability и не пишет transactions. До
+реализации worker не добавляется в Compose. Upload bytes обрабатываются только в bounded API tmpfs;
+в backup попадают extracted drafts/evidence, но не raw images.
+
 Нужны Docker Compose v2. Для `scripts/docker-smoke.sh` дополнительно нужны host `curl`, `jq` и
 свободные ports `53000`, `58000`, `55433` либо соответствующие `PATIENTCAPITAL_SMOKE_*` overrides.
 
@@ -26,6 +31,12 @@ example предназначено для запуска Python с host; Compose
 GigaChat fields не включают runtime mode и используются только при явно запущенном future re-eval.
 `MOEX_ISS_BASE_URL` allowlisted кодом и не может быть перенаправлен на произвольный host;
 `MOEX_TIMEOUT_SECONDS` и `MOEX_MAX_AGE_SECONDS` задают fail-closed transport/freshness границы.
+
+Планируемая PC2 config должна иметь безопасные явные defaults: `MONITOR_RUNS_PER_DAY` принимает
+только `3` или `4`; расписание хранится с timezone, а missed/duplicate ticks идемпотентны. Upload
+bytes/pixels/TTL и extractor mode задаются отдельными bounded settings. External extractor остаётся
+disabled, пока его data contract и admission не приняты; отсутствие extractor показывает
+`unavailable`, не маскируется ручным успехом.
 
 ## Startup и health
 
@@ -51,6 +62,10 @@ docker compose config --quiet
 
 `/health/live` доказывает только процесс API; `/health/ready` отдельно доказывает DB dependency.
 Product metrics/SLO/alerts не реализованы и обязательны до любого production/public режима.
+
+После PC2 monitor health/readiness должны различать scheduler process, last successful evidence
+refresh и provider degradation. Provider failure не делает существующий ledger недоступным и не
+создаёт повторный alert; stale status остаётся видимым в web.
 
 ## Shutdown и очистка
 
@@ -111,6 +126,7 @@ downgrade удаляет tables/data и не является operational rollba
 ## Известные operational limits
 
 - Auth, RBAC, TLS termination, remote access, HA, automated backups, monitoring и alerting отсутствуют.
+- PC2 worker, upload extractor и alert persistence пока planned; документ не утверждает их наличие.
 - Capacity выше 10 000 ledger events и proposal latency на 100 assets не измерены.
 - PostgreSQL backup artifact проверен на читаемый catalog; destructive restore rehearsal не запущен.
 - Base-image/dependency audit — point-in-time evidence 15.08.2026, а не бессрочная гарантия.

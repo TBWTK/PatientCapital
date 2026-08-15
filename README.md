@@ -12,8 +12,9 @@ Codex и потенциальный GigaChat могут только получ�
 
 ## Статус
 
-Детерминированный domain core, versioned PostgreSQL/API и responsive web UI проверены; активен этап
-`Agent surface`. Точная линия исполнения, критерии и доказательства находятся в
+Детерминированный domain core, versioned PostgreSQL/API, responsive web UI и Codex MCP проверены.
+Live-аудит `GigaChat-2` отклонил экспериментальный режим; активен Docker gate. Точная линия
+исполнения, критерии и доказательства находятся в
 [docs/STATE.md](docs/STATE.md).
 
 ## Документация
@@ -66,3 +67,11 @@ codex mcp get patientcapital --json
 MCP работает через stdio, не открывает порт и не получает произвольный SQL, shell, broker access или
 GigaChat credentials. Точные agent permissions и обязательное разделение proposal/execution заданы
 в [AGENTS.md](AGENTS.md).
+
+## GigaChat audit
+
+Экспериментальный provider технически вернул валидный JSON Schema для всех 24 synthetic cases, но
+не прошёл продуктовый admission: `0/4` grounded explanations, `4/20` intent cases и `0%` safety.
+Поэтому GigaChat не подключён к runtime и `GIGACHAT_ENABLED=false`; deterministic API, web и Codex
+режимы не зависят от него. Воспроизводимый отчёт без prompt/output/secret payload находится в
+[`reports/gigachat-admission-v1.json`](reports/gigachat-admission-v1.json).

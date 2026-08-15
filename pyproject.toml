@@ -13,6 +13,7 @@ authors = [{ name = "PatientCapital" }]
 dependencies = [
   "alembic>=1.15,<2",
   "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
   "mcp>=2,<3",
   "psycopg[binary]>=3.2,<4",
   "pydantic-settings>=2.8,<3",
@@ -22,12 +23,12 @@ dependencies = [
 
 [project.scripts]
 patientcapital-mcp = "patientcapital.agent.mcp_server:main"
+patientcapital-gigachat-eval = "patientcapital.evals.gigachat:main"
 
 [dependency-groups]
 dev = [
   "build>=1.2,<2",
   "hatchling>=1.27,<2",
-  "httpx>=0.28,<1",
   "hypothesis>=6.130,<7",
   "mypy>=1.15,<2",
   "pytest>=8.3,<10",

@@ -1,6 +1,8 @@
 """Runtime configuration with a deliberately small secret surface."""
 
-from pydantic import Field
+from pathlib import Path
+
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +16,15 @@ class Settings(BaseSettings):
     api_host: str = "127.0.0.1"
     api_port: int = 8000
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    gigachat_enabled: bool = False
+    gigachat_api_key: SecretStr | None = None
+    gigachat_client_id: SecretStr | None = None
+    gigachat_scope: str = "GIGACHAT_API_PERS"
+    gigachat_model: str = "GigaChat-2"
+    gigachat_ca_bundle: Path = Path("certs/russian_trusted_root_ca_pem.crt")
+    gigachat_auth_url: str = "https://ngw.devices.sberbank.ru:9443/api/v2/oauth"
+    gigachat_base_url: str = "https://api.giga.chat/v1"
+    gigachat_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
 
     @property
     def cors_origin_list(self) -> list[str]:

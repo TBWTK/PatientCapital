@@ -9,22 +9,19 @@ updated: 2026-08-15
 
 ## Active objective
 
-Провести admission eval GigaChat на versioned corpus. Provider может получить только redacted
-deterministic run для объяснения или строгий intent; он остаётся выключенным, если schema, numeric
-grounding, unknown handling или safety gate не дают 100%.
+Собрать воспроизводимый Docker Compose-контур для web, API и PostgreSQL, затем проверить clean-volume
+health и сквозной flow profile/assets/prices → contribution proposal → transaction → dashboard.
 
 ## Acceptance criteria
 
-- [ ] Versioned corpus покрывает explanation grounding, unknown/refusal, prompt injection и
-  размеченное intent extraction; evaluator не принимает «похожий» числовой ответ.
-- [ ] TLS использует проверенный CA bundle, OAuth token не логируется, внешнему provider не уходят
-  broker identifiers, полный ledger или credentials.
-- [ ] Live report фиксирует model/version, prompt/corpus versions, latency, usage и response hashes;
-  schema, numeric/ID preservation, hallucination, unknown и fallback gates равны 100%.
-- [ ] При любом провале GigaChat остаётся `GIGACHAT_ENABLED=false`; deterministic output доступен
-  без model prose. При допуске provider только объясняет/извлекает intent и не вызывает domain math.
-- [ ] Timeout, OAuth, TLS, blacklist и malformed-schema paths имеют безопасные tests; Ruff, mypy,
-  полный regression и secret scan проходят.
+- [ ] `docker compose up --build --wait` поднимает db, migration/API и production web без ручных
+  host-процессов; published ports привязаны только к loopback.
+- [ ] API readiness зависит от PostgreSQL, web health проверяет HTTP, startup не маскирует failure.
+- [ ] Clean-volume smoke создаёт конфигурацию и выполняет proposal/record/dashboard через public API.
+- [ ] CA доступен eval tooling, но GigaChat credentials не вшиты в image/compose/config; `.env`
+  остаётся ignored.
+- [ ] Полный regression, Compose config, dependency/secret scan, `git diff --check` и
+  project-control audit проходят.
 
 ## Current verified state
 
@@ -66,6 +63,14 @@ grounding, unknown handling или safety gate не дают 100%.
 - MCP verification: `6` wire tests проверяют discovery/schema/annotations, реальный subprocess
   negotiation, persisted HTTP parity, exact idempotent replay, stale/extra/unknown fail-loud.
   Полный suite `67 passed`, branch coverage `95.25%`; Ruff и strict mypy прошли 15.08.2026.
+- GigaChat eval использует публичный Russian Trusted Root CA с TLS verification, sanitized OAuth
+  errors и versioned corpus из `4` explanation + `20` intent cases. Credentials/tokens и raw
+  prompt/output не сохраняются в report.
+- Live `GigaChat-2:2.0.30.01` дал `24/24` schema-valid responses, но `0/4` grounded explanations,
+  `4/20` correct intents и `0%` safety. Provider отклонён, runtime integration не добавлена,
+  `GIGACHAT_ENABLED=false`; report сохранён в `reports/gigachat-admission-v1.json`.
+- GigaChat targeted verification: `7 passed`; Ruff и strict mypy прошли. Tests закрывают OAuth raw
+  и preencoded keys, token cache, timeout, malformed output и unavailable-model fail-fast.
 
 ## Changed areas
 
@@ -79,6 +84,8 @@ grounding, unknown handling или safety gate не дают 100%.
   tests и project-bound social preview asset.
 - Agent surface: transport-neutral `AgentTools`, strict MCP stdio adapter, contract tests, console
   entrypoint и зарегистрированная локальная Codex connection.
+- Provider audit: публичный CA, fail-closed HTTPX OAuth/JSON Schema adapter, versioned synthetic
+  corpus, evaluator tests и sanitized rejected live report; runtime connection отсутствует.
 
 ## Decisions made
 
@@ -106,18 +113,20 @@ grounding, unknown handling или safety gate не дают 100%.
   fail-closed моделью `extra=forbid`, чтобы advertised schema совпадала с runtime validation.
 - Agent tools не изменяют profile/asset universe. `record_transaction` принимает только явно
   подтверждённый факт, имеет idempotency annotation и никогда не вызывается из proposal автоматически.
+- `GigaChat-2` отклонён по grounding/intent/safety, несмотря на 100% schema parse. Gate не ослабляется;
+  следующий provider/model должен пройти тот же versioned corpus до появления runtime adapter.
 
 ## Next exact step
 
-Зафиксировать GigaChat eval corpus и Pydantic explanation/intent schemas, затем реализовать
-выключенный по умолчанию TLS/OAuth adapter и live evaluator без runtime admission до отчёта.
+Добавить production Dockerfiles для API и web, Compose health/startup dependencies и затем выполнить
+clean-volume HTTP smoke полного пользовательского flow.
 
 ## Blockers
 
 - Публичный/коммерческий режим и формулировка персональных рекомендаций заблокированы до
   юридического анализа; это не блокирует локальный исследовательский MVP без исполнения.
-- Пригодность GigaChat неизвестна до живого фиксированного eval corpus; это не блокирует
-  детерминированный core.
+- GigaChat-2 непригоден для текущего режима по live admission; требуется другая модель/provider или
+  новая версия, но это не блокирует deterministic MVP.
 
 ## Non-goals
 

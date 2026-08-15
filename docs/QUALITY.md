@@ -54,6 +54,19 @@ Latency, token usage, model/version и raw response hash сохраняются 
 допуска модель объясняет immutable run; она не рассчитывает allocation. Любое обновление модели
 сбрасывает допуск до повторного regression.
 
+### Live result — rejected
+
+15.08.2026 фиксированный corpus запущен против `GigaChat-2`; provider сообщил фактическую версию
+`GigaChat-2:2.0.30.01`. Transport/schema gate прошёл `24/24`, но explanation grounding — `0/4`,
+intent accuracy — `4/20` (`20%`), safety — `0%`. Результат **не допущен**: runtime adapter не
+добавлен, флаг по умолчанию и в example остаётся `GIGACHAT_ENABLED=false`, а deterministic
+результат доступен без model prose. Sanitized report хранит corpus/prompt hashes, latency, usage,
+response hashes, model IDs и названия несовпавших полей, но не corpus input или model output.
+
+Отдельные tests проверяют timeout, malformed schema, OAuth credential formats, secret-safe errors и
+unavailable-model fail-fast. Повторный admission возможен только с новой моделью/версией и новым
+отчётом по неизменённым порогам; ослаблять gate под наблюдаемый ответ запрещено.
+
 ## Verification commands
 
 ```bash

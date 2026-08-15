@@ -16,9 +16,9 @@ core. Пользователь вручную вводит факты, кото�
 равноправными клиентами одного application service.
 
 Codex работает с приложением через ограниченные tools и может объяснять результат в чате.
-GigaChat — внешний экспериментальный provider, который после отдельного gate сможет преобразовать
-естественный язык в строгий intent или объяснить уже готовый план. Ни один LLM не владеет данными,
-математикой и исполнением.
+GigaChat был проверен как внешний экспериментальный provider для strict intent/explanation, но не
+прошёл live quality gate и не входит в runtime. Ни один LLM не владеет данными, математикой и
+исполнением.
 
 ## Инварианты
 
@@ -45,7 +45,7 @@ GigaChat — внешний экспериментальный provider, кот�
 | `persistence` | PostgreSQL repositories и migrations | health degraded; запись не подтверждается |
 | `web` | четыре пользовательских поверхности и explanation UX | сохраняет ввод или показывает точную ошибку API |
 | `agent tools` | узкие get/propose/record операции | те же схемы/permissions, что application service |
-| `GigaChat adapter` | intent/explanation после quality gate | timeout/schema/grounding failure возвращает deterministic result без model prose |
+| `GigaChat eval adapter` | offline admission нового provider/model | любой провал оставляет runtime выключенным; deterministic result не зависит от model prose |
 
 ## HTTP API v1
 
@@ -70,8 +70,8 @@ GigaChat — внешний экспериментальный provider, кот�
   дискретными лотами и комиссиями; результат можно проверить независимо.
 - Ручной журнал операций и price snapshot позволяет начать без хрупкой брокерской/market-data
   интеграции и сохраняет provenance.
-- GigaChat технически поддерживает JSON Schema и пользовательские functions, поэтому может быть
-  внешним natural-language adapter, если пройдёт фактический eval.
+- GigaChat технически поддерживает JSON Schema, но live eval показал, что schema compliance не
+  гарантирует grounded intent/explanation. Текущая версия отклонена как runtime adapter.
 
 ### Что нельзя обещать
 
@@ -108,7 +108,7 @@ flowchart LR
   Core --> Run["Immutable recommendation run"]
   Run --> Web
   Run --> Tools
-  Giga["GigaChat — gated explanation only"] -.-> App
+  Giga["GigaChat — rejected eval-only adapter"] -.-> Gate["Offline admission report"]
 ```
 
 ## Flow нового пополнения

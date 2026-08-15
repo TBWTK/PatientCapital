@@ -16,7 +16,8 @@ recommendation runs, GigaChat credentials, Codex permissions и доказате
 
 - Browser → local API: недоверенный ввод, даже в single-user режиме.
 - API → PostgreSQL: транзакционная граница и least-privilege credentials.
-- Application → GigaChat: внешняя сеть; отправляется только минимальный redacted payload.
+- Application → GigaChat eval: внешняя сеть; live-аудит использует только synthetic corpus.
+  Runtime connection отклонён и отсутствует.
 - Codex/agent → tools: модельный клиент не получает произвольный SQL, shell или broker capability.
 - Host → Docker: `.env`, CA bundle, volumes и published ports принадлежат оператору.
 
@@ -40,7 +41,8 @@ recommendation runs, GigaChat credentials, Codex permissions и доказате
 Контур запускается локально и не публикуется в Интернет. У него нет production authentication,
 CSRF/RBAC, tenant isolation, broker order capability или юридически утверждённого процесса
 инвестиционного консультирования. Поэтому доступ за пределами доверенного host запрещён. Живой
-GigaChat включается только после quality gate и с TLS verification; `verify=false` запрещён.
+GigaChat не прошёл quality gate и остаётся выключенным. Повторный eval разрешён только с TLS
+verification; `verify=false` запрещён.
 
 ## Production blockers
 

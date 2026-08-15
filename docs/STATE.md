@@ -22,9 +22,9 @@ mapping и повторно доказать releasable local `main`.
 - [x] `DATA.md` и новый operator contract описывают только фактическую schema, Docker lifecycle,
   persistence/recovery и явно маркированные непроверенные ограничения.
 - [x] `QUALITY.md` отображает каждое требование/существенный риск в named evidence и честный status.
-- [ ] IMMUNE/project-control handoff checks, docs links, `git diff --check` и релевантный regression
+- [x] IMMUNE/project-control handoff checks, docs links, `git diff --check` и релевантный regression
   проходят; checkpoint находится на чистом локальном `main`.
-- [ ] GitHub push выполняется только после явного разрешения пользователя; до него remote state
+- [x] GitHub push выполняется только после явного разрешения пользователя; до него remote state
   остаётся видимым, а не выдаётся за synced.
 
 ## Current verified state
@@ -100,6 +100,8 @@ mapping и повторно доказать releasable local `main`.
   structural check. Project-control: `PASS errors=0 warnings=0`, `13` документов и `3` Mermaid
   blocks. PostgreSQL `pg_dump -Fc` stream успешно прочитан `pg_restore --list`; destructive full
   restore rehearsal честно остаётся `not run`.
+- Completion audit сохранён в local `main` checkpoint `d6904ad`; после commit worktree clean.
+  GitHub publication не входит в этот claim и остаётся blocked в `QUALITY.md` до explicit approval.
 
 ## Changed areas
 
@@ -154,8 +156,9 @@ mapping и повторно доказать releasable local `main`.
 
 ## Next exact step
 
-Создать локальный Git checkpoint, выполнить handoff-mode checks на clean `main` и отразить итоговый
-status. GitHub push остаётся отдельным внешним действием только после явного разрешения владельца.
+Получить явное решение владельца о первом экспорте repository history. При разрешении выполнить
+`git push -u origin main` и проверить remote `main`; при отказе сохранить GitHub publication как
+осознанно `blocked`, не меняя verified local handoff.
 
 ## Blockers
 

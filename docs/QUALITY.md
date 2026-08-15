@@ -112,7 +112,7 @@ git diff --check
 | PC-OPS-02 PostgreSQL restore | recovery rehearsal | isolated disposable volume | destructive restore procedure in `OPERATIONS.md` | Restored facts/runs equal source; measured RTO/RPO | not run |
 | PC-NFR-01 10k ledger / 100-asset latency | performance/capacity | target host | benchmark not implemented | 10k events supported; proposal <500 ms | not run |
 | PC-COMP-01 public personalized advice | human legal review | intended jurisdiction/operating model | external legal opinion | Public/commercial boundary approved | blocked |
-| PC-GIT-01 releasable default branch | Git + full gates | local `main` | status/log + handoff checks | Verified checkpoints, clean worktree after commit | pending checkpoint |
+| PC-GIT-01 releasable default branch | Git + full gates | local `main` | status/log + handoff checks | Verified checkpoints, clean worktree after commit | passing |
 | PC-GIT-02 GitHub publication | external release | user-provided empty remote | `git push origin main` | Export only after repository-owner approval | blocked |
 
 ## Портфель проверок

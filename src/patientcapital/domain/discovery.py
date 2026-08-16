@@ -7,13 +7,18 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 
-from patientcapital.domain.admission import AdmissionStatus, evaluate_asset_admission
+from patientcapital.domain.admission import (
+    ADMISSION_POLICY_VERSION,
+    AdmissionStatus,
+    AssetAdmissionProfile,
+    evaluate_asset_admission,
+)
 from patientcapital.domain.errors import InvalidAllocationInput
 from patientcapital.marketdata.models import InstrumentKind, MarketCandidate
-from patientcapital.research.models import BalanceSheetStatus, CorporateActionStatus, ResearchScope
+from patientcapital.research.models import ResearchScope
 
 DISCOVERY_POLICY_VERSION = "market-intelligence-v1"
-DIVIDEND_POLICY_VERSION = "dividend-quality-v1"
+DIVIDEND_POLICY_VERSION = "equity-dividend-quality-v2"
 DIVIDEND_MARKET_POLICY_VERSION = "dividend-market-screen-v1"
 _CORE_WEIGHTS: dict[str, tuple[Decimal, Decimal]] = {
     "conservative": (Decimal("0.80000000"), Decimal("0.20000000")),
@@ -78,6 +83,7 @@ def _select_ofz(
     contribution: Decimal,
     target_date: date,
     calculated_at: datetime,
+    admission_profiles: Mapping[str, AssetAdmissionProfile] | None,
 ) -> MarketCandidate | None:
     eligible = [
         item
@@ -87,7 +93,7 @@ def _select_ofz(
         and item.maturity_date is not None
         and item.maturity_date > target_date.replace(year=target_date.year - 5)
         and item.lot_cost <= contribution
-        and evaluate_asset_admission(item, calculated_at=calculated_at).overall_status
+        and _profile_for(item, calculated_at, admission_profiles).overall_status
         is AdmissionStatus.ELIGIBLE
     ]
     if not eligible:
@@ -102,7 +108,11 @@ def _select_ofz(
 
 
 def _select_fund(
-    candidates: tuple[MarketCandidate, ...], *, contribution: Decimal, calculated_at: datetime
+    candidates: tuple[MarketCandidate, ...],
+    *,
+    contribution: Decimal,
+    calculated_at: datetime,
+    admission_profiles: Mapping[str, AssetAdmissionProfile] | None,
 ) -> MarketCandidate | None:
     eligible = [
         item
@@ -110,7 +120,7 @@ def _select_fund(
         if item.kind is InstrumentKind.EQUITY_INDEX_FUND
         and item.currency == "RUB"
         and item.lot_cost <= contribution
-        and evaluate_asset_admission(item, calculated_at=calculated_at).overall_status
+        and _profile_for(item, calculated_at, admission_profiles).overall_status
         is AdmissionStatus.ELIGIBLE
     ]
     if not eligible:
@@ -124,45 +134,15 @@ def _dividend_rejection_reason(
     contribution: Decimal,
     risk_level: str,
     calculated_at: datetime,
+    admission_profiles: Mapping[str, AssetAdmissionProfile] | None,
 ) -> str | None:
     if risk_level != "growth":
         return "Dividend-stock category в MVP допускается только риск-профилем «рост»."
-    research = candidate.research
-    if research is None:
-        return "Отсутствует typed dividend research evidence."
-    if not research.is_fresh_at(calculated_at):
-        return "Research evidence просрочено или имеет недопустимое время наблюдения."
-    if research.scope is ResearchScope.MARKET_SCREEN:
-        return (
-            "Market screen является research-only: profitability, payout, balance, governance "
-            "и corporate actions остаются unknown."
-        )
-    if research.policy_version != DIVIDEND_POLICY_VERSION:
-        return "Отсутствует evidence допустимой версии dividend research policy."
-    if research.profitable_years is None or research.profitable_years < 3:
-        return "Недостаточно подтверждённых прибыльных отчётных периодов."
-    if research.dividend_years < 3:
-        return "Недостаточно подтверждённой дивидендной истории."
-    if (
-        research.payout_ratio_percent is None
-        or research.payout_ratio_percent <= 0
-        or research.payout_ratio_percent > 100
-    ):
-        return "Дивиденд не покрыт подтверждённой прибылью."
-    if research.balance_sheet_status not in {
-        BalanceSheetStatus.NO_DEBT,
-        BalanceSheetStatus.ADEQUATE_CAPITAL,
-    }:
-        return "Состояние баланса неизвестно или содержит подтверждённый риск."
-    if research.governance_program_member is not True:
-        return "Отдельная проверка корпоративного управления не пройдена."
-    if research.corporate_action_status is not CorporateActionStatus.NO_MATERIAL_ACTION_IDENTIFIED:
-        return "Выявлено или не исключено существенное корпоративное действие."
     if candidate.currency != "RUB":
         return "Валюта инструмента не соответствует рублёвой policy."
     if candidate.lot_cost > contribution:
         return "Стоимость целого лота превышает сумму пополнения."
-    profile = evaluate_asset_admission(candidate, calculated_at=calculated_at)
+    profile = _profile_for(candidate, calculated_at, admission_profiles)
     if profile.overall_status is not AdmissionStatus.ELIGIBLE:
         return "Контур допуска актива не пройден: " + ", ".join(profile.reason_codes)
     return None
@@ -174,6 +154,7 @@ def _select_dividend_stock(
     contribution: Decimal,
     risk_level: str,
     calculated_at: datetime,
+    admission_profiles: Mapping[str, AssetAdmissionProfile] | None,
 ) -> MarketCandidate | None:
     eligible = [
         item
@@ -184,6 +165,7 @@ def _select_dividend_stock(
             contribution=contribution,
             risk_level=risk_level,
             calculated_at=calculated_at,
+            admission_profiles=admission_profiles,
         )
         is None
     ]
@@ -233,6 +215,27 @@ def _normalized_weights(
     return result
 
 
+def _profile_for(
+    candidate: MarketCandidate,
+    calculated_at: datetime,
+    admission_profiles: Mapping[str, AssetAdmissionProfile] | None,
+) -> AssetAdmissionProfile:
+    if admission_profiles is None:
+        return evaluate_asset_admission(candidate, calculated_at=calculated_at)
+    profile = admission_profiles.get(candidate.asset_id)
+    if (
+        profile is None
+        or profile.asset_id != candidate.asset_id
+        or profile.policy_version != ADMISSION_POLICY_VERSION
+        or profile.expires_at < calculated_at
+    ):
+        raise InvalidAllocationInput(
+            "ADMISSION_PROFILE_MISSING",
+            f"matching persisted admission profile is missing for {candidate.asset_id}",
+        )
+    return profile
+
+
 def select_market_candidates(
     candidates: tuple[MarketCandidate, ...],
     *,
@@ -240,6 +243,7 @@ def select_market_candidates(
     horizon_years: int,
     risk_level: str,
     calculated_at: datetime,
+    admission_profiles: Mapping[str, AssetAdmissionProfile] | None = None,
 ) -> MarketSelection:
     """Select an affordable OFZ/fund pair without model-owned facts or weights."""
 
@@ -267,13 +271,20 @@ def select_market_candidates(
         contribution=contribution,
         target_date=target_date,
         calculated_at=calculated_at,
+        admission_profiles=admission_profiles,
     )
-    fund = _select_fund(candidates, contribution=contribution, calculated_at=calculated_at)
+    fund = _select_fund(
+        candidates,
+        contribution=contribution,
+        calculated_at=calculated_at,
+        admission_profiles=admission_profiles,
+    )
     stock = _select_dividend_stock(
         candidates,
         contribution=contribution,
         risk_level=risk_level,
         calculated_at=calculated_at,
+        admission_profiles=admission_profiles,
     )
     if ofz is None and fund is None and stock is None:
         raise InvalidAllocationInput(
@@ -353,6 +364,7 @@ def select_market_candidates(
                     contribution=contribution,
                     risk_level=risk_level,
                     calculated_at=calculated_at,
+                    admission_profiles=admission_profiles,
                 )
                 or "Акция уступила выбранному кандидату в dividend-quality ranking policy."
             )
@@ -361,7 +373,7 @@ def select_market_candidates(
         elif candidate.lot_cost > contribution:
             reason = "Стоимость целого лота превышает сумму пополнения."
         elif (
-            profile := evaluate_asset_admission(candidate, calculated_at=calculated_at)
+            profile := _profile_for(candidate, calculated_at, admission_profiles)
         ).overall_status is not AdmissionStatus.ELIGIBLE:
             reason = "Контур допуска актива не пройден: " + ", ".join(profile.reason_codes)
         else:

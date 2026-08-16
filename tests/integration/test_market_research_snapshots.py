@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -13,13 +14,15 @@ from patientcapital.market_intelligence.service import acquire_market_research
 from patientcapital.marketdata.errors import MarketDataError
 from patientcapital.marketdata.models import InstrumentKind, MarketCandidate, MarketScan
 from patientcapital.persistence.database import Database
+from patientcapital.research.corpus import MOEX_ISSUER_EVIDENCE_V2
+from patientcapital.research.provider import ReviewedIssuerCorpusProvider
 from tests.integration.conftest import TEST_DATABASE_URL
 from tests.market_fixtures import admitted_liquidity
 
 
 class CountingScanner:
     name = "counting-market-scanner"
-    scan_policy_version = "moex-board-scan-v3"
+    scan_policy_version = "moex-board-scan-v4"
 
     def __init__(self) -> None:
         self.calls = 0
@@ -66,11 +69,48 @@ class CountingScanner:
 
 class FailingScanner:
     name = "failing-market-scanner"
-    scan_policy_version = "moex-board-scan-v3"
+    scan_policy_version = "moex-board-scan-v4"
 
     def scan(self, *, calculated_at: datetime) -> MarketScan:
         del calculated_at
         raise MarketDataError("MOEX_INVALID_RESPONSE", "required board data is incomplete")
+
+    def discover(self, *, calculated_at: datetime) -> tuple[MarketCandidate, ...]:
+        return self.scan(calculated_at=calculated_at).candidates
+
+
+class EquityScanner:
+    name = "equity-market-scanner"
+    scan_policy_version = "equity-test-scan-v1"
+
+    def scan(self, *, calculated_at: datetime) -> MarketScan:
+        candidate = MarketCandidate(
+            asset_id="MOEX",
+            isin="RU000A0JR4A1",
+            name="Moscow Exchange",
+            kind=InstrumentKind.PUBLIC_EQUITY,
+            currency="RUB",
+            lot_size=10,
+            unit_price=Decimal("180"),
+            price_as_of=calculated_at - timedelta(minutes=5),
+            max_age=timedelta(days=4),
+            source_url="https://iss.moex.com/moex",
+            classification_url="https://www.moex.com/ru/marketdata/",
+            quote_kind="last",
+            turnover=Decimal("100000000"),
+            liquidity=admitted_liquidity(
+                InstrumentKind.PUBLIC_EQUITY,
+                observed_at=calculated_at - timedelta(minutes=5),
+            ),
+        )
+        return MarketScan(
+            policy_version=self.scan_policy_version,
+            observed_at=calculated_at,
+            candidates=(candidate,),
+            universe_size=1,
+            kind_counts={"public_equity": 1},
+            enriched_count=0,
+        )
 
     def discover(self, *, calculated_at: datetime) -> tuple[MarketCandidate, ...]:
         return self.scan(calculated_at=calculated_at).candidates
@@ -144,10 +184,12 @@ def test_latest_market_research_endpoint_exposes_snapshot_status() -> None:
     assert datetime.fromisoformat(payload["observed_at"]).tzinfo is not None
     assert admission.status_code == 200
     admission_payload = admission.json()
-    assert admission_payload["policy_version"] == "asset-admission-v2"
+    assert admission_payload["policy_version"] == "asset-admission-v3"
+    assert len(admission_payload["issuer_evidence_set_hash"]) == 64
     assert admission_payload["assessment_count"] == 1
     assert admission_payload["status_counts"]["eligible"] == 1
     profile = admission_payload["assessments"][0]["profile"]
+    assert admission_payload["assessments"][0]["issuer_evidence_snapshot_id"] is None
     assert profile["overall_status"] == "eligible"
     assert profile["liquidity"]["status"] == "eligible"
     assert profile["investment"]["status"] == "eligible"
@@ -167,6 +209,52 @@ def test_admission_assessments_are_append_only() -> None:
         engine.begin() as connection,
     ):
         connection.execute(text("UPDATE asset_admission_assessments SET overall_status = 'reject'"))
+    engine.dispose()
+
+
+def test_new_issuer_facts_re_evaluate_the_same_market_snapshot() -> None:
+    observed_at = datetime.fromisoformat("2026-08-16T15:30:00+00:00")
+    rejected_bundle = replace(
+        MOEX_ISSUER_EVIDENCE_V2,
+        research=replace(
+            MOEX_ISSUER_EVIDENCE_V2.research,
+            payout_ratio_percent=Decimal("100.00000001"),
+        ),
+    )
+    database = Database(TEST_DATABASE_URL)
+    try:
+        with database.sessions() as session:
+            first = acquire_market_research(
+                session,
+                EquityScanner(),
+                observed_at=observed_at,
+                cache_seconds=14_400,
+                issuer_evidence_provider=ReviewedIssuerCorpusProvider(),
+            )
+        with database.sessions() as session:
+            second = acquire_market_research(
+                session,
+                EquityScanner(),
+                observed_at=observed_at + timedelta(minutes=1),
+                cache_seconds=14_400,
+                issuer_evidence_provider=ReviewedIssuerCorpusProvider((rejected_bundle,)),
+            )
+    finally:
+        database.close()
+
+    assert first.record.id == second.record.id
+    assert first.admission_run.id != second.admission_run.id
+    assert first.admission_run.issuer_evidence_set_hash != (
+        second.admission_run.issuer_evidence_set_hash
+    )
+    assert first.profiles["MOEX"].overall_status.value == "eligible"
+    assert second.profiles["MOEX"].overall_status.value == "reject"
+
+    engine = create_engine(TEST_DATABASE_URL)
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT count(*) FROM market_research_snapshots")) == 1
+        assert connection.scalar(text("SELECT count(*) FROM issuer_evidence_snapshots")) == 2
+        assert connection.scalar(text("SELECT count(*) FROM asset_admission_runs")) == 2
     engine.dispose()
 
 

@@ -35,7 +35,7 @@ _APPROVED_FUNDS: Mapping[str, str] = {
     "SBMX": "Первая — Фонд Топ Российских акций",
     "TMOS": "Тинькофф / Т-Капитал — Индекс МосБиржи",  # noqa: RUF001
 }
-_SCAN_POLICY_VERSION = "moex-board-scan-v3"
+_SCAN_POLICY_VERSION = "moex-board-scan-v4"
 _LIQUIDITY_POLICY_VERSION = "market-liquidity-v2"
 _DIVIDEND_MARKET_POLICY_VERSION = "dividend-market-screen-v1"
 _DEFAULT_STOCK_PREFILTER_LIMIT = 12
@@ -669,6 +669,11 @@ class MoexIssProvider:
                     classification_url="https://www.moex.com/ru/marketdata/",
                     quote_kind=price_field.lower(),
                     turnover=turnover,
+                    isin=(
+                        _string(security_row, "ISIN")
+                        if security_row.get("ISIN") is not None
+                        else None
+                    ),
                     research=research,
                     liquidity=self._liquidity_evidence(
                         asset_id=asset_id,

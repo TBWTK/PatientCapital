@@ -405,6 +405,7 @@ class MarketSearchResponse(ContractModel):
     kind_counts: dict[str, int]
     admission_run_id: UUID
     admission_policy_version: str
+    issuer_evidence_set_hash: str
     admission_status_counts: dict[str, int]
 
 
@@ -425,6 +426,7 @@ class MarketResearchStatusResponse(ContractModel):
 
 class AssetAdmissionAssessmentResponse(ContractModel):
     name: str
+    issuer_evidence_snapshot_id: UUID | None
     profile: AssetAdmissionProfileResponse
 
 
@@ -432,6 +434,7 @@ class AssetAdmissionRunResponse(ContractModel):
     id: UUID
     market_snapshot_id: UUID
     policy_version: str
+    issuer_evidence_set_hash: str
     scope: Literal["universe_discovery", "pool_refresh", "on_demand"]
     status: Literal["succeeded"]
     evaluated_at: datetime

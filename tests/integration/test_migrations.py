@@ -32,6 +32,7 @@ def test_head_migration_creates_required_authorities() -> None:
         "market_research_snapshots",
         "asset_admission_runs",
         "asset_admission_assessments",
+        "issuer_evidence_snapshots",
     }.issubset(set(inspector.get_table_names()))
     assert inspector.get_unique_constraints("transactions")
     transaction_columns = {item["name"]: item for item in inspector.get_columns("transactions")}
@@ -47,6 +48,7 @@ def test_head_migration_creates_required_authorities() -> None:
     assert inspector.get_foreign_keys("monitor_alert_acknowledgements")
     assert inspector.get_foreign_keys("asset_admission_runs")
     assert inspector.get_foreign_keys("asset_admission_assessments")
+    assert inspector.get_unique_constraints("issuer_evidence_snapshots")
     engine.dispose()
 
 

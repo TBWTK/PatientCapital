@@ -84,6 +84,21 @@ updated: 2026-08-16
 - [x] `PC4 migration`: существующие profile/ledger/runs/snapshots/drafts/alerts сохраняются после
   additive schema migration и rollback caveat документирован.
 
+## PC5 trusted issuer-evidence capability evals
+
+- [x] `Identity/source`: asset/ISIN mismatch, untrusted host и future/invalid source
+  dates fail closed; source hash меняет evidence identity, а conflict даёт `unknown`.
+- [x] `Reporting freshness`: свежая загрузка старого отчёта не лечит missing latest-due FY/current
+  period; unresolved restatement/conflict остаётся `unknown`.
+- [x] `Dividend authority`: binding suspension даёт strategy hard kill, proposal/comment — `watch`;
+  default/delisting и going-concern/adverse audit являются отдельными hard events.
+- [x] `Financial gates`: exact Decimal boundaries для profitability `>=3/4`, payout `(0,100%]`,
+  positive equity, audit/governance и event coverage; missing value даёт `unknown`.
+- [x] `Metamorphic`: порядок documents/events и narrative не меняют evidence hash/status;
+  v1/screen evidence не может дать v2 eligible.
+- [x] `Integration/no trade`: evidence-set hash versioned in immutable admission run; proposal uses
+  matching persisted profiles only; API/MCP/web parity; transaction/order/SELL counts unchanged.
+
 ## Regression gates
 
 - [x] Unit + property tests domain core (`51 passed`, branch coverage `98.01%`, 15.08.2026).
@@ -199,6 +214,8 @@ git diff --check
 | PC4-REQ-03 immutable profiles | migration + API/MCP/web parity | PostgreSQL `0008` + generated TS + browser | migration/contract/component/browser suites | Gates/source/as-of/reasons persist append-only and render progressively | passing |
 | PC4-RISK-01 top-N bias | metamorphic provider + live inspection | full synthetic board + live 537-instrument universe | provider suite + latest admission endpoint | Top-N caps enrichment only; 99 equities remain in research queue | passing |
 | PC4-RISK-02 narrative-to-trade | negative/eval/ledger inspection | market screen and missing issuer facts | discovery/monitor/API suites + product DB counts | LLM/user opinion cannot create eligible fact, transaction, SELL or order | passing |
+| PC5-REQ-01 trusted issuer evidence | corpus + boundary + integration + live browser | exact MOEX/ISIN reviewed packet, mismatches, stale/conflicting/adverse mutations | issuer-evidence/admission/integration/web suites + live amount-only run | Only v2 eligible packet reaches proposal; exact source/hash/reasons persist | passing |
+| PC5-RISK-01 issuer cache/selection drift | metamorphic + immutable DB + no-side-effect | same market snapshot with two evidence hashes; reversed/narrative fixtures | market-intelligence integration + domain corpus + ledger inspection | Separate admission runs; selection consumes matching persisted profile; transactions unchanged | passing |
 
 ## Портфель проверок
 
@@ -216,6 +233,6 @@ idempotency consistency; clean-volume Docker operational E2E; controlled live pr
 - parallel-write stress — single-user scope и DB locks проверены функционально, не под нагрузкой;
 - destructive restore rehearsal — documented, но RTO/RPO остаются unknown;
 - 10k-ledger/100-asset performance и saturation — expansion gate, а не доказанный MVP property.
-- PC2-REQ-01/02/03/04/05 и compatibility gate имеют implementation evidence; остаётся финальный
-  project/IMMUNE/Git handoff audit.
+- Универсальный issuer coverage не заявлен: runtime reviewed packet пока есть только для MOEX;
+  остальные equity остаются `unknown` до отдельного source adapter/eval.
 <!-- immune-project-engineering:quality:end -->

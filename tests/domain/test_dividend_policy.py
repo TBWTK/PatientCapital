@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
@@ -15,15 +16,29 @@ from patientcapital.marketdata.models import (
     MarketCandidate,
     MarketLiquidityEvidence,
 )
+from patientcapital.research.corpus import MOEX_ISSUER_EVIDENCE_V2
 from patientcapital.research.models import (
     BalanceSheetStatus,
     CorporateActionStatus,
+    DividendIssuerEvidenceBundle,
     DividendResearchEvidence,
     ResearchCitation,
     ResearchFactKind,
 )
 
-NOW = datetime(2026, 8, 16, 9, 0, tzinfo=UTC)
+NOW = datetime(2026, 8, 16, 15, 30, tzinfo=UTC)
+
+
+def trusted_bundle(asset_id: str, isin: str) -> DividendIssuerEvidenceBundle:
+    return replace(
+        MOEX_ISSUER_EVIDENCE_V2,
+        asset_id=asset_id,
+        isin=isin,
+        documents=tuple(
+            replace(item, asset_id=asset_id, isin=isin)
+            for item in MOEX_ISSUER_EVIDENCE_V2.documents
+        ),
+    )
 
 
 def admitted_liquidity(
@@ -96,6 +111,7 @@ def candidate(
     price: str,
     turnover: str,
     research: DividendResearchEvidence | None = None,
+    issuer_evidence: DividendIssuerEvidenceBundle | None = None,
     maturity: date | None = None,
     currency: str = "RUB",
     market_liquidity: MarketLiquidityEvidence | None = None,
@@ -117,12 +133,14 @@ def candidate(
         ),
         quote_kind="last_dirty" if maturity is not None else "current",
         turnover=Decimal(turnover),
+        isin=issuer_evidence.isin if issuer_evidence is not None else None,
         maturity_date=maturity,
         yield_percent=Decimal("15") if maturity is not None else None,
         clean_price_percent=Decimal("77") if maturity is not None else None,
         face_value=Decimal("1000") if maturity is not None else None,
         accrued_interest=Decimal("30") if maturity is not None else None,
-        research=research,
+        research=issuer_evidence.research if issuer_evidence is not None else research,
+        issuer_evidence=issuer_evidence,
         liquidity=market_liquidity or admitted_liquidity(kind),
     )
 
@@ -143,7 +161,7 @@ def test_growth_policy_admits_source_backed_dividend_stock_with_concentration_ca
                 InstrumentKind.DIVIDEND_STOCK,
                 price="155",
                 turnover="1000000000",
-                research=evidence(),
+                issuer_evidence=trusted_bundle("MOEX", "RU000A0JR4A1"),
             ),
         ),
         contribution=Decimal("8000"),
@@ -165,27 +183,25 @@ def test_growth_policy_admits_source_backed_dividend_stock_with_concentration_ca
 
 
 @pytest.mark.parametrize(
-    ("research", "turnover", "reason"),
+    ("research", "turnover"),
     [
-        (evidence(observed_at=NOW - timedelta(days=181)), "1000000000", "просроч"),
-        (evidence(profitable_years=2), "1000000000", "прибыл"),
-        (evidence(dividend_years=2), "1000000000", "дивиденд"),
-        (evidence(payout_ratio_percent=Decimal("120")), "1000000000", "покры"),
+        (evidence(observed_at=NOW - timedelta(days=181)), "1000000000"),
+        (evidence(profitable_years=2), "1000000000"),
+        (evidence(dividend_years=2), "1000000000"),
+        (evidence(payout_ratio_percent=Decimal("120")), "1000000000"),
         (
             evidence(balance_sheet_status=BalanceSheetStatus.CONCERN),
             "1000000000",
-            "баланс",
         ),
-        (evidence(governance_program_member=False), "1000000000", "управлен"),
+        (evidence(governance_program_member=False), "1000000000"),
         (
             evidence(corporate_action_status=CorporateActionStatus.MATERIAL),
             "1000000000",
-            "корпоратив",
         ),
     ],
 )
 def test_dividend_gate_rejects_each_material_unknown(
-    research: DividendResearchEvidence, turnover: str, reason: str
+    research: DividendResearchEvidence, turnover: str
 ) -> None:
     selection = select_market_candidates(
         (
@@ -205,7 +221,7 @@ def test_dividend_gate_rejects_each_material_unknown(
     )
 
     rejected = next(item for item in selection.rejected if item.candidate.asset_id == "STOCK")
-    assert reason in rejected.reason.lower()
+    assert "EQDV2_EVIDENCE_MISSING" in rejected.reason
     assert [(item.candidate.asset_id, item.target_weight) for item in selection.items] == [
         ("FUND", Decimal("1.00000000"))
     ]
@@ -220,7 +236,7 @@ def test_dividend_gate_uses_rolling_liquidity_instead_of_current_turnover() -> N
                 InstrumentKind.DIVIDEND_STOCK,
                 price="155",
                 turnover="1000000000",
-                research=evidence(),
+                issuer_evidence=trusted_bundle("STOCK", "RU0000000001"),
                 market_liquidity=admitted_liquidity(
                     InstrumentKind.DIVIDEND_STOCK, turnover="1000000"
                 ),
@@ -309,6 +325,7 @@ def test_dividend_policy_rejects_wrong_policy_currency_and_unaffordable_lot() ->
             turnover="1000000000",
             research=evidence(),
             currency="USD",
+            issuer_evidence=trusted_bundle("FOREIGN", "RU0000000002"),
         ),
         candidate(
             "EXPENSIVE",
@@ -316,6 +333,7 @@ def test_dividend_policy_rejects_wrong_policy_currency_and_unaffordable_lot() ->
             price="9000",
             turnover="1000000000",
             research=evidence(),
+            issuer_evidence=trusted_bundle("EXPENSIVE", "RU0000000003"),
         ),
         candidate("FUND", InstrumentKind.EQUITY_INDEX_FUND, price="100", turnover="800"),
     )
@@ -329,7 +347,7 @@ def test_dividend_policy_rejects_wrong_policy_currency_and_unaffordable_lot() ->
     )
 
     reasons = {item.candidate.asset_id: item.reason for item in selection.rejected}
-    assert "версии" in reasons["WRONG-POLICY"]
+    assert "EQDV2_EVIDENCE_MISSING" in reasons["WRONG-POLICY"]
     assert "Валюта" in reasons["FOREIGN"]
     assert "лота" in reasons["EXPENSIVE"]
 
@@ -343,14 +361,14 @@ def test_dividend_policy_ranks_two_eligible_stocks_by_liquidity() -> None:
                 InstrumentKind.DIVIDEND_STOCK,
                 price="100",
                 turnover="1000000000",
-                research=evidence(),
+                issuer_evidence=trusted_bundle("STOCK-A", "RU0000000004"),
             ),
             candidate(
                 "STOCK-B",
                 InstrumentKind.DIVIDEND_STOCK,
                 price="100",
                 turnover="900000000",
-                research=evidence(),
+                issuer_evidence=trusted_bundle("STOCK-B", "RU0000000005"),
             ),
         ),
         contribution=Decimal("8000"),

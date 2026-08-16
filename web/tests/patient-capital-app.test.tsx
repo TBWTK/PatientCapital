@@ -75,7 +75,7 @@ const admissionProfile = (
   assetId: string,
   instrumentKind: "ofz" | "equity_index_fund" | "dividend_stock" | "public_equity",
 ) => ({
-  policy_version: "asset-admission-v2",
+  policy_version: "asset-admission-v3",
   asset_id: assetId,
   instrument_kind: instrumentKind,
   strategy_profile: instrumentKind === "ofz" ? "sovereign_fixed_income" : instrumentKind === "equity_index_fund" ? "broad_index" : "dividend_quality",
@@ -100,7 +100,7 @@ const admissionProfile = (
     }],
   },
   investment: {
-    policy_version: instrumentKind === "ofz" ? "ofz-admission-v1" : "equity-dividend-quality-v1",
+    policy_version: instrumentKind === "ofz" ? "ofz-admission-v1" : "equity-dividend-quality-v2",
     status: "eligible" as const,
     reason_codes: ["ADMISSION_PASS"],
     gates: [],
@@ -216,7 +216,8 @@ describe("PatientCapitalApp", () => {
           enriched_count: 12,
           kind_counts: { ofz: 54, equity_index_fund: 3, dividend_stock: 12 },
           admission_run_id: "00000000-0000-0000-0000-000000000098",
-          admission_policy_version: "asset-admission-v2",
+          admission_policy_version: "asset-admission-v3",
+          issuer_evidence_set_hash: "a".repeat(64),
           admission_status_counts: { eligible: 14, watch: 3, reject: 2, unknown: 7 },
         },
         candidates: [{

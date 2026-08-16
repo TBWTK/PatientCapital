@@ -63,7 +63,8 @@ def clean_database(migrated_database: None) -> Generator[None]:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE market_research_snapshots, monitor_alert_acknowledgements, "
+                "TRUNCATE issuer_evidence_snapshots, market_research_snapshots, "
+                "monitor_alert_acknowledgements, "
                 "monitor_alerts, monitor_runs, "
                 "transaction_draft_decisions, transaction_drafts, proposal_sets, "
                 "recommendation_runs, transactions, price_snapshots, "

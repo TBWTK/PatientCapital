@@ -89,6 +89,7 @@ class StaticMarketDataProvider:
                 classification_url="https://www.moex.com/en/stocks/moex",
                 quote_kind="current",
                 turnover=Decimal("1144411993"),
+                isin="RU000A0JR4A1",
                 research=MOEX_DIVIDEND_RESEARCH,
                 liquidity=admitted_liquidity(
                     InstrumentKind.DIVIDEND_STOCK,
@@ -184,13 +185,17 @@ def test_growth_amount_only_flow_exposes_grounded_dividend_research_without_trad
             ("MOEX", "0.20000000"),
         ]
         stock = run["candidates"][2]
-        assert stock["research"]["policy_version"] == "dividend-quality-v1"
+        assert stock["research"]["policy_version"] == "equity-dividend-quality-v2"
         assert len(stock["research"]["citations"]) == 4
+        assert stock["admission"]["investment"]["status"] == "eligible"
+        assert run["search"]["admission_policy_version"] == "asset-admission-v3"
+        assert len(run["search"]["issuer_evidence_set_hash"]) == 64
         assert Decimal(run["spent"]) <= Decimal("8000.00")
 
     engine = create_engine(TEST_DATABASE_URL)
     with engine.connect() as connection:
         assert connection.scalar(text("SELECT count(*) FROM transactions")) == 0
+        assert connection.scalar(text("SELECT count(*) FROM issuer_evidence_snapshots")) == 1
     engine.dispose()
 
 

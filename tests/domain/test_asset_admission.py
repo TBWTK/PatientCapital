@@ -350,7 +350,7 @@ def test_market_screen_is_research_only_even_when_history_looks_attractive() -> 
 
     assert profile.policy_version == ADMISSION_POLICY_VERSION
     assert profile.overall_status is AdmissionStatus.UNKNOWN
-    assert "ADMISSION_RESEARCH_ONLY" in profile.reason_codes
+    assert "EQDV2_EVIDENCE_MISSING" in profile.reason_codes
 
 
 def test_old_dividend_fact_does_not_become_fresh_when_downloaded_today() -> None:
@@ -360,81 +360,26 @@ def test_old_dividend_fact_does_not_become_fresh_when_downloaded_today() -> None
     )
 
     assert profile.overall_status is AdmissionStatus.UNKNOWN
-    assert "DIVIDEND_FACT_STALE" in profile.reason_codes
+    assert "EQDV2_EVIDENCE_MISSING" in profile.reason_codes
 
 
-def test_binding_material_corporate_action_is_a_dividend_strategy_hard_kill() -> None:
+def test_legacy_material_flag_cannot_create_a_v2_hard_kill() -> None:
     profile = evaluate_asset_admission(
         equity(full_research(corporate_action_status=CorporateActionStatus.MATERIAL)),
         calculated_at=NOW,
     )
 
-    assert profile.overall_status is AdmissionStatus.REJECT
-    assert "DIVIDEND_MATERIAL_CORPORATE_ACTION" in profile.hard_kills
+    assert profile.overall_status is AdmissionStatus.UNKNOWN
+    assert profile.hard_kills == ()
+    assert "EQDV2_EVIDENCE_MISSING" in profile.unknowns
 
 
-@pytest.mark.parametrize(
-    ("overrides", "expected_status", "expected_reason"),
-    [
-        (
-            {"observed_at": NOW - timedelta(days=181)},
-            AdmissionStatus.UNKNOWN,
-            "ADMISSION_RESEARCH_STALE_OR_UNSUPPORTED",
-        ),
-        (
-            {"corporate_action_status": CorporateActionStatus.UNKNOWN},
-            AdmissionStatus.UNKNOWN,
-            "DIVIDEND_CORPORATE_ACTION_UNKNOWN",
-        ),
-        (
-            {"last_registry_close_date": None},
-            AdmissionStatus.UNKNOWN,
-            "DIVIDEND_FACT_STALE",
-        ),
-        (
-            {"profitable_years": 2},
-            AdmissionStatus.REJECT,
-            "DIVIDEND_PROFITABILITY_FAIL",
-        ),
-        (
-            {"dividend_years": 2},
-            AdmissionStatus.REJECT,
-            "DIVIDEND_CONTINUITY_FAIL",
-        ),
-        (
-            {"payout_ratio_percent": Decimal("101")},
-            AdmissionStatus.REJECT,
-            "DIVIDEND_PAYOUT_FAIL",
-        ),
-        (
-            {"balance_sheet_status": BalanceSheetStatus.CONCERN},
-            AdmissionStatus.REJECT,
-            "DIVIDEND_BALANCE_FAIL",
-        ),
-        (
-            {"balance_sheet_status": BalanceSheetStatus.UNKNOWN},
-            AdmissionStatus.UNKNOWN,
-            "DIVIDEND_BALANCE_UNKNOWN",
-        ),
-        (
-            {"governance_program_member": False},
-            AdmissionStatus.REJECT,
-            "DIVIDEND_GOVERNANCE_FAIL",
-        ),
-        ({}, AdmissionStatus.ELIGIBLE, "DIVIDEND_QUALITY_PASS"),
-    ],
-)
-def test_full_quality_equity_admission_gates(
-    overrides: dict[str, object],
-    expected_status: AdmissionStatus,
-    expected_reason: str,
-) -> None:
-    profile = evaluate_asset_admission(
-        equity(full_research(**overrides)), calculated_at=NOW
-    )
+def test_legacy_full_quality_packet_is_not_compatible_with_v2_admission() -> None:
+    profile = evaluate_asset_admission(equity(full_research()), calculated_at=NOW)
 
-    assert profile.overall_status is expected_status
-    assert expected_reason in profile.reason_codes
+    assert profile.overall_status is AdmissionStatus.UNKNOWN
+    assert profile.investment.policy_version == "equity-dividend-quality-v2"
+    assert profile.reason_codes == ("EQDV2_EVIDENCE_MISSING",)
 
 
 def test_class_specific_investment_unknowns_are_fail_closed() -> None:

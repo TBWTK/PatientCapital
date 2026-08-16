@@ -10,7 +10,7 @@ from typing import Protocol, runtime_checkable
 
 from patientcapital.domain.errors import InvalidAllocationInput
 from patientcapital.domain.money import validate_currency
-from patientcapital.research.models import DividendResearchEvidence
+from patientcapital.research.models import DividendIssuerEvidenceBundle, DividendResearchEvidence
 
 
 class InstrumentKind(StrEnum):
@@ -126,6 +126,7 @@ class MarketCandidate:
     classification_url: str
     quote_kind: str
     turnover: Decimal
+    isin: str | None = None
     maturity_date: date | None = None
     yield_percent: Decimal | None = None
     clean_price_percent: Decimal | None = None
@@ -135,6 +136,7 @@ class MarketCandidate:
     coupon_percent: Decimal | None = None
     coupon_value: Decimal | None = None
     research: DividendResearchEvidence | None = None
+    issuer_evidence: DividendIssuerEvidenceBundle | None = None
     liquidity: MarketLiquidityEvidence | None = None
 
     def __post_init__(self) -> None:
@@ -200,6 +202,20 @@ class MarketCandidate:
                 "INVALID_MARKET_CANDIDATE",
                 "dividend research evidence belongs only to dividend stocks",
             )
+        if self.issuer_evidence is not None:
+            if self.kind not in {InstrumentKind.DIVIDEND_STOCK, InstrumentKind.PUBLIC_EQUITY}:
+                raise InvalidAllocationInput(
+                    "INVALID_MARKET_CANDIDATE",
+                    "issuer evidence belongs only to public equities",
+                )
+            if self.isin is None or (
+                self.issuer_evidence.asset_id != self.asset_id
+                or self.issuer_evidence.isin != self.isin
+            ):
+                raise InvalidAllocationInput(
+                    "INVALID_MARKET_CANDIDATE",
+                    "issuer evidence identity must match asset id and ISIN",
+                )
 
     @property
     def lot_cost(self) -> Decimal:

@@ -67,7 +67,7 @@ evidence; transaction intake создаёт подтверждаемый draft; 
 | `asset admission` | rolling 20-session liquidity, class investment gate и deterministic `eligible/watch/reject/unknown` composition | missing/stale/conflicting material evidence остаётся unknown; market screen не selectable |
 | `selection policy` | `five-year-moex-v2`: maturity/liquidity ranking, class targets и composition с dividend gate | пустой eligible set блокирует proposal; LLM fallback запрещён |
 | `strategy registry` | упорядоченный набор admitted policies и выбор единственной recommended | недоступная policy исключается с видимой причиной; случайная замена запрещена |
-| `research` *(implemented)* | `dividend-research-evidence-v1`, primary corpus и `dividend-quality-v1` для новых классов | stale/incomplete/coverage/governance/action/liquidity failure исключает candidate |
+| `research` *(implemented)* | `issuer-evidence-v2`, reviewed primary packets и strict identity/source/hash provider boundary | unsupported/mismatch/stale/conflict остаётся unknown; narrative и v1 screen не авторизуют v2 |
 | `transaction intake` *(PC2)* | text/image extraction, resolver, unknowns и explicit confirmation | draft остаётся unconfirmed; ledger write запрещён |
 | `monitor` *(implemented)* | четыре scheduled evidence refresh в день и threshold/event alerts | idempotent no-op без trigger; provider error видим; transactions/orders недоступны |
 | `web` | Обзор, Пополнить, Ассистент, Профиль и progressive-disclosure UX | сохраняет draft или показывает точную ошибку API |
@@ -166,7 +166,7 @@ flowchart LR
   Web --> App["Application service"]
   Tools --> App
   App --> MOEX["MOEX ISS delayed facts"]
-  Corpus["Reviewed primary research corpus"] --> Policy["five-year-moex-v2 + dividend-quality-v1"]
+  Corpus["Reviewed primary issuer packet"] --> Policy["five-year-moex-v2 + equity-dividend-quality-v2"]
   MOEX --> Policy
   Policy --> App
   App --> Core["Deterministic allocation core"]
@@ -181,20 +181,28 @@ Agent path заканчивается на MCP boundary: зарегистрир�
 `patientcapital-mcp`, а adapter обращается к тому же HTTP/application contract, что web. UI не
 встраивает Codex app-server и не имеет скрытой кнопки, которая может инициировать сделку.
 
-## Dividend research policy v1
+## Trusted issuer evidence PC5
 
-`dividend-quality-v1` не является самостоятельным советником или dividend-capture стратегией. Он
-допускает категорию к пятилетнему growth plan только при одновременном выполнении всех условий:
-fresh reviewed evidence; минимум три прибыльных и три дивидендных периода; payout `0 < x <= 100%`;
-`no_debt` либо `adequate_capital`; подтверждённый governance gate; отсутствие выявленного material
-corporate action; RUB и доступный целый lot. Торгуемость принадлежит отдельному rolling liquidity
-gate, а affordability — budget feasibility. Target
-категории ограничен `20%`; при любом отказе исходная OFZ/fund policy продолжает работать без акции.
+`equity-dividend-quality-v2` не является самостоятельным советником или dividend-capture
+стратегией. Он допускает equity-категорию к пятилетнему growth plan только при одновременном
+выполнении typed gates: exact security/ISIN identity, свежий reporting period и event coverage,
+clean audit, прибыль в последнем и минимум трёх из четырёх периодов, минимум три dividend periods,
+binding/paid event, payout `0 < x <= 100%`, positive equity и governance minimum. Binding dividend
+suspension/default/delisting даёт strategy hard kill; non-binding adverse event — `watch`; missing,
+stale, conflicting или unsupported evidence — `unknown`.
 
-Эта production allowlist была границей PC2 и заменяется в PC3 dynamic board enumeration. Reviewed
-MOEX corpus остаётся историческим full-quality evidence, но не является единственным источником
-identity. Dynamic dividend-history screen имеет более узкий scope и обязан показывать unknown
-fundamentals/governance/corporate actions вместо имитации полного issuer audit.
+Reviewed provider связывает каждое поле с allowlisted primary document, publication/effective/
+retrieval timestamps и SHA-256. Narrative исключён из evidence hash. `issuer_evidence_snapshots`
+append-only, а admission identity равна `(market_snapshot, policy_version,
+issuer_evidence_set_hash)`. Selection потребляет persisted profiles этого run и не пересчитывает
+issuer verdict в ranking path. Текущий reviewed packet существует только для MOEX; это не ticker
+whitelist, поскольку все остальные бумаги честно остаются в research queue со статусом `unknown`.
+Authenticated NSD/Interfax либо новые reviewed packets подключаются тем же provider contract.
+
+Торгуемость принадлежит отдельному rolling liquidity gate, affordability — budget feasibility,
+owner preference — отдельному constraint. Legacy `dividend-quality-v1` и `market_screen` читаются
+для старых runs, но не дают `eligible` в `asset-admission-v3`. Growth-equity и sector-specific
+quality требуют отдельных policies.
 
 ## Dynamic Market Intelligence PC3
 

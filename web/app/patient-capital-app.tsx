@@ -275,7 +275,11 @@ function RecommendationEvidence({ result }: { result: Recommendation }) {
           </div>
           <div>
             <span>Снимок {shortDateTime(result.search.observed_at)}</span>
-            <small>{result.search.scan_policy_version} · {result.search.admission_policy_version} · {result.search.admission_run_id.slice(0, 8)}</small>
+            <small>
+              {result.search.scan_policy_version} · {result.search.admission_policy_version}
+              {" · evidence "}{result.search.issuer_evidence_set_hash.slice(0, 8)}
+              {" · run "}{result.search.admission_run_id.slice(0, 8)}
+            </small>
           </div>
         </section>
       )}

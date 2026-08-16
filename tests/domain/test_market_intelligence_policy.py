@@ -233,4 +233,4 @@ def test_dynamic_dividend_screen_never_enters_a_proposal() -> None:
         "STOCK-LIQUID",
         "STOCK-INCOME",
     }
-    assert all("research" in item.reason.lower() for item in selection.rejected)
+    assert all("EQDV2_EVIDENCE_MISSING" in item.reason for item in selection.rejected)

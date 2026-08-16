@@ -522,6 +522,8 @@ export interface components {
         AssetAdmissionAssessmentResponse: {
             /** Name */
             name: string;
+            /** Issuer Evidence Snapshot Id */
+            issuer_evidence_snapshot_id: string | null;
             profile: components["schemas"]["AssetAdmissionProfileResponse"];
         };
         /** AssetAdmissionProfileResponse */
@@ -575,6 +577,8 @@ export interface components {
             market_snapshot_id: string;
             /** Policy Version */
             policy_version: string;
+            /** Issuer Evidence Set Hash */
+            issuer_evidence_set_hash: string;
             /**
              * Scope
              * @enum {string}
@@ -864,6 +868,8 @@ export interface components {
             admission_run_id: string;
             /** Admission Policy Version */
             admission_policy_version: string;
+            /** Issuer Evidence Set Hash */
+            issuer_evidence_set_hash: string;
             /** Admission Status Counts */
             admission_status_counts: {
                 [key: string]: number;

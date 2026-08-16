@@ -34,6 +34,8 @@ updated: 2026-08-16
 | transaction draft *(implemented)* | исходный text/image hash, extraction, resolved instrument, confidence и unknowns | transaction-intake service; immutable и unconfirmed |
 | draft decision *(implemented)* | explicit confirm/reject и exact confirmed payload/version | append-only; только confirm может вызвать существующий transaction command |
 | monitor run / alert / acknowledgement *(implemented)* | schedule/policy/input/result, trigger/no-op/error evidence и user acknowledgement | monitor service; immutable, без transaction/order side effect |
+| `issuer_evidence_snapshots` *(implemented)* | exact security/ISIN, provider status, immutable reviewed packet/source hashes либо typed failure | issuer-evidence provider; один content-addressed result на identity + observation |
+| `asset_admission_runs` / `asset_admission_assessments` *(implemented)* | versioned liquidity + investment verdicts и exact issuer-evidence reference | admission service; run identity включает market snapshot, policy и evidence-set hash |
 
 ## Lifecycle и версии
 
@@ -43,7 +45,8 @@ updated: 2026-08-16
 отклоняют `UPDATE/DELETE` для `profile_versions`, `asset_versions`, `price_snapshots`, `transactions`,
 `recommendation_runs`, `proposal_sets`, `transaction_drafts`, `transaction_draft_decisions`,
 `monitor_runs`, `monitor_alerts`, `monitor_alert_acknowledgements` и
-`market_research_snapshots`, `asset_admission_runs`, `asset_admission_assessments`.
+`market_research_snapshots`, `issuer_evidence_snapshots`, `asset_admission_runs`,
+`asset_admission_assessments`.
 
 API поддерживает только `BUY` и `SELL`. Formal compensating-event link в schema отсутствует;
 исправление вводится новой фактической операцией с новым idempotency key и поясняющей `note`, если
@@ -76,20 +79,23 @@ portfolio quantities, пользовательский бюджет и broker pr
 на snapshot id и отдельно сохраняет budget/portfolio allocation. Snapshot не перезаписывается:
 каждый refresh создаёт новую строку, а slot/idempotency key блокирует дубликат.
 
-Admission run ссылается на конкретный market snapshot и не переоценивает его молча. Assessment не
+Admission run ссылается на конкретный market snapshot и не переоценивает его молча. Его unique
+identity — `(market_snapshot_id, policy_version, issuer_evidence_set_hash)`, поэтому новый reviewed
+fact создаёт отдельную оценку того же рынка и не сталкивается с legacy cache. Assessment хранит
+optional FK на точный immutable issuer packet. Assessment не
 создаёт строку в `assets`: широкий research pool не является portfolio universe. Latest pool —
 проекция последних immutable assessments; `asset_versions` остаётся authority только для выбранных
-либо пользовательских portfolio assets. Legacy PC3 snapshot без matching `asset-admission-v2` run
+либо пользовательских portfolio assets. Legacy PC3 snapshot без matching `asset-admission-v3` run
 не переиспользуется новым cache path.
 
-Для `dividend_stock` input snapshot дополнительно фиксирует `dividend-research-evidence-v1`:
-policy version, observed/max-age, reporting period, profitable/dividend years, payout ratio,
-balance/governance/corporate-action statuses, summary и ровно по одной primary citation на каждый
-gate. Evidence не является отдельной mutable таблицей: оно навсегда принадлежит конкретному
-immutable recommendation run. `five-year-moex-v2` использует числа из него только в eligibility;
-security identity, price, lot и turnover всё равно принадлежат строгому ISS adapter.
+Legacy `dividend_stock` run может содержать `dividend-research-evidence-v1`, но новая runtime policy
+его не принимает. `issuer-evidence-v2` хранится отдельно как content-addressed immutable payload:
+exact asset/ISIN, reporting/audit/profitability/dividend/payout/equity/governance/event fields,
+allowlisted source documents, publication/effective/retrieval times, content SHA-256, conflicts и
+binding authority. Summary остаётся отображаемым контекстом и не входит в evidence hash/status.
+Security identity, price, lot и rolling turnover по-прежнему принадлежат строгому ISS adapter.
 
-Migrations `20260816_0003`…`20260816_0008` additive: существующие profile/assets/prices/
+Migrations `20260816_0003`…`20260816_0009` additive: существующие profile/assets/prices/
 transactions/runs не переписываются. Proposal set хранит только admitted strategy metadata и UUID
 runs. Draft хранит extraction snapshot; unique append-only decision ссылается на transaction только
 после атомарного confirm. Monitor сохраняет slot/policy/provider outcome, daily-deduplicated alert и

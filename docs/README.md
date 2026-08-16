@@ -52,22 +52,24 @@ transaction assistant, explainable analytics, первый research-universe gat
    только по версионированному событию/порогу, подтверждение означает лишь ознакомление и никогда не
    создаёт transaction или broker order.
 
-Первая допущенная dividend-stock policy — `dividend-quality-v1`: только профиль «рост», максимум
-20% target на категорию, минимум три прибыльных и три дивидендных периода, покрытая выплата,
-допустимый баланс, ликвидность, governance и отсутствие выявленного material corporate action.
-Первый allowlisted инструмент — обыкновенная акция MOEX; цена/лот/оборот поступают из ISS, а
-research context — из reviewed primary-source corpus. Policy не ранжирует акции по дивидендной
-доходности и не реализует dividend capture.
+Первая runtime dividend-stock policy — `equity-dividend-quality-v2`: только профиль «рост», максимум
+20% target на категорию, exact MOEX security/ISIN, свежие official reporting/event facts, минимум
+три прибыльных и три дивидендных периода, покрытая выплата, положительный капитал, clean audit,
+governance coverage и отсутствие active hard kill. Первый reviewed packet создан для обыкновенной
+акции MOEX; цена/лот/rolling liquidity поступают из ISS, issuer facts — из зафиксированных primary
+documents с content hash. Остальные акции остаются `unknown`, пока такой packet не собран. Policy
+не ранжирует акции по обещанной дивидендной доходности и не реализует dividend capture.
 
-`PC3-MI` устранил статический предел, а активный `PC4-ADMISSION` отделяет discovery от допуска.
+`PC3-MI` устранил статический предел, `PC4-ADMISSION` отделил discovery от допуска, а
+`PC5-ISSUER` подключил первый доверенный issuer-evidence adapter.
 Фоновый scanner четыре раза в день перечисляет
 активные рублёвые инструменты MOEX, сохраняет immutable market snapshot, а запрос суммы использует
-его только пока он свежий и иначе выполняет bounded live refresh. SECID ОФЗ и dividend-stock
-кандидатов не перечисляются в коде. Versioned policy хранит trace: universe coverage, доступность
-лота и 20-session liquidity. Все прошедшие equity остаются в research queue, но MOEX-only
-дивидендный screen всегда `unknown` и не может попасть в proposal. Только immutable overall
-`eligible` после class investment gate участвует в ranking; неподтверждённые измерения не
-заполняются моделью.
+его только пока он свежий и иначе выполняет bounded live refresh. SECID ОФЗ и equity research queue
+не перечисляются в market scanner. Versioned policy хранит trace: universe coverage, доступность
+лота и 20-session liquidity. `market_screen`/`dividend-quality-v1` не авторизуют новый proposal;
+только immutable overall `eligible` из `asset-admission-v3` участвует в ranking. Admission run
+также фиксирует `issuer_evidence_set_hash`, поэтому новый официальный packet переоценивает тот же
+market snapshot отдельным run, а неподтверждённые измерения не заполняются моделью.
 
 Целевая web-навигация: **Обзор**, **Пополнить**, **Ассистент**, **Профиль**. Ручной ledger editor
 остаётся доступным как advanced/recovery fallback, но не является основным пользовательским путём.
@@ -125,6 +127,7 @@ broker execution, публикацию, ослабление quality gates ил�
 - [ADR 0004: assistant-first продуктовый цикл](decisions/0004-assistant-first-product-loop.md)
 - [ADR 0005: динамический Market Intelligence](decisions/0005-dynamic-market-intelligence.md)
 - [ADR 0006: контур допуска актива](decisions/0006-asset-admission-contour.md)
+- [ADR 0007: доверенные данные эмитента](decisions/0007-trusted-issuer-evidence.md)
 
 <!-- immune-project-engineering:docs:start -->
 - [Аудит и достаточность контекста](AUDIT.md)

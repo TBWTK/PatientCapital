@@ -32,5 +32,7 @@ updated: 2026-08-16
 | PC3-4 Explainable product | Web показывает scan freshness/coverage/why/rejected alternatives | Generated types + component/a11y/browser/Docker live journey | done |
 | PC3 handoff | PC3 contracts, implementation, data и operations говорят одну правду | Full regression, live MOEX inspection, clean releasable checkpoint | done |
 | PC2-MVP handoff | Все PC2 acceptance доказаны, existing ledger сохранён, docs/code/Git согласованы | Migration rehearsal + full regression + Docker E2E + browser QA + IMMUNE audit | done |
+| PC4 Asset admission | Rolling liquidity, class admission и budget feasibility разделены | Full-universe/provider/policy/API/MCP/web/Docker evidence | done |
+| PC5 Trusted issuer evidence | Официальные issuer facts дают reproducible dividend-quality v2 без narrative/ticker verdict | Corpus + adapter + immutable evidence hash + channel/no-trade/live gates | done |
 
 Допустимые статусы: `planned`, `active`, `blocked`, `done`.

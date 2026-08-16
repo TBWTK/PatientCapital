@@ -2,7 +2,7 @@
 title: Эксплуатация PatientCapital
 type: operations
 status: stable
-updated: 2026-08-15
+updated: 2026-08-16
 ---
 
 # Эксплуатация PatientCapital
@@ -36,11 +36,19 @@ GigaChat fields не включают runtime mode и используются �
 `MARKET_RESEARCH_STOCK_PREFILTER_LIMIT` ограничивает per-security dividend fan-out. Увеличивать его
 без live latency/rate-limit evidence нельзя.
 
-`moex-board-scan-v3` перед enrichment собирает 20 завершённых сессий TQOB/TQBR через paginated ISS
+`moex-board-scan-v4` перед enrichment собирает 20 завершённых сессий TQOB/TQBR через paginated ISS
 history. На проверочном host полный scan `537` instruments занял около `5–7 s`, создал `134`
 profiles (`32` ОФЗ, `3` фонда, `99` equity) и только `12` dividend calls. Closed-market отсутствие
 spread хранится как non-material advisory; подтверждённый высокий spread material. Каждый свежий
-market snapshot обязан иметь matching `asset-admission-v2` run, иначе cache fail closed.
+market snapshot обязан иметь matching `asset-admission-v3` run с точным
+`issuer_evidence_set_hash`, иначе cache fail closed. Один market snapshot может получить новый
+immutable admission run при изменении issuer packet; старый verdict не перезаписывается.
+
+Первый runtime adapter — `reviewed-official-corpus-v1`; он даёт trusted packet только для exact
+`MOEX/RU000A0JR4A1`. Пакет имеет ограниченный `valid_until`, а official-event coverage — окно `8h`:
+после истечения акция становится `unknown` до reviewed refresh. Unsupported equity не является
+provider error и сохраняется как visible `unknown`. Универсальное автоматическое покрытие требует
+отдельного credentialed/licensed NSD/Interfax adapter либо расширения reviewed corpus.
 
 Планируемая PC2 config должна иметь безопасные явные defaults: `MONITOR_RUNS_PER_DAY` принимает
 только `3` или `4`; расписание хранится с timezone, а missed/duplicate ticks идемпотентны. Upload

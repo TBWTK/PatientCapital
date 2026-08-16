@@ -51,7 +51,7 @@ broker order capability.
 | Screen presented as fundamental audit | typed `market_screen` scope, explicit unknown fields and source URLs | historical dividends do not predict future payments |
 | Stale cache silently reused | persisted expiry, fail-loud stale/provider error, immutable scan id in proposal | delayed MOEX facts remain non-real-time even when fresh by policy |
 | Однодневный spike принят за ликвидность | 20 completed-session coverage/median turnover и class thresholds; top-N только enrichment queue | thresholds требуют периодической калибровки под режим рынка |
-| LLM/opinion превращён в issuer verdict | typed primary evidence, immutable gates и deterministic status; narrative не входит в decision hash | trusted issuer adapter ещё не реализован, поэтому equity остаётся unknown |
+| LLM/opinion превращён в issuer verdict | typed primary evidence, exact security/ISIN, source hashes, immutable gates и deterministic status; narrative не входит в decision hash | reviewed runtime packet пока есть только для MOEX; остальные equity остаются unknown |
 | Старый PC3 cache обходит новый gate | cache namespace фильтрует provider/scan policy и требует matching admission run | ошибочная ручная DB-операция вне приложения остаётся operator risk |
 
 ## Условия эксплуатации MVP
@@ -74,11 +74,12 @@ PC2 upload/extractor local-only: Pillow проверяет decoded JPEG/PNG, MIM
 передаётся; любой будущий внешний extractor требует нового admission и data-flow review.
 Monitor получает только read/evidence capabilities и технически не импортирует ledger/order command.
 
-Dividend corpus допускает только HTTPS hosts MOEX/ISS/Банка России и валидирует ровно одну citation
-для fundamentals, dividends, governance и corporate actions. Research summary отображается как
-контекст, но не входит в security master или арифметику. Просрочка, неизвестный balance/governance,
-непокрытая выплата, material/unknown corporate action или недостаточная ликвидность исключают
-кандидата. Добавление issuer domain требует отдельного adapter review, а не расширения через prompt.
+Issuer provider допускает только HTTPS hosts MOEX/ISS/Банка России, exact security/ISIN и документы
+с publication/effective/retrieval times и content SHA-256. Research summary отображается как
+контекст, но не входит в evidence hash, verdict или арифметику. Identity mismatch, конфликт,
+просрочка, неизвестный balance/governance, непокрытая выплата, adverse action или недостаточная
+ликвидность не становятся `eligible`. Добавление issuer domain/adapter требует отдельного review и
+eval, а не расширения через prompt. Открытые новости могут быть discovery lead, но не typed fact.
 
 ## Production blockers
 

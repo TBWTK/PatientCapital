@@ -1020,6 +1020,7 @@ def _market_search_response(acquired: AcquiredMarketResearch) -> MarketSearchRes
         kind_counts={key: int(value) for key, value in record.kind_counts.items()},
         admission_run_id=acquired.admission_run.id,
         admission_policy_version=acquired.admission_run.policy_version,
+        issuer_evidence_set_hash=acquired.admission_run.issuer_evidence_set_hash,
         admission_status_counts={
             key: int(value) for key, value in acquired.admission_run.status_counts.items()
         },
@@ -1059,6 +1060,7 @@ def get_latest_asset_admission(session: Session) -> AssetAdmissionRunResponse:
         id=run.id,
         market_snapshot_id=run.market_snapshot_id,
         policy_version=run.policy_version,
+        issuer_evidence_set_hash=run.issuer_evidence_set_hash,
         scope=run.scope,  # type: ignore[arg-type]
         status=run.status,  # type: ignore[arg-type]
         evaluated_at=run.evaluated_at,
@@ -1068,6 +1070,7 @@ def get_latest_asset_admission(session: Session) -> AssetAdmissionRunResponse:
         assessments=[
             AssetAdmissionAssessmentResponse(
                 name=item.name,
+                issuer_evidence_snapshot_id=item.issuer_evidence_snapshot_id,
                 profile=_asset_admission_profile_response(
                     deserialize_admission_profile(item.profile)
                 ),
@@ -1212,6 +1215,7 @@ def create_discovery_recommendation(
             horizon_years=profile.investment_horizon_years,
             risk_level=profile.risk_level,
             calculated_at=calculated_at,
+            admission_profiles=acquired.profiles,
         )
         selected_ids = {item.candidate.asset_id for item in selection.items}
         universe_ids = selected_ids | {

@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import cast
 
 from patientcapital.marketdata.models import (
     InstrumentKind,
@@ -14,11 +13,17 @@ from patientcapital.marketdata.models import (
     MarketCandidate,
     MarketLiquidityEvidence,
 )
-from patientcapital.research.models import BalanceSheetStatus, CorporateActionStatus, ResearchScope
+from patientcapital.research.models import (
+    IssuerAuditStatus,
+    IssuerDecisionAuthority,
+    IssuerEventKind,
+    IssuerGovernanceStatus,
+    IssuerSourceRole,
+)
 
-ADMISSION_POLICY_VERSION = "asset-admission-v2"
+ADMISSION_POLICY_VERSION = "asset-admission-v3"
 LIQUIDITY_POLICY_VERSION = "market-liquidity-v2"
-DIVIDEND_ADMISSION_POLICY_VERSION = "equity-dividend-quality-v1"
+DIVIDEND_ADMISSION_POLICY_VERSION = "equity-dividend-quality-v2"
 OFZ_ADMISSION_POLICY_VERSION = "ofz-admission-v1"
 FUND_ADMISSION_POLICY_VERSION = "broad-index-fund-admission-v1"
 
@@ -359,68 +364,387 @@ def _investment_dimension(
             FUND_ADMISSION_POLICY_VERSION, AdmissionStatus.ELIGIBLE, "FUND_CLASSIFICATION_VALID"
         )
 
-    research = candidate.research
-    if research is None or research.scope is ResearchScope.MARKET_SCREEN:
-        return result(
-            DIVIDEND_ADMISSION_POLICY_VERSION,
+    return _equity_investment_dimension(candidate, calculated_at=calculated_at)
+
+
+def _equity_investment_dimension(
+    candidate: MarketCandidate, *, calculated_at: datetime
+) -> tuple[AdmissionDimension, tuple[str, ...], tuple[str, ...]]:
+    evidence = candidate.issuer_evidence
+    if evidence is None:
+        gate = AdmissionGate(
+            gate_id="issuer_evidence",
+            status=AdmissionStatus.UNKNOWN,
+            reason_code="EQDV2_EVIDENCE_MISSING",
+            observed_value=None,
+            unit=None,
+            threshold="issuer-evidence-v2",
+            source_url=candidate.source_url,
+            observed_at=candidate.price_as_of,
+            valid_until=candidate.price_as_of + candidate.max_age,
+        )
+        return (
+            AdmissionDimension(
+                DIVIDEND_ADMISSION_POLICY_VERSION,
+                AdmissionStatus.UNKNOWN,
+                (gate,),
+                (gate.reason_code,),
+            ),
+            (),
+            (gate.reason_code,),
+        )
+
+    documents_by_role = {
+        role: next(item for item in evidence.documents if item.role is role)
+        for role in IssuerSourceRole
+        if any(item.role is role for item in evidence.documents)
+    }
+
+    def issuer_gate(
+        gate_id: str,
+        status: AdmissionStatus,
+        reason_code: str,
+        *,
+        role: IssuerSourceRole,
+        observed_value: str | None,
+        threshold: str | None,
+        unit: str | None = None,
+    ) -> AdmissionGate:
+        document = documents_by_role[role]
+        return AdmissionGate(
+            gate_id=gate_id,
+            status=status,
+            reason_code=reason_code,
+            observed_value=observed_value,
+            unit=unit,
+            threshold=threshold,
+            source_url=document.url,
+            observed_at=evidence.observed_at,
+            valid_until=evidence.valid_until,
+        )
+
+    gates: list[AdmissionGate] = []
+    identity_ok = (
+        candidate.isin is not None
+        and candidate.asset_id == evidence.asset_id
+        and candidate.isin == evidence.isin
+    )
+    gates.append(
+        issuer_gate(
+            "identity_source",
+            AdmissionStatus.ELIGIBLE if identity_ok else AdmissionStatus.UNKNOWN,
+            "EQDV2_IDENTITY_PASS" if identity_ok else "EQDV2_IDENTITY_MISMATCH",
+            role=IssuerSourceRole.IDENTITY,
+            observed_value=f"{evidence.asset_id}:{evidence.isin}",
+            threshold=f"{candidate.asset_id}:{candidate.isin}",
+        )
+    )
+
+    if evidence.conflicts:
+        gates.append(
+            issuer_gate(
+                "fact_conflicts",
+                AdmissionStatus.UNKNOWN,
+                "EQDV2_FACT_CONFLICT",
+                role=IssuerSourceRole.CORPORATE_ACTIONS,
+                observed_value=",".join(item.conflict_id for item in evidence.conflicts),
+                threshold="none",
+            )
+        )
+    else:
+        gates.append(
+            issuer_gate(
+                "fact_conflicts",
+                AdmissionStatus.ELIGIBLE,
+                "EQDV2_FACTS_CONSISTENT",
+                role=IssuerSourceRole.CORPORATE_ACTIONS,
+                observed_value="0",
+                threshold="=0",
+            )
+        )
+
+    reporting_period = evidence.research.reporting_period_end
+    reporting_age = (
+        (calculated_at.date() - reporting_period).days if reporting_period is not None else None
+    )
+    reporting_ok = (
+        evidence.is_fresh_at(calculated_at)
+        and reporting_age is not None
+        and 0 <= reporting_age <= 210
+    )
+    gates.append(
+        issuer_gate(
+            "reporting_completeness",
+            AdmissionStatus.ELIGIBLE if reporting_ok else AdmissionStatus.UNKNOWN,
+            "EQDV2_REPORTING_PASS" if reporting_ok else "EQDV2_FINANCIALS_STALE_PERIOD",
+            role=IssuerSourceRole.FINANCIALS,
+            observed_value=reporting_period.isoformat() if reporting_period is not None else None,
+            threshold="latest official period age <=210d",
+            unit="date",
+        )
+    )
+
+    audit_statuses = {
+        IssuerAuditStatus.CLEAN: (AdmissionStatus.ELIGIBLE, "EQDV2_AUDIT_PASS"),
+        IssuerAuditStatus.QUALIFIED: (
+            AdmissionStatus.WATCH,
+            "EQDV2_AUDIT_QUALIFIED_REVIEW",
+        ),
+        IssuerAuditStatus.GOING_CONCERN: (AdmissionStatus.REJECT, "EQDV2_GOING_CONCERN"),
+        IssuerAuditStatus.ADVERSE: (AdmissionStatus.REJECT, "EQDV2_AUDIT_ADVERSE"),
+        IssuerAuditStatus.UNKNOWN: (AdmissionStatus.UNKNOWN, "EQDV2_AUDIT_UNKNOWN"),
+    }
+    audit_status, audit_reason = audit_statuses[evidence.audit_status]
+    gates.append(
+        issuer_gate(
+            "audit",
+            audit_status,
+            audit_reason,
+            role=IssuerSourceRole.AUDIT,
+            observed_value=evidence.audit_status.value,
+            threshold="clean",
+        )
+    )
+
+    profitable_years = evidence.research.profitable_years
+    profitability_ok = evidence.latest_period_profitable is True and (
+        profitable_years is not None and profitable_years >= 3
+    )
+    profitability_unknown = (
+        evidence.latest_period_profitable is None or profitable_years is None
+    )
+    gates.append(
+        issuer_gate(
+            "profitability",
+            (
+                AdmissionStatus.UNKNOWN
+                if profitability_unknown
+                else AdmissionStatus.ELIGIBLE
+                if profitability_ok
+                else AdmissionStatus.REJECT
+            ),
+            (
+                "EQDV2_PROFITABILITY_UNKNOWN"
+                if profitability_unknown
+                else "EQDV2_PROFITABILITY_PASS"
+                if profitability_ok
+                else "EQDV2_PROFITABILITY_FAIL"
+            ),
+            role=IssuerSourceRole.FINANCIALS,
+            observed_value=(
+                f"latest={evidence.latest_period_profitable};positive_years={profitable_years}"
+            ),
+            threshold="latest positive and >=3/4 positive FY",
+        )
+    )
+
+    active_events = tuple(
+        item
+        for item in evidence.events
+        if item.effective_from <= calculated_at.date()
+        and (item.effective_until is None or calculated_at.date() <= item.effective_until)
+    )
+    hard_event_reason: str | None = None
+    if any(
+        item.authority is IssuerDecisionAuthority.BINDING
+        and item.kind in {IssuerEventKind.DIVIDEND_SUSPENDED, IssuerEventKind.DIVIDEND_CANCELLED}
+        for item in active_events
+    ):
+        hard_event_reason = "EQDV2_BINDING_DIVIDEND_SUSPENSION"
+    elif any(item.kind is IssuerEventKind.DEFAULT_OR_INSOLVENCY for item in active_events):
+        hard_event_reason = "EQDV2_DEFAULT_OR_INSOLVENCY"
+    elif any(item.kind is IssuerEventKind.DELISTING for item in active_events):
+        hard_event_reason = "EQDV2_BINDING_DELISTING"
+
+    nonbinding_adverse = any(
+        item.authority is IssuerDecisionAuthority.NON_BINDING
+        and item.kind in {IssuerEventKind.DIVIDEND_SUSPENDED, IssuerEventKind.DIVIDEND_CANCELLED}
+        for item in active_events
+    )
+    if hard_event_reason is not None:
+        event_status = AdmissionStatus.REJECT
+        event_reason = hard_event_reason
+    elif nonbinding_adverse:
+        event_status = AdmissionStatus.WATCH
+        event_reason = "EQDV2_DIVIDEND_NONBINDING_ADVERSE"
+    else:
+        review_event = next(
+            (
+                item
+                for item in active_events
+                if item.kind
+                in {
+                    IssuerEventKind.DILUTION,
+                    IssuerEventKind.RELATED_PARTY,
+                    IssuerEventKind.GOVERNANCE_CHANGE,
+                    IssuerEventKind.RESTRUCTURING,
+                }
+            ),
+            None,
+        )
+        if review_event is None:
+            event_status, event_reason = AdmissionStatus.ELIGIBLE, "EQDV2_EVENTS_CLEAR"
+        else:
+            event_status = AdmissionStatus.WATCH
+            event_reason = {
+                IssuerEventKind.DILUTION: "EQDV2_DILUTION_REVIEW",
+                IssuerEventKind.RELATED_PARTY: "EQDV2_RELATED_PARTY_REVIEW",
+                IssuerEventKind.GOVERNANCE_CHANGE: "EQDV2_GOVERNANCE_CHANGE_REVIEW",
+                IssuerEventKind.RESTRUCTURING: "EQDV2_GOVERNANCE_CHANGE_REVIEW",
+            }[review_event.kind]
+    gates.append(
+        issuer_gate(
+            "material_events",
+            event_status,
+            event_reason,
+            role=IssuerSourceRole.CORPORATE_ACTIONS,
+            observed_value=",".join(item.kind.value for item in active_events) or "none",
+            threshold="no active adverse binding event",
+        )
+    )
+
+    coverage_age = calculated_at - evidence.event_coverage_through
+    coverage_ok = timedelta(0) <= coverage_age <= timedelta(hours=8)
+    gates.append(
+        issuer_gate(
+            "event_coverage_freshness",
+            AdmissionStatus.ELIGIBLE if coverage_ok else AdmissionStatus.UNKNOWN,
+            "EQDV2_EVENT_COVERAGE_PASS"
+            if coverage_ok
+            else "EQDV2_EVENT_COVERAGE_STALE",
+            role=IssuerSourceRole.CORPORATE_ACTIONS,
+            observed_value=evidence.event_coverage_through.isoformat(),
+            threshold="age <=8h",
+            unit="datetime",
+        )
+    )
+
+    dividend_paid = any(item.kind is IssuerEventKind.DIVIDEND_PAID for item in active_events)
+    continuity_ok = (
+        evidence.research.dividend_years >= 3
+        and evidence.research.last_registry_close_date is not None
+        and dividend_paid
+    )
+    gates.append(
+        issuer_gate(
+            "dividend_continuity",
+            AdmissionStatus.ELIGIBLE if continuity_ok else AdmissionStatus.UNKNOWN,
+            "EQDV2_DIVIDEND_CONTINUITY_PASS"
+            if continuity_ok
+            else "EQDV2_DIVIDEND_DECISION_MISSING",
+            role=IssuerSourceRole.DIVIDENDS,
+            observed_value=(
+                f"years={evidence.research.dividend_years};paid_event={dividend_paid}"
+            ),
+            threshold=">=3/4 due FY including latest due and payment evidence",
+        )
+    )
+
+    payout = evidence.research.payout_ratio_percent
+    payout_unknown = payout is None
+    payout_ok = payout is not None and Decimal("0") < payout <= Decimal("100")
+    gates.append(
+        issuer_gate(
+            "payout_coverage",
+            (
+                AdmissionStatus.UNKNOWN
+                if payout_unknown
+                else AdmissionStatus.ELIGIBLE
+                if payout_ok
+                else AdmissionStatus.REJECT
+            ),
+            (
+                "EQDV2_PAYOUT_BASIS_MISMATCH"
+                if payout_unknown
+                else "EQDV2_PAYOUT_PASS"
+                if payout_ok
+                else "EQDV2_PAYOUT_UNCOVERED"
+            ),
+            role=IssuerSourceRole.DIVIDENDS,
+            observed_value=str(payout) if payout is not None else None,
+            threshold="0 < payout/profit <=100",
+            unit="percent",
+        )
+    )
+
+    gates.append(
+        issuer_gate(
+            "balance_minimum",
+            (
+                AdmissionStatus.UNKNOWN
+                if evidence.positive_equity is None
+                else AdmissionStatus.ELIGIBLE
+                if evidence.positive_equity
+                else AdmissionStatus.REJECT
+            ),
+            (
+                "EQDV2_BALANCE_UNKNOWN"
+                if evidence.positive_equity is None
+                else "EQDV2_BALANCE_MINIMUM_PASS"
+                if evidence.positive_equity
+                else "EQDV2_NEGATIVE_EQUITY"
+            ),
+            role=IssuerSourceRole.FINANCIALS,
+            observed_value=str(evidence.positive_equity),
+            threshold="total equity >0",
+        )
+    )
+
+    governance_statuses = {
+        IssuerGovernanceStatus.CLEAR: (
+            AdmissionStatus.ELIGIBLE,
+            "EQDV2_GOVERNANCE_MINIMUM_PASS",
+        ),
+        IssuerGovernanceStatus.REVIEW: (
+            AdmissionStatus.WATCH,
+            "EQDV2_GOVERNANCE_CHANGE_REVIEW",
+        ),
+        IssuerGovernanceStatus.UNKNOWN: (
             AdmissionStatus.UNKNOWN,
-            "ADMISSION_RESEARCH_ONLY",
+            "EQDV2_GOVERNANCE_UNKNOWN",
+        ),
+    }
+    governance_status, governance_reason = governance_statuses[evidence.governance_status]
+    gates.append(
+        issuer_gate(
+            "governance_minimum",
+            governance_status,
+            governance_reason,
+            role=IssuerSourceRole.GOVERNANCE,
+            observed_value=evidence.governance_status.value,
+            threshold="current filings and no active rights event",
         )
-    if research.policy_version != "dividend-quality-v1" or not research.is_fresh_at(calculated_at):
-        return result(
+    )
+
+    status = compose_statuses(tuple(item.status for item in gates))
+    non_pass_reasons = tuple(
+        item.reason_code for item in gates if item.status is not AdmissionStatus.ELIGIBLE
+    )
+    reason_codes = non_pass_reasons or ("EQDV2_ELIGIBLE",)
+    hard_kills = tuple(
+        item.reason_code
+        for item in gates
+        if item.reason_code
+        in {
+            "EQDV2_BINDING_DIVIDEND_SUSPENSION",
+            "EQDV2_DEFAULT_OR_INSOLVENCY",
+            "EQDV2_BINDING_DELISTING",
+            "EQDV2_GOING_CONCERN",
+            "EQDV2_AUDIT_ADVERSE",
+        }
+    )
+    unknowns = tuple(
+        item.reason_code for item in gates if item.status is AdmissionStatus.UNKNOWN
+    )
+    return (
+        AdmissionDimension(
             DIVIDEND_ADMISSION_POLICY_VERSION,
-            AdmissionStatus.UNKNOWN,
-            "ADMISSION_RESEARCH_STALE_OR_UNSUPPORTED",
-        )
-    if research.corporate_action_status is CorporateActionStatus.MATERIAL:
-        return result(
-            DIVIDEND_ADMISSION_POLICY_VERSION,
-            AdmissionStatus.REJECT,
-            "DIVIDEND_MATERIAL_CORPORATE_ACTION",
-        )
-    if research.corporate_action_status is CorporateActionStatus.UNKNOWN:
-        return result(
-            DIVIDEND_ADMISSION_POLICY_VERSION,
-            AdmissionStatus.UNKNOWN,
-            "DIVIDEND_CORPORATE_ACTION_UNKNOWN",
-        )
-    if research.last_registry_close_date is None or (
-        calculated_at.date() - research.last_registry_close_date
-    ) > timedelta(days=730):
-        return result(
-            DIVIDEND_ADMISSION_POLICY_VERSION,
-            AdmissionStatus.UNKNOWN,
-            "DIVIDEND_FACT_STALE",
-        )
-    profitable_years = cast(int, research.profitable_years)
-    payout_ratio_percent = cast(Decimal, research.payout_ratio_percent)
-    governance_program_member = cast(bool, research.governance_program_member)
-    if profitable_years < 3:
-        return result(
-            DIVIDEND_ADMISSION_POLICY_VERSION, AdmissionStatus.REJECT, "DIVIDEND_PROFITABILITY_FAIL"
-        )
-    if research.dividend_years < 3:
-        return result(
-            DIVIDEND_ADMISSION_POLICY_VERSION, AdmissionStatus.REJECT, "DIVIDEND_CONTINUITY_FAIL"
-        )
-    if not Decimal("0") < payout_ratio_percent <= Decimal("100"):
-        return result(
-            DIVIDEND_ADMISSION_POLICY_VERSION, AdmissionStatus.REJECT, "DIVIDEND_PAYOUT_FAIL"
-        )
-    if research.balance_sheet_status is BalanceSheetStatus.CONCERN:
-        return result(
-            DIVIDEND_ADMISSION_POLICY_VERSION, AdmissionStatus.REJECT, "DIVIDEND_BALANCE_FAIL"
-        )
-    if research.balance_sheet_status is BalanceSheetStatus.UNKNOWN:
-        return result(
-            DIVIDEND_ADMISSION_POLICY_VERSION, AdmissionStatus.UNKNOWN, "DIVIDEND_BALANCE_UNKNOWN"
-        )
-    if governance_program_member is False:
-        return result(
-            DIVIDEND_ADMISSION_POLICY_VERSION, AdmissionStatus.REJECT, "DIVIDEND_GOVERNANCE_FAIL"
-        )
-    return result(
-        DIVIDEND_ADMISSION_POLICY_VERSION, AdmissionStatus.ELIGIBLE, "DIVIDEND_QUALITY_PASS"
+            status,
+            tuple(gates),
+            reason_codes,
+        ),
+        hard_kills,
+        unknowns,
     )
 
 
@@ -437,6 +761,13 @@ def evaluate_asset_admission(
         expiry_candidates.append(candidate.liquidity.observed_at + candidate.liquidity.max_age)
     if candidate.research is not None:
         expiry_candidates.append(candidate.research.observed_at + candidate.research.max_age)
+    if candidate.issuer_evidence is not None:
+        expiry_candidates.extend(
+            (
+                candidate.issuer_evidence.valid_until,
+                candidate.issuer_evidence.event_coverage_through + timedelta(hours=8),
+            )
+        )
     reason_codes = tuple(dict.fromkeys((*liquidity.reason_codes, *investment.reason_codes)))
     strategy = {
         InstrumentKind.OFZ: "sovereign_fixed_income",

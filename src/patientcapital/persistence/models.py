@@ -206,7 +206,8 @@ class AssetAdmissionRunRecord(Base):
         UniqueConstraint(
             "market_snapshot_id",
             "policy_version",
-            name="uq_asset_admission_runs_snapshot_policy",
+            "issuer_evidence_set_hash",
+            name="uq_asset_admission_runs_snapshot_policy_evidence",
         ),
         CheckConstraint("scope IN ('universe_discovery', 'pool_refresh', 'on_demand')"),
         CheckConstraint("status = 'succeeded'"),
@@ -218,6 +219,7 @@ class AssetAdmissionRunRecord(Base):
         ForeignKey("market_research_snapshots.id", ondelete="RESTRICT"), nullable=False
     )
     policy_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    issuer_evidence_set_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     scope: Mapped[str] = mapped_column(String(32), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -245,6 +247,9 @@ class AssetAdmissionAssessmentRecord(Base):
     run_id: Mapped[UUID] = mapped_column(
         ForeignKey("asset_admission_runs.id", ondelete="RESTRICT"), nullable=False
     )
+    issuer_evidence_snapshot_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("issuer_evidence_snapshots.id", ondelete="RESTRICT"), nullable=True
+    )
     asset_id: Mapped[str] = mapped_column(String(64), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     instrument_kind: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -254,6 +259,32 @@ class AssetAdmissionAssessmentRecord(Base):
     evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     profile: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class IssuerEvidenceSnapshotRecord(Base):
+    __tablename__ = "issuer_evidence_snapshots"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_issuer_evidence_snapshots_idempotency_key"),
+        CheckConstraint("status IN ('succeeded', 'unsupported', 'unavailable', 'invalid')"),
+        CheckConstraint("source_count >= 0"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    idempotency_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    asset_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    isin: Mapped[str] = mapped_column(String(32), nullable=False)
+    provider: Mapped[str] = mapped_column(String(100), nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    evidence_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    valid_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    source_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

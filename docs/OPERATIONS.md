@@ -127,7 +127,8 @@ downgrade удаляет tables/data и не является operational rollba
 ## Известные operational limits
 
 - Auth, RBAC, TLS termination, remote access, HA, automated backups, monitoring и alerting отсутствуют.
-- PC2 worker и alert persistence пока planned; local upload extractor и draft persistence реализованы.
+- PC2 worker и alert persistence пока planned; local upload extractor/draft persistence и
+  source-backed dividend research policy реализованы.
 - Capacity выше 10 000 ledger events и proposal latency на 100 assets не измерены.
 - PostgreSQL backup artifact проверен на читаемый catalog; destructive restore rehearsal не запущен.
 - Base-image/dependency audit — point-in-time evidence 15.08.2026, а не бессрочная гарантия.

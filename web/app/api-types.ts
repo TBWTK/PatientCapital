@@ -427,7 +427,7 @@ export interface components {
              * Instrument Type
              * @enum {string}
              */
-            instrument_type: "ofz" | "equity_index_fund";
+            instrument_type: "ofz" | "equity_index_fund" | "dividend_stock";
             /** Target Weight */
             target_weight: string;
             /** Rationale */
@@ -455,11 +455,53 @@ export interface components {
             source_url: string;
             /** Classification Url */
             classification_url: string;
+            research?: components["schemas"]["DividendResearchResponse"] | null;
         };
         /** DiscoveryRecommendationCreate */
         DiscoveryRecommendationCreate: {
             /** Contribution */
             contribution: number | string;
+        };
+        /** DividendResearchResponse */
+        DividendResearchResponse: {
+            /** Schema Version */
+            schema_version: string;
+            /** Policy Version */
+            policy_version: string;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /** Max Age Seconds */
+            max_age_seconds: number;
+            /**
+             * Reporting Period End
+             * Format: date
+             */
+            reporting_period_end: string;
+            /** Profitable Years */
+            profitable_years: number;
+            /** Dividend Years */
+            dividend_years: number;
+            /** Payout Ratio Percent */
+            payout_ratio_percent: string;
+            /**
+             * Balance Sheet Status
+             * @enum {string}
+             */
+            balance_sheet_status: "no_debt" | "adequate_capital" | "concern" | "unknown";
+            /** Governance Program Member */
+            governance_program_member: boolean;
+            /**
+             * Corporate Action Status
+             * @enum {string}
+             */
+            corporate_action_status: "no_material_action_identified" | "material" | "unknown";
+            /** Summary */
+            summary: string;
+            /** Citations */
+            citations: components["schemas"]["ResearchCitationResponse"][];
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -763,7 +805,7 @@ export interface components {
              * Instrument Type
              * @enum {string}
              */
-            instrument_type: "ofz" | "equity_index_fund";
+            instrument_type: "ofz" | "equity_index_fund" | "dividend_stock";
             /** Reason */
             reason: string;
             /** Unit Price */
@@ -779,6 +821,18 @@ export interface components {
             price_as_of: string;
             /** Source Url */
             source_url: string;
+        };
+        /** ResearchCitationResponse */
+        ResearchCitationResponse: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "fundamentals" | "dividends" | "governance" | "corporate_actions";
+            /** Title */
+            title: string;
+            /** Url */
+            url: string;
         };
         /** StrategyProposalResponse */
         StrategyProposalResponse: {

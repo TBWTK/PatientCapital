@@ -16,6 +16,7 @@ from patientcapital.marketdata.moex import (
     _string,
     _timestamp,
 )
+from patientcapital.research.corpus import MOEX_DIVIDEND_RESEARCH
 
 NOW = datetime(2026, 8, 15, 9, 0, tzinfo=UTC)
 
@@ -70,6 +71,13 @@ def test_market_candidate_rejects_invalid_material_fact(
 def test_ofz_requires_all_dirty_price_components() -> None:
     with pytest.raises(InvalidAllocationInput) as captured:
         _candidate(kind=InstrumentKind.OFZ, maturity_date=date(2031, 8, 15))
+
+    assert captured.value.code == "INVALID_MARKET_CANDIDATE"
+
+
+def test_non_dividend_candidate_rejects_dividend_research_evidence() -> None:
+    with pytest.raises(InvalidAllocationInput) as captured:
+        _candidate(research=MOEX_DIVIDEND_RESEARCH)
 
     assert captured.value.code == "INVALID_MARKET_CANDIDATE"
 

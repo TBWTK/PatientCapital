@@ -246,10 +246,34 @@ class DiscoveryRecommendationCreate(ContractModel):
     contribution: Decimal = Field(gt=0, decimal_places=2)
 
 
+class ResearchCitationResponse(ContractModel):
+    kind: Literal["fundamentals", "dividends", "governance", "corporate_actions"]
+    title: str
+    url: str
+
+
+class DividendResearchResponse(ContractModel):
+    schema_version: str
+    policy_version: str
+    observed_at: datetime
+    max_age_seconds: int
+    reporting_period_end: date
+    profitable_years: int
+    dividend_years: int
+    payout_ratio_percent: Decimal
+    balance_sheet_status: Literal["no_debt", "adequate_capital", "concern", "unknown"]
+    governance_program_member: bool
+    corporate_action_status: Literal[
+        "no_material_action_identified", "material", "unknown"
+    ]
+    summary: str
+    citations: list[ResearchCitationResponse]
+
+
 class DiscoveryCandidateResponse(ContractModel):
     asset_id: str
     name: str
-    instrument_type: Literal["ofz", "equity_index_fund"]
+    instrument_type: Literal["ofz", "equity_index_fund", "dividend_stock"]
     target_weight: Decimal
     rationale: str
     unit_price: Decimal
@@ -262,12 +286,13 @@ class DiscoveryCandidateResponse(ContractModel):
     yield_percent: Decimal | None = None
     source_url: str
     classification_url: str
+    research: DividendResearchResponse | None = None
 
 
 class RejectedDiscoveryCandidateResponse(ContractModel):
     asset_id: str
     name: str
-    instrument_type: Literal["ofz", "equity_index_fund"]
+    instrument_type: Literal["ofz", "equity_index_fund", "dividend_stock"]
     reason: str
     unit_price: Decimal
     lot_size: int

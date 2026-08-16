@@ -20,7 +20,7 @@ updated: 2026-08-16
 - [x] Карточка сначала показывает действие, обоснование, вложенную сумму/остаток и риски; security,
   lot/price/fee, freshness, sources, rejected candidates и policy/run versions скрыты в доступном
   progressive-disclosure блоке.
-- [ ] LLM/search может добавлять цитируемый research context, но инструмент, цена, lot, target,
+- [x] LLM/search может добавлять цитируемый research context, но инструмент, цена, lot, target,
   quantity, fee и totals материализуются только после typed validation и deterministic calculation.
 - [x] Свободный текст и поддержанное изображение создают unconfirmed transaction draft. Перед
   записью пользователь подтверждает side, resolved asset, quantity, clean unit price, НКД, fee,
@@ -30,7 +30,7 @@ updated: 2026-08-16
 - [x] Обзор объясняет капитал: market value, contributions/cost basis, realized/unrealized result,
   income, allocation/drift, freshness и recent activity. Неподдерживаемая метрика показывается как
   `unknown/not configured`, а не рассчитывается правдоподобной заглушкой.
-- [ ] Новый asset class допускается только отдельной versioned research/selection policy и eval.
+- [x] Новый asset class допускается только отдельной versioned research/selection policy и eval.
   Dividend-stock policy проверяет фундаментальные, дивидендные, liquidity, governance,
   corporate-action и concentration facts; dividend capture не является core default.
 - [ ] Monitor может собирать данные `3..4` раза в день, но создаёт alert/proposal только по
@@ -53,9 +53,14 @@ updated: 2026-08-16
 - `PC2-3 Analytics` завершён: `analytics-ledger-v1` возвращает typed metric status, market/cost,
   realized/unrealized result, freshness, allocation и recent activity. Неподдерживаемые cashflow и
   income остаются `not_configured`, не нулём.
+- `PC2-4 Research universe` завершён: `five-year-moex-v2` композиционно использует
+  `dividend-quality-v1`; акция MOEX допускается только для профиля «рост» с cap `20%` после typed
+  profitability/dividend/coverage/balance/liquidity/governance/corporate-action/freshness gates.
+  Primary citations и server-owned summary входят в immutable run, но calculation получает только
+  validated ISS security/price/lot и deterministic target.
 - Локальный portfolio содержит подтверждённую BUY `SU26226RMFS9`; его числовая evidence не должна
   измениться при migration v2.
-- Оставшийся product-gap: dividend research policy и recurring monitoring.
+- Оставшийся product-gap: recurring monitoring и финальная cross-surface проверка.
 - PC2-1 evidence 16.08.2026: `145 passed`, branch coverage `94.23%`; Ruff/mypy/OpenAPI; web build,
   typecheck, lint, SSR, `4` component tests + axe; MCP/API/migration tests; healthy Compose; browser
   desktop `1440px` и mobile `390px` без horizontal overflow.
@@ -65,11 +70,17 @@ updated: 2026-08-16
 - PC2-3 evidence 16.08.2026: `164 passed`; exact BUY→SELL realized fixture, stale freshness,
   API/MCP parity; web build/typecheck/lint/SSR/`6` component tests + axe; healthy Docker and browser
   inspection of current portfolio analytics/recent BUY.
+- PC2-4 evidence 16.08.2026: `191 passed`, branch coverage `94.12%`; Ruff/mypy/OpenAPI/generated TS;
+  web build/typecheck/lint/SSR/`6` component tests + axe; healthy Compose; controlled live MOEX run
+  returned OFZ `40%`, broad-index fund `40%`, dividend stock MOEX `20%`, spent `6 914.15 RUB` from
+  `8 000 RUB` after the configured buffer, and created `0` transactions. Browser exposed research
+  only inside nested details with four primary citations. Existing OFZ 26226 stayed `7` units,
+  cost basis `7 142.91 RUB`, market value `7 143.71 RUB`, unrealized `0.80 RUB`.
 
 ## Changed areas
 
-- Server-owned `analytics-ledger-v1`, typed unavailable metrics/freshness/activity API+MCP,
-  generated web contract и expanded Overview without frontend financial formulas.
+- Typed `dividend-research-evidence-v1`, reviewed primary corpus, `dividend-quality-v1`, MOEX share
+  mapping, `five-year-moex-v2`, immutable API evidence и nested progressive-disclosure web UI.
 
 ## Decisions made
 
@@ -79,16 +90,18 @@ updated: 2026-08-16
 - Текст/OCR/vision создаёт только draft; ledger меняется после отдельного явного confirmation.
 - Частое наблюдение отделено от редкого threshold/event-driven предложения; автоторговли нет.
 - Расширение universe выполняется policy-by-policy; текущая безопасная core policy не ослабляется.
+- Dividend-stock class пока допускается только для профиля «рост», не более `20%`; отсутствие или
+  просрочка любого research gate исключает акцию, а не вызывает LLM fallback.
 
 ## Next exact step
 
-Начать `PC2-4 Research universe`: зафиксировать dividend-stock evidence contract/policy corpus,
-использовать только официальные/первичные источники и допустить category отдельным eval gate.
+Начать `PC2-5 Monitoring`: определить immutable monitor run/alert schema, fake-clock schedule
+`4/day`, versioned event/threshold policy и доказать idempotent no-op/alert без transaction/order.
 
 ## Blockers
 
-- Дополнительные стратегии и dividend-stock universe не появляются до собственных policy/evidence
-  gates. Это не блокирует уже готовую core-карточку.
+- Новые dividend-stock кандидаты не появляются без отдельного reviewed corpus и policy regression;
+  текущий allowlist намеренно состоит из одного инструмента.
 - Публичный/коммерческий режим остаётся заблокирован до legal, identity, privacy и licensing review.
 
 ## Non-goals

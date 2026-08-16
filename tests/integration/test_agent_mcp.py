@@ -136,7 +136,7 @@ def test_mcp_amount_only_discovery_persists_the_same_run_as_http(client: TestCli
     assert result.is_error is False
     run = cast(dict[str, Any], result.structured_content)
     assert run["mode"] == "automatic"
-    assert run["policy_version"] == "five-year-moex-v1"
+    assert run["policy_version"] == "five-year-moex-v2"
     assert {item["asset_id"] for item in cast(list[dict[str, Any]], run["candidates"])} == {
         "SU26218RMFS6",
         "EQMX",

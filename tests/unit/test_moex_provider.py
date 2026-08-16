@@ -53,6 +53,7 @@ def _handler(request: httpx.Request) -> httpx.Response:
             },
         )
     asset_id = request.url.path.rsplit("/", 1)[-1].removesuffix(".json")
+    is_stock = asset_id == "MOEX"
     return httpx.Response(
         200,
         json={
@@ -67,7 +68,16 @@ def _handler(request: httpx.Request) -> httpx.Response:
                     "INSTRID",
                     "ISIN",
                 ],
-                [[asset_id, f"{asset_id} ETF", 1, "A", "SUR", "J", "IFTF", "RU000TEST"]],
+                [[
+                    asset_id,
+                    "МосБиржа" if is_stock else f"{asset_id} ETF",
+                    10 if is_stock else 1,
+                    "A",
+                    "SUR",
+                    "1" if is_stock else "J",
+                    "EQIN" if is_stock else "IFTF",
+                    "RU000A0JR4A1" if is_stock else "RU000TEST",
+                ]],
             ),
             "marketdata": _block(
                 ["SECID", "LAST", "MARKETPRICE", "LCURRENTPRICE", "VALTODAY", "SYSTIME"],
@@ -91,6 +101,16 @@ def test_provider_maps_strict_moex_facts_and_dirty_ofz_cost() -> None:
     funds = [item for item in result if item.kind is InstrumentKind.EQUITY_INDEX_FUND]
     assert {item.asset_id for item in funds} == {"EQMX", "SBMX", "TMOS"}
     assert all(item.classification_url == "https://www.moex.com/msn/etf" for item in funds)
+    stocks = [item for item in result if item.kind is InstrumentKind.DIVIDEND_STOCK]
+    assert [item.asset_id for item in stocks] == ["MOEX"]
+    assert stocks[0].lot_size == 10
+    assert stocks[0].research is not None
+    assert {citation.kind.value for citation in stocks[0].research.citations} == {
+        "fundamentals",
+        "dividends",
+        "governance",
+        "corporate_actions",
+    }
 
 
 def test_provider_rejects_malformed_moex_block() -> None:

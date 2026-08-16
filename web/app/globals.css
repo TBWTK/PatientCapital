@@ -147,6 +147,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
 .candidate-grid dd { margin: 0; font-weight: 700; text-align: right; }
 .candidate-grid footer { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
 .candidate-grid a { color: var(--green); font-size: 9px; font-weight: 750; text-underline-offset: 3px; }
+.research-details { margin-top: 15px; border-top: 1px solid #e3e6e0; }
+.research-details summary { padding: 13px 0 8px; color: var(--green); font-size: 9px; font-weight: 800; cursor: pointer; }
+.research-details > p { margin: 0 0 12px; color: var(--muted); font-size: 9px; line-height: 1.6; }
+.research-details nav { display: grid; gap: 7px; margin-top: 12px; }
+.research-details > small { display: block; margin-top: 12px; color: #7d8581; font-size: 8px; }
 .rejected-details { margin-bottom: 18px; border: 1px solid #e2e4df; background: #f8f9f6; }
 .rejected-details > summary { padding: 13px 15px; color: var(--muted); font-size: 9px; font-weight: 750; cursor: pointer; text-transform: uppercase; }
 .rejected-details > div { border-top: 1px solid #e2e4df; }

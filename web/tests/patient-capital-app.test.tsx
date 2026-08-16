@@ -128,7 +128,7 @@ describe("PatientCapitalApp", () => {
   it("renders one recommended strategy card and progressively discloses exact evidence", async () => {
     const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
       const path = String(input);
-      if (path.endsWith("/v1/profile")) return json({ version: 3, base_currency: "RUB", investment_horizon_years: 5, risk_level: "balanced", cash_buffer: "0.00", broker_name: "Demo Broker", fee_rate: "0.001", minimum_fee: "1.00", created_at: "2026-08-15T00:00:00Z" });
+      if (path.endsWith("/v1/profile")) return json({ version: 3, base_currency: "RUB", investment_horizon_years: 5, risk_level: "growth", cash_buffer: "0.00", broker_name: "Demo Broker", fee_rate: "0.001", minimum_fee: "1.00", created_at: "2026-08-15T00:00:00Z" });
       if (path.endsWith("/v1/assets")) return json({ assets: [] });
       if (path.endsWith("/v1/portfolio")) return json({ currency: "RUB", total_market_value: "0.00", total_cost_basis: "0.00", total_unrealized_pnl: "0.00", assets: [] });
       if (path.endsWith("/v1/analytics/overview")) return json(analyticsOverview());
@@ -162,14 +162,14 @@ describe("PatientCapitalApp", () => {
         leftover: "102.11",
         reason: "ALLOCATED",
         mode: "automatic",
-        policy_version: "five-year-moex-v1",
+        policy_version: "five-year-moex-v2",
         horizon_years: 5,
-        risk_level: "balanced",
+        risk_level: "growth",
         candidates: [{
           asset_id: "SU26218RMFS6",
           name: "ОФЗ 26218",
           instrument_type: "ofz",
-          target_weight: "0.60000000",
+          target_weight: "0.40000000",
           rationale: "Ликвидный рублёвый выпуск ОФЗ около пятилетней даты.",
           unit_price: "818.21000000",
           lot_size: 1,
@@ -181,6 +181,40 @@ describe("PatientCapitalApp", () => {
           yield_percent: "15.19",
           source_url: "https://iss.moex.com/ofz",
           classification_url: "https://www.moex.com/ru/marketdata/",
+        }, {
+          asset_id: "MOEX",
+          name: "Московская биржа",
+          instrument_type: "dividend_stock",
+          target_weight: "0.20000000",
+          rationale: "Акция прошла отдельные dividend-quality gates.",
+          unit_price: "153.95000000",
+          lot_size: 10,
+          lot_cost: "1539.50",
+          price_as_of: "2026-08-14T20:50:43Z",
+          quote_kind: "lcurrentprice",
+          turnover: "1144411993",
+          source_url: "https://iss.moex.com/moex",
+          classification_url: "https://www.moex.com/en/stocks/moex",
+          research: {
+            schema_version: "dividend-research-evidence-v1",
+            policy_version: "dividend-quality-v1",
+            observed_at: "2026-08-16T00:00:00Z",
+            max_age_seconds: 15552000,
+            reporting_period_end: "2025-12-31",
+            profitable_years: 4,
+            dividend_years: 4,
+            payout_ratio_percent: "75.00",
+            balance_sheet_status: "no_debt",
+            governance_program_member: true,
+            corporate_action_status: "no_material_action_identified",
+            summary: "Проверенный контекст из первичных источников.",
+            citations: [
+              { kind: "fundamentals", title: "МСФО-результаты", url: "https://www.moex.com/n98156" },
+              { kind: "dividends", title: "Дивидендная история", url: "https://www.moex.com/a2656" },
+              { kind: "governance", title: "Корпоративное управление", url: "https://www.moex.com/programma-sozdaniya-aktsionernoj-stoimosti-publichnyh-aktsionernyh-obschestv" },
+              { kind: "corporate_actions", title: "Корпоративные события", url: "https://www.moex.com/povtornoe-godovoe-zasedanie-obschego-sobraniya-aktsionerov" },
+            ],
+          },
         }],
         rejected_candidates: [{
           asset_id: "FUNDALT",
@@ -214,8 +248,15 @@ describe("PatientCapitalApp", () => {
     fireEvent.click(screen.getByText("Расчёт и источники"));
     expect(evidence?.open).toBe(true);
     expect(screen.getAllByRole("heading", { name: "ОФЗ 26218" }).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "Московская биржа" })).toBeTruthy();
+    const research = screen.getByText("Почему акция прошла проверку").closest("details");
+    expect(research?.open).toBe(false);
+    fireEvent.click(screen.getByText("Почему акция прошла проверку"));
+    expect(research?.open).toBe(true);
+    expect(screen.getByRole("link", { name: "МСФО-результаты ↗" }).getAttribute("href")).toBe("https://www.moex.com/n98156");
+    expect(screen.getByText(/dividend capture не используется/)).toBeTruthy();
     expect(screen.getByText(/Не выбранные policy кандидаты/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Котировка MOEX ↗" }).getAttribute("href")).toBe("https://iss.moex.com/ofz");
+    expect(screen.getAllByRole("link", { name: "Котировка MOEX ↗" }).some((link) => link.getAttribute("href") === "https://iss.moex.com/ofz")).toBe(true);
     const accessibility = await axe.run(container, {
       rules: { "color-contrast": { enabled: false } },
     });

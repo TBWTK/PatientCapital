@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, text
 from patientcapital.api.app import create_app
 from patientcapital.config import Settings
 from patientcapital.marketdata.models import InstrumentKind, MarketCandidate
+from patientcapital.research.corpus import MOEX_DIVIDEND_RESEARCH
 from tests.integration.conftest import TEST_DATABASE_URL
 
 
@@ -62,6 +63,21 @@ class StaticMarketDataProvider:
                 quote_kind="current",
                 turnover=Decimal("1000"),
             ),
+            MarketCandidate(
+                asset_id="MOEX",
+                name="Московская биржа",
+                kind=InstrumentKind.DIVIDEND_STOCK,
+                currency="RUB",
+                lot_size=10,
+                unit_price=Decimal("153.95000000"),
+                price_as_of=calculated_at - timedelta(hours=1),
+                max_age=timedelta(days=4),
+                source_url="https://iss.moex.com/moex",
+                classification_url="https://www.moex.com/en/stocks/moex",
+                quote_kind="current",
+                turnover=Decimal("1144411993"),
+                research=MOEX_DIVIDEND_RESEARCH,
+            ),
         )
 
 
@@ -97,7 +113,7 @@ def test_amount_only_flow_materializes_market_evidence_and_does_not_trade() -> N
         assert run["mode"] == "automatic"
         assert run["horizon_years"] == 5
         assert run["risk_level"] == "balanced"
-        assert run["policy_version"] == "five-year-moex-v1"
+        assert run["policy_version"] == "five-year-moex-v2"
         assert [(item["asset_id"], item["target_weight"]) for item in run["candidates"]] == [
             ("SU26218RMFS6", "0.60000000"),
             ("EQMX", "0.40000000"),
@@ -105,8 +121,9 @@ def test_amount_only_flow_materializes_market_evidence_and_does_not_trade() -> N
         assert Decimal(run["spent"]) <= Decimal("8000.00")
         assert run["lines"]
         assert all(item["source_url"].startswith("https://") for item in run["candidates"])
-        assert [item["asset_id"] for item in run["rejected_candidates"]] == ["FUNDALT"]
+        assert [item["asset_id"] for item in run["rejected_candidates"]] == ["FUNDALT", "MOEX"]
         assert "ranking" in run["rejected_candidates"][0]["reason"]
+        assert "рост" in run["rejected_candidates"][1]["reason"]
 
         assets = client.get("/v1/assets").json()["assets"]
         assert {item["asset_id"] for item in assets if item["is_active"]} == {
@@ -121,6 +138,42 @@ def test_amount_only_flow_materializes_market_evidence_and_does_not_trade() -> N
     with engine.connect() as connection:
         assert connection.scalar(text("SELECT count(*) FROM transactions")) == 0
         assert connection.scalar(text("SELECT count(*) FROM price_snapshots")) == 2
+    engine.dispose()
+
+
+def test_growth_amount_only_flow_exposes_grounded_dividend_research_without_trading() -> None:
+    with _client() as client:
+        client.put(
+            "/v1/profile",
+            json={
+                "expected_version": None,
+                "base_currency": "RUB",
+                "investment_horizon_years": 5,
+                "risk_level": "growth",
+                "cash_buffer": "0.00",
+                "broker_name": "Test Broker",
+                "fee_rate": "0.0005",
+                "minimum_fee": "0.00",
+            },
+        )
+
+        response = client.post("/v1/discovery/recommendations", json={"contribution": "8000.00"})
+
+        assert response.status_code == 201, response.text
+        run = response.json()
+        assert [(item["asset_id"], item["target_weight"]) for item in run["candidates"]] == [
+            ("SU26218RMFS6", "0.40000000"),
+            ("EQMX", "0.40000000"),
+            ("MOEX", "0.20000000"),
+        ]
+        stock = run["candidates"][2]
+        assert stock["research"]["policy_version"] == "dividend-quality-v1"
+        assert len(stock["research"]["citations"]) == 4
+        assert Decimal(run["spent"]) <= Decimal("8000.00")
+
+    engine = create_engine(TEST_DATABASE_URL)
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT count(*) FROM transactions")) == 0
     engine.dispose()
 
 

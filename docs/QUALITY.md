@@ -43,7 +43,7 @@ updated: 2026-08-16
   при одной допустимой policy карточка одна, а financial lines равны исходному v1 run.
 - [x] `Progressive evidence`: compact layer содержит действие/почему/риски, details доступны с
   клавиатуры и screen reader и показывают exact source/freshness/policy/run evidence.
-- [ ] `Grounded research`: prose/citation не может создать asset/price/lot/target; stale, conflict,
+- [x] `Grounded research`: prose/citation не может создать asset/price/lot/target; stale, conflict,
   unsupported category и provider failure дают видимый blocked strategy.
 - [x] `Transaction draft`: realistic Russian text и admitted broker screenshot создают ожидаемые
   fields/unknowns, но не transaction; ambiguous asset/number/time не допускает confirm.
@@ -53,7 +53,7 @@ updated: 2026-08-16
   отклоняются; filename не используется, generated private temp artifacts удаляются до ответа.
 - [x] `Explainable overview`: cash-flow fixtures различают contribution, cost basis, realized/
   unrealized result и income; unsupported goal/income fact отображается explicit unknown.
-- [ ] `Dividend policy admission`: fixed issuer/corporate-action/liquidity/dividend fixtures дают
+- [x] `Dividend policy admission`: fixed issuer/corporate-action/liquidity/dividend fixtures дают
   reproducible eligibility/ranking; missing fundamentals и unsustainable/ambiguous dividend block.
 - [ ] `Monitor no-trade`: fake clock `3..4/day`, duplicate ticks и provider outage дают idempotent
   run/no-op/alert evidence; transaction count и отсутствие order client остаются доказуемыми.
@@ -159,7 +159,7 @@ git diff --check
 | PC2-REQ-01 strategy proposal set | capability + API/component/a11y | current growth profile + fixed/live MOEX evidence | proposal-set/API/MCP/migration/web suites + responsive browser | `1..3` admitted cards, one recommended, exact v1 numeric parity | passing |
 | PC2-REQ-02 transaction assistant | parser corpus + contract/integration/E2E | Russian text, supplied T-Invest screenshot, ambiguous/invalid fixtures | unit/API/MCP/migration/web suites + real Docker OCR/browser | Draft only; full confirmation creates exactly one ledger event | passing |
 | PC2-REQ-03 explainable analytics | ledger/cashflow capability + component/browser | BUY→SELL, unsupported cashflow/income, stale-price fixtures | analytics API/MCP/component/a11y/browser suites | Every displayed metric has one server authority or explicit unknown | passing |
-| PC2-REQ-04 dividend research policy | source/policy/capability + controlled live read | versioned issuer/dividend/liquidity/corporate-action corpus | planned research/policy suites | Only typed fresh eligible facts reach deterministic calculation | planned |
+| PC2-REQ-04 dividend research policy | source/policy/capability + controlled live read | versioned issuer/dividend/liquidity/corporate-action corpus | research/model/domain/provider/API/web suites + live Docker/browser read | Only typed fresh eligible facts reach deterministic calculation; max category target 20%; no dividend capture | passing |
 | PC2-REQ-05 scheduled monitoring | fake-clock/property/resilience/Docker | trigger/no-trigger/duplicate/outage fixtures | planned monitor/worker suites | `3..4/day` observations, idempotent alerts, zero transaction/order effects | planned |
 | PC2-RISK-01 upload/privacy | security/boundary/retention | malformed MIME/magic, oversized bytes/pixels, timeout, real screenshot | image unit suite + Docker `/tmp` inspection | Bounded local parse, private immediate cleanup, no external send | passing |
 | PC2-RISK-02 compatibility | migration/contract/regression | copy of current local schema facts | migration rehearsal + full existing gates | Existing profile/ledger/runs unchanged and readable | planned |
@@ -180,6 +180,6 @@ idempotency consistency; clean-volume Docker operational E2E; controlled live pr
 - parallel-write stress — single-user scope и DB locks проверены функционально, не под нагрузкой;
 - destructive restore rehearsal — documented, но RTO/RPO остаются unknown;
 - 10k-ledger/100-asset performance и saturation — expansion gate, а не доказанный MVP property.
-- PC2-REQ-01/02/03 имеют implementation evidence; остальные PC2 строки остаются planned до собственных
-  checkpoint gates.
+- PC2-REQ-01/02/03/04 имеют implementation evidence; monitoring и финальный compatibility gate
+  остаются planned до собственных checkpoints.
 <!-- immune-project-engineering:quality:end -->

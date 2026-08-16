@@ -38,8 +38,8 @@ amount-only discovery рублёвых ОФЗ и фондов широкого �
 immutable recommendation runs, web и Codex tools.
 
 **Assistant-first MVP v2** реализуется по проверяемым checkpoint; product shell/proposal sets и
-transaction assistant и explainable analytics уже готовы; research universe и monitoring остаются
-в работе:
+transaction assistant, explainable analytics и первый research-universe gate уже готовы; monitoring
+остаётся в работе:
 
 1. `amount → proposal set`: одна рекомендуемая и до двух альтернативных стратегических карточек;
    неподдерживаемые варианты не генерируются для количества.
@@ -50,6 +50,13 @@ transaction assistant и explainable analytics уже готовы; research uni
    являются дивидендные акции, но не краткосрочный dividend capture как core-стратегия.
 4. `observe → alert`: сбор данных может выполняться три-четыре раза в день, но рекомендация
    появляется только по версионированному событию/порогу и никогда не исполняется автоматически.
+
+Первая допущенная dividend-stock policy — `dividend-quality-v1`: только профиль «рост», максимум
+20% target на категорию, минимум три прибыльных и три дивидендных периода, покрытая выплата,
+допустимый баланс, ликвидность, governance и отсутствие выявленного material corporate action.
+Первый allowlisted инструмент — обыкновенная акция MOEX; цена/лот/оборот поступают из ISS, а
+research context — из reviewed primary-source corpus. Policy не ранжирует акции по дивидендной
+доходности и не реализует dividend capture.
 
 Целевая web-навигация: **Обзор**, **Пополнить**, **Ассистент**, **Профиль**. Ручной ledger editor
 остаётся доступным как advanced/recovery fallback, но не является основным пользовательским путём.
@@ -85,6 +92,11 @@ broker execution, публикацию, ослабление quality gates ил�
   [сертификаты](https://developers.sber.ru/docs/ru/gigachat/certificates).
 - Банк России: [инвестиционные советники](https://www.cbr.ru/explan/invest/) и
   [требования к автоматическим советникам](https://www.cbr.ru/eng/press/event/?id=11066).
+- Primary dividend corpus: [карточка и листинг MOEX](https://www.moex.com/en/stocks/moex),
+  [МСФО-результаты 2025](https://www.moex.com/n98156),
+  [дивидендная история](https://www.moex.com/a2656),
+  [программа корпоративного управления](https://www.moex.com/programma-sozdaniya-aktsionernoj-stoimosti-publichnyh-aktsionernyh-obschestv)
+  и [материалы собрания 2026](https://www.moex.com/povtornoe-godovoe-zasedanie-obschego-sobraniya-aktsionerov).
 
 ## Навигация
 

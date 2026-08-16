@@ -10,11 +10,13 @@ from typing import Protocol
 
 from patientcapital.domain.errors import InvalidAllocationInput
 from patientcapital.domain.money import validate_currency
+from patientcapital.research.models import DividendResearchEvidence
 
 
 class InstrumentKind(StrEnum):
     OFZ = "ofz"
     EQUITY_INDEX_FUND = "equity_index_fund"
+    DIVIDEND_STOCK = "dividend_stock"
 
 
 def _finite(value: Decimal, *, name: str, positive: bool = False) -> None:
@@ -43,6 +45,7 @@ class MarketCandidate:
     clean_price_percent: Decimal | None = None
     face_value: Decimal | None = None
     accrued_interest: Decimal | None = None
+    research: DividendResearchEvidence | None = None
 
     def __post_init__(self) -> None:
         if not self.asset_id.strip() or not self.name.strip():
@@ -91,6 +94,16 @@ class MarketCandidate:
         ):
             raise InvalidAllocationInput(
                 "INVALID_MARKET_CANDIDATE", "OFZ requires maturity and dirty-price components"
+            )
+        if self.kind is InstrumentKind.DIVIDEND_STOCK and self.research is None:
+            raise InvalidAllocationInput(
+                "INVALID_MARKET_CANDIDATE",
+                "dividend stock requires typed research evidence",
+            )
+        if self.kind is not InstrumentKind.DIVIDEND_STOCK and self.research is not None:
+            raise InvalidAllocationInput(
+                "INVALID_MARKET_CANDIDATE",
+                "dividend research evidence belongs only to dividend stocks",
             )
 
     @property

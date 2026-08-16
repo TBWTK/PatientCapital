@@ -63,10 +63,10 @@ evidence; transaction intake создаёт подтверждаемый draft; 
 | `application` | use cases и транзакционные границы | rollback и явный failure result |
 | `api` | versioned HTTP contracts и input validation | 4xx для входа, 409 для version conflict, 503 для dependency |
 | `persistence` | PostgreSQL repositories и migrations | health degraded; запись не подтверждается |
-| `marketdata` | allowlisted MOEX ISS transport и strict mapping в immutable candidate facts | timeout/schema/stale/unknown блокирует automatic run typed-ошибкой |
-| `selection policy` | versioned eligibility, maturity/liquidity ranking и class targets | пустой eligible set блокирует proposal; LLM fallback запрещён |
+| `marketdata` | allowlisted MOEX ISS transport и strict mapping в immutable bond/fund/share candidate facts | timeout/schema/stale/unknown блокирует automatic run typed-ошибкой |
+| `selection policy` | `five-year-moex-v2`: maturity/liquidity ranking, class targets и composition с dividend gate | пустой eligible set блокирует proposal; LLM fallback запрещён |
 | `strategy registry` | упорядоченный набор admitted policies и выбор единственной recommended | недоступная policy исключается с видимой причиной; случайная замена запрещена |
-| `research` *(PC2)* | typed source adapters и immutable evidence для новых классов активов | stale/conflict/provider failure блокирует затронутую policy |
+| `research` *(implemented)* | `dividend-research-evidence-v1`, primary corpus и `dividend-quality-v1` для новых классов | stale/incomplete/coverage/governance/action/liquidity failure исключает candidate |
 | `transaction intake` *(PC2)* | text/image extraction, resolver, unknowns и explicit confirmation | draft остаётся unconfirmed; ledger write запрещён |
 | `monitor` *(PC2)* | scheduled evidence refresh и threshold/event alerts | idempotent no-op без trigger; transactions/orders недоступны |
 | `web` | Обзор, Пополнить, Ассистент, Профиль и progressive-disclosure UX | сохраняет draft или показывает точную ошибку API |
@@ -95,6 +95,11 @@ evidence; transaction intake создаёт подтверждаемый draft; 
 
 Все денежные JSON-поля сериализуются decimal-строками. Ошибка имеет один envelope
 `{"error":{"code","message"}}`; transport не превращает domain unknown в HTTP 200.
+
+`DiscoveryCandidateResponse.research` присутствует только у `dividend_stock` и содержит версии,
+freshness, typed gate facts, server-owned summary и primary citations. Это evidence layer, а не
+второй calculation engine: identity/price/lot/turnover приходят из ISS, веса задаёт
+`five-year-moex-v2`, а quantities/fees/totals — общий allocator.
 
 ## Additive API contracts PC2
 
@@ -156,7 +161,8 @@ flowchart LR
   Web --> App["Application service"]
   Tools --> App
   App --> MOEX["MOEX ISS delayed facts"]
-  MOEX --> Policy["Versioned discovery policy"]
+  Corpus["Reviewed primary research corpus"] --> Policy["five-year-moex-v2 + dividend-quality-v1"]
+  MOEX --> Policy
   Policy --> App
   App --> Core["Deterministic allocation core"]
   App --> DB[("PostgreSQL ledger + snapshots")]
@@ -169,6 +175,20 @@ flowchart LR
 Agent path заканчивается на MCP boundary: зарегистрированный Codex STDIO client запускает
 `patientcapital-mcp`, а adapter обращается к тому же HTTP/application contract, что web. UI не
 встраивает Codex app-server и не имеет скрытой кнопки, которая может инициировать сделку.
+
+## Dividend research policy v1
+
+`dividend-quality-v1` не является самостоятельным советником или dividend-capture стратегией. Он
+допускает категорию к пятилетнему growth plan только при одновременном выполнении всех условий:
+fresh reviewed evidence; минимум три прибыльных и три дивидендных периода; payout `0 < x <= 100%`;
+`no_debt` либо `adequate_capital`; подтверждённый governance gate; отсутствие выявленного material
+corporate action; RUB, доступный целый lot и дневной turnover не ниже `10 000 000 RUB`. Target
+категории ограничен `20%`; при любом отказе исходная OFZ/fund policy продолжает работать без акции.
+
+Production allowlist v1 содержит MOEX (`RU000A0JR4A1`, TQBR, ordinary share). Corpus observed
+16.08.2026 имеет max age 180 дней; после этого акция автоматически исключается до reviewed refresh.
+Добавление нового тикера требует primary corpus, негативных fixtures и нового regression, а не
+редактирования prompt.
 
 ## Flow нового пополнения
 

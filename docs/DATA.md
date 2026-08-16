@@ -27,7 +27,7 @@ updated: 2026-08-16
 
 | Сущность | Назначение | Authority / invariant |
 | --- | --- | --- |
-| research evidence | normalized issuer/market/corporate-action/dividend facts и provenance | typed source adapter; source/fetched/observed/freshness/schema обязательны |
+| research evidence *(implemented in run snapshot)* | normalized issuer/market/corporate-action/dividend facts и provenance | typed source adapter; source/observed/freshness/schema/policy обязательны |
 | transaction draft *(implemented)* | исходный text/image hash, extraction, resolved instrument, confidence и unknowns | transaction-intake service; immutable и unconfirmed |
 | draft decision *(implemented)* | explicit confirm/reject и exact confirmed payload/version | append-only; только confirm может вызвать существующий transaction command |
 | monitor run / alert | schedule/policy/input/result и trigger/no-op evidence | monitor service; immutable, без transaction/order side effect |
@@ -65,6 +65,13 @@ profile/asset/price/position facts;
 `output_snapshot` фиксирует source-backed candidates, rationale, lines и domain totals. Старый run
 не пересчитывается новой algorithm или policy version. `assets.id` является business identity;
 automatic mode materialизует только валидированный MOEX `SECID`, отдельного broker resolver нет.
+
+Для `dividend_stock` input snapshot дополнительно фиксирует `dividend-research-evidence-v1`:
+policy version, observed/max-age, reporting period, profitable/dividend years, payout ratio,
+balance/governance/corporate-action statuses, summary и ровно по одной primary citation на каждый
+gate. Evidence не является отдельной mutable таблицей: оно навсегда принадлежит конкретному
+immutable recommendation run. `five-year-moex-v2` использует числа из него только в eligibility;
+security identity, price, lot и turnover всё равно принадлежат строгому ISS adapter.
 
 Migrations `20260816_0003` и `20260816_0004` additive: существующие profile/assets/prices/
 transactions/runs не переписываются. Proposal set хранит только admitted strategy metadata и UUID

@@ -21,6 +21,7 @@ from patientcapital.contracts import (
     AssetResponse,
     DiscoveryCandidateResponse,
     DiscoveryRecommendationCreate,
+    DividendResearchResponse,
     PortfolioAssetResponse,
     PortfolioResponse,
     PriceCreate,
@@ -35,6 +36,7 @@ from patientcapital.contracts import (
     RecommendationLineResponse,
     RecommendationResponse,
     RejectedDiscoveryCandidateResponse,
+    ResearchCitationResponse,
     StrategyProposalResponse,
     TransactionCreate,
     TransactionDraftDecisionCreate,
@@ -871,6 +873,32 @@ def _discovery_candidate_response(
         yield_percent=item.yield_percent,
         source_url=item.source_url,
         classification_url=item.classification_url,
+        research=(
+            DividendResearchResponse(
+                schema_version=item.research.schema_version,
+                policy_version=item.research.policy_version,
+                observed_at=item.research.observed_at,
+                max_age_seconds=int(item.research.max_age.total_seconds()),
+                reporting_period_end=item.research.reporting_period_end,
+                profitable_years=item.research.profitable_years,
+                dividend_years=item.research.dividend_years,
+                payout_ratio_percent=item.research.payout_ratio_percent,
+                balance_sheet_status=item.research.balance_sheet_status.value,
+                governance_program_member=item.research.governance_program_member,
+                corporate_action_status=item.research.corporate_action_status.value,
+                summary=item.research.summary,
+                citations=[
+                    ResearchCitationResponse(
+                        kind=citation.kind.value,
+                        title=citation.title,
+                        url=citation.url,
+                    )
+                    for citation in item.research.citations
+                ],
+            )
+            if item.research is not None
+            else None
+        ),
     )
 
 
@@ -1108,6 +1136,36 @@ def create_discovery_recommendation(
                     "price_as_of": item.price_as_of.isoformat(),
                     "price_snapshot_id": str(price_records[item.asset_id].id),
                     "source_url": item.source_url,
+                    "research": (
+                        {
+                            "schema_version": item.research.schema_version,
+                            "policy_version": item.research.policy_version,
+                            "observed_at": item.research.observed_at.isoformat(),
+                            "max_age_seconds": int(item.research.max_age.total_seconds()),
+                            "reporting_period_end": item.research.reporting_period_end.isoformat(),
+                            "profitable_years": item.research.profitable_years,
+                            "dividend_years": item.research.dividend_years,
+                            "payout_ratio_percent": str(item.research.payout_ratio_percent),
+                            "balance_sheet_status": item.research.balance_sheet_status.value,
+                            "governance_program_member": (
+                                item.research.governance_program_member
+                            ),
+                            "corporate_action_status": (
+                                item.research.corporate_action_status.value
+                            ),
+                            "summary": item.research.summary,
+                            "citations": [
+                                {
+                                    "kind": citation.kind.value,
+                                    "title": citation.title,
+                                    "url": citation.url,
+                                }
+                                for citation in item.research.citations
+                            ],
+                        }
+                        if item.research is not None
+                        else None
+                    ),
                 }
                 for item in universe
             ],

@@ -2,7 +2,7 @@
 title: Модель угроз
 type: security
 status: active
-updated: 2026-08-15
+updated: 2026-08-16
 ---
 
 # Модель угроз
@@ -45,7 +45,7 @@ broker order capability.
 | Malicious/oversized image | MIME/magic-byte/dimension/size limits, generated filename, private tmpfs, timeout | parser/library vulnerability |
 | OCR/vision hallucination | output is unconfirmed draft, field confidence/unknowns, exact human confirmation | пользователь может подтвердить неверный draft |
 | Sensitive screenshot retention | raw file never in DB/Git/backup; private temp удаляется до ответа draft | host administrator can inspect live process/tmpfs во время OCR |
-| Research/source injection | allowlisted typed adapters, provenance/freshness, prose cannot materialize facts | issuer/public source can be misleading |
+| Research/source injection | primary-host allowlist, four typed gate citations, provenance/freshness/schema/policy; prose cannot materialize facts | exchange/issuer source can still be wrong or incomplete |
 | Monitoring churn or duplicate alert | versioned thresholds, idempotent run/alert keys, no transaction/order tool | noisy but non-executing recommendations |
 
 ## Условия эксплуатации MVP
@@ -67,6 +67,12 @@ PC2 upload/extractor local-only: Pillow проверяет decoded JPEG/PNG, MIM
 очищает artifacts до ответа. Filename не используется как путь, raw image внешнему provider не
 передаётся; любой будущий внешний extractor требует нового admission и data-flow review.
 Monitor получает только read/evidence capabilities и технически не импортирует ledger/order command.
+
+Dividend corpus допускает только HTTPS hosts MOEX/ISS/Банка России и валидирует ровно одну citation
+для fundamentals, dividends, governance и corporate actions. Research summary отображается как
+контекст, но не входит в security master или арифметику. Просрочка, неизвестный balance/governance,
+непокрытая выплата, material/unknown corporate action или недостаточная ликвидность исключают
+кандидата. Добавление issuer domain требует отдельного adapter review, а не расширения через prompt.
 
 ## Production blockers
 

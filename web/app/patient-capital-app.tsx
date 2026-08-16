@@ -234,7 +234,7 @@ function RecommendationEvidence({ result }: { result: Recommendation }) {
         <div className="candidate-grid" aria-label="Подобранные инструменты">
           {candidates.map((candidate) => (
             <article key={candidate.asset_id}>
-              <header><i>{candidate.instrument_type === "ofz" ? "ОФЗ" : "ФОНД"}</i><b>{percent(candidate.target_weight)}</b></header>
+              <header><i>{candidate.instrument_type === "ofz" ? "ОФЗ" : candidate.instrument_type === "dividend_stock" ? "АКЦИЯ" : "ФОНД"}</i><b>{percent(candidate.target_weight)}</b></header>
               <h3>{candidate.name}</h3>
               <p>{candidate.rationale}</p>
               <dl>
@@ -245,6 +245,26 @@ function RecommendationEvidence({ result }: { result: Recommendation }) {
                 {candidate.yield_percent != null && <div><dt>Доходность MOEX</dt><dd>{candidate.yield_percent}%</dd></div>}
                 <div><dt>Цена на</dt><dd>{shortDateTime(candidate.price_as_of)}</dd></div>
               </dl>
+              {candidate.research && (
+                <details className="research-details">
+                  <summary>Почему акция прошла проверку</summary>
+                  <p>{candidate.research.summary}</p>
+                  <dl>
+                    <div><dt>Прибыльные периоды</dt><dd>{candidate.research.profitable_years}</dd></div>
+                    <div><dt>Дивидендные периоды</dt><dd>{candidate.research.dividend_years}</dd></div>
+                    <div><dt>Выплата от прибыли</dt><dd>{candidate.research.payout_ratio_percent}%</dd></div>
+                    <div><dt>Баланс</dt><dd>{candidate.research.balance_sheet_status === "no_debt" ? "Без долга" : candidate.research.balance_sheet_status === "adequate_capital" ? "Капитал достаточен" : "Не допущен"}</dd></div>
+                    <div><dt>Corporate action</dt><dd>{candidate.research.corporate_action_status === "no_material_action_identified" ? "Не выявлено" : "Не допущен"}</dd></div>
+                    <div><dt>Research на</dt><dd>{shortDateTime(candidate.research.observed_at)}</dd></div>
+                  </dl>
+                  <nav aria-label={`Первичные источники ${candidate.asset_id}`}>
+                    {candidate.research.citations.map((citation) => (
+                      <a key={citation.kind} href={citation.url} target="_blank" rel="noreferrer">{citation.title} ↗</a>
+                    ))}
+                  </nav>
+                  <small>Policy {candidate.research.policy_version} · dividend capture не используется</small>
+                </details>
+              )}
               <footer><a href={candidate.source_url} target="_blank" rel="noreferrer">Котировка MOEX ↗</a><a href={candidate.classification_url} target="_blank" rel="noreferrer">Класс инструмента ↗</a></footer>
             </article>
           ))}

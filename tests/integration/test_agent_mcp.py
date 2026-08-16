@@ -44,7 +44,9 @@ def test_mcp_discovery_is_allowlisted_typed_and_permission_annotated() -> None:
         "discover_contribution",
         "list_assets",
         "get_portfolio",
+        "get_proposal_set",
         "propose_contribution",
+        "propose_strategy_set",
         "get_recommendation",
         "record_transaction",
     }
@@ -62,6 +64,9 @@ def test_mcp_discovery_is_allowlisted_typed_and_permission_annotated() -> None:
     assert by_name["discover_contribution"].annotations.open_world_hint is True
     assert by_name["discover_contribution"].annotations.destructive_hint is False
     assert by_name["discover_contribution"].input_schema["additionalProperties"] is False
+    assert by_name["propose_strategy_set"].annotations is not None
+    assert by_name["propose_strategy_set"].annotations.open_world_hint is True
+    assert by_name["propose_strategy_set"].output_schema is not None
 
 
 def test_real_stdio_entrypoint_negotiates_and_lists_tools() -> None:
@@ -79,6 +84,7 @@ def test_real_stdio_entrypoint_negotiates_and_lists_tools() -> None:
     assert {tool.name for tool in discovered.tools} >= {
         "discover_contribution",
         "get_portfolio",
+        "propose_strategy_set",
         "propose_contribution",
         "record_transaction",
     }
@@ -123,6 +129,54 @@ def test_mcp_amount_only_discovery_persists_the_same_run_as_http(client: TestCli
     persisted = client.get(f"/v1/recommendations/{run['id']}")
     assert persisted.status_code == 200
     assert persisted.json() == run
+
+
+def test_mcp_strategy_set_is_the_same_immutable_set_retrieved_by_http(
+    client: TestClient,
+) -> None:
+    profile = client.put(
+        "/v1/profile",
+        json={
+            "expected_version": None,
+            "base_currency": "RUB",
+            "investment_horizon_years": 5,
+            "risk_level": "growth",
+            "cash_buffer": "0.00",
+            "broker_name": "Test Broker",
+            "fee_rate": "0.0005",
+            "minimum_fee": "0.00",
+        },
+    )
+    assert profile.status_code == 200
+
+    async def propose() -> CallToolResult:
+        database = Database(TEST_DATABASE_URL)
+        try:
+            server = build_mcp_server(database, StaticMarketDataProvider())
+            async with Client(server) as mcp_client:
+                return await mcp_client.call_tool(
+                    "propose_strategy_set", {"contribution": "8000.00"}
+                )
+        finally:
+            database.close()
+
+    result = asyncio.run(propose())
+    assert result.is_error is False
+    proposal_set = cast(dict[str, Any], result.structured_content)
+    assert proposal_set["recommended_strategy_id"] == "five_year_core"
+    assert len(cast(list[dict[str, Any]], proposal_set["strategies"])) == 1
+    persisted = client.get(f"/v1/proposal-sets/{proposal_set['id']}")
+    assert persisted.status_code == 200
+    assert persisted.json() == proposal_set
+
+    async def retrieve(mcp_client: Client) -> CallToolResult:
+        return await mcp_client.call_tool(
+            "get_proposal_set", {"proposal_set_id": proposal_set["id"]}
+        )
+
+    retrieved = _run(retrieve)
+    assert retrieved.is_error is False
+    assert retrieved.structured_content == proposal_set
 
 
 def test_mcp_missing_profile_is_a_machine_coded_tool_error() -> None:

@@ -24,9 +24,13 @@ from patientcapital.contracts import (
     PriceResponse,
     ProfilePut,
     ProfileResponse,
+    ProposalSetCreate,
+    ProposalSetResponse,
     RecommendationCreate,
     RecommendationLineResponse,
     RecommendationResponse,
+    RejectedDiscoveryCandidateResponse,
+    StrategyProposalResponse,
     TransactionCreate,
     TransactionResponse,
 )
@@ -41,6 +45,7 @@ from patientcapital.domain.models import (
 )
 from patientcapital.domain.money import Money, quantize_minor
 from patientcapital.domain.planner import build_contribution_plan
+from patientcapital.domain.strategies import StrategyDefinition, admitted_strategies
 from patientcapital.marketdata.errors import MarketDataError
 from patientcapital.marketdata.models import MarketCandidate, MarketDataProvider
 from patientcapital.persistence.models import (
@@ -48,6 +53,7 @@ from patientcapital.persistence.models import (
     AssetVersion,
     PriceRecord,
     ProfileVersion,
+    ProposalSetRecord,
     RecommendationRunRecord,
     TransactionRecord,
 )
@@ -485,6 +491,22 @@ def _discovery_candidate_response(
     )
 
 
+def _rejected_discovery_candidate_response(
+    item: MarketCandidate, *, reason: str
+) -> RejectedDiscoveryCandidateResponse:
+    return RejectedDiscoveryCandidateResponse(
+        asset_id=item.asset_id,
+        name=item.name,
+        instrument_type=item.kind.value,
+        reason=reason,
+        unit_price=item.unit_price,
+        lot_size=item.lot_size,
+        lot_cost=quantize_minor(item.unit_price * item.lot_size),
+        price_as_of=item.price_as_of,
+        source_url=item.source_url,
+    )
+
+
 def _materialize_discovery_universe(
     session: Session,
     *,
@@ -673,6 +695,14 @@ def create_discovery_recommendation(
                     )
                     for item in selection.items
                 ],
+                "rejected_candidates": [
+                    _rejected_discovery_candidate_response(
+                        item.candidate,
+                        reason=item.reason,
+                    )
+                    for item in selection.rejected
+                ],
+                "profile_version": profile.version,
             }
         )
         input_snapshot: dict[str, object] = {
@@ -771,7 +801,8 @@ def create_recommendation(
             calculated_at=calculated_at,
         )
         run_id = uuid4()
-        response = _recommendation_response(run_id, payload.contribution, domain_request)
+        base_response = _recommendation_response(run_id, payload.contribution, domain_request)
+        response = base_response.model_copy(update={"profile_version": profile.version})
         input_snapshot: dict[str, object] = {
             "profile_version": profile.version,
             "base_currency": profile.base_currency,
@@ -814,3 +845,120 @@ def get_recommendation(session: Session, run_id: UUID) -> RecommendationResponse
     if record is None:
         raise ApplicationError(404, "RECOMMENDATION_NOT_FOUND", "recommendation run was not found")
     return RecommendationResponse.model_validate(record.output_snapshot)
+
+
+def _strategy_response(
+    definition: StrategyDefinition,
+    recommendation: RecommendationResponse,
+    *,
+    recommended: bool,
+) -> StrategyProposalResponse:
+    return StrategyProposalResponse(
+        strategy_id=definition.strategy_id,
+        name=definition.name,
+        summary=definition.summary,
+        why=definition.why,
+        risk_note=definition.risk_note,
+        tradeoffs=list(definition.tradeoffs),
+        recommended=recommended,
+        recommendation=recommendation,
+    )
+
+
+def _proposal_set_response(session: Session, record: ProposalSetRecord) -> ProposalSetResponse:
+    strategies: list[StrategyProposalResponse] = []
+    for snapshot in record.strategies:
+        run_id_value = snapshot.get("run_id")
+        if not isinstance(run_id_value, str):
+            raise ApplicationError(
+                500, "PROPOSAL_SET_INVARIANT_BROKEN", "proposal strategy has no run id"
+            )
+        run = session.get(RecommendationRunRecord, UUID(run_id_value))
+        if run is None:
+            raise ApplicationError(
+                500,
+                "PROPOSAL_SET_INVARIANT_BROKEN",
+                f"recommendation run {run_id_value} is missing",
+            )
+        strategy_payload = dict(snapshot)
+        strategy_payload.pop("run_id", None)
+        strategy_payload["recommendation"] = RecommendationResponse.model_validate(
+            run.output_snapshot
+        )
+        strategies.append(StrategyProposalResponse.model_validate(strategy_payload))
+    if not 1 <= len(strategies) <= 3:
+        raise ApplicationError(
+            500,
+            "PROPOSAL_SET_INVARIANT_BROKEN",
+            "proposal set must contain between one and three strategies",
+        )
+    return ProposalSetResponse(
+        id=record.id,
+        contribution=record.contribution,
+        currency=record.currency,
+        profile_version=record.profile_version,
+        recommended_strategy_id=record.recommended_strategy_id,
+        strategies=strategies,
+        created_at=record.created_at,
+    )
+
+
+def create_proposal_set(
+    session: Session,
+    payload: ProposalSetCreate,
+    provider: MarketDataProvider,
+) -> ProposalSetResponse:
+    definitions = tuple(sorted(admitted_strategies(), key=lambda item: -item.priority))
+    if not 1 <= len(definitions) <= 3:
+        raise ApplicationError(
+            500,
+            "STRATEGY_REGISTRY_INVALID",
+            "strategy registry must admit between one and three strategies",
+        )
+
+    responses: list[tuple[StrategyDefinition, RecommendationResponse]] = []
+    for definition in definitions:
+        recommendation = create_discovery_recommendation(
+            session,
+            DiscoveryRecommendationCreate(contribution=payload.contribution),
+            provider,
+        )
+        responses.append((definition, recommendation))
+
+    recommended_id = definitions[0].strategy_id
+    stored_strategies: list[dict[str, object]] = []
+    for definition, recommendation in responses:
+        strategy = _strategy_response(
+            definition,
+            recommendation,
+            recommended=definition.strategy_id == recommended_id,
+        )
+        stored = strategy.model_dump(mode="json", exclude={"recommendation"})
+        stored["run_id"] = str(recommendation.id)
+        stored_strategies.append(stored)
+
+    profile_version_value = responses[0][1].profile_version
+    if profile_version_value is None:
+        raise ApplicationError(
+            500, "PROPOSAL_SET_INVARIANT_BROKEN", "recommendation has no profile version"
+        )
+
+    with session.begin():
+        record = ProposalSetRecord(
+            id=uuid4(),
+            contribution=payload.contribution,
+            currency=responses[0][1].currency,
+            profile_version=profile_version_value,
+            recommended_strategy_id=recommended_id,
+            strategies=stored_strategies,
+        )
+        session.add(record)
+        session.flush()
+        return _proposal_set_response(session, record)
+
+
+def get_proposal_set(session: Session, proposal_set_id: UUID) -> ProposalSetResponse:
+    record = session.get(ProposalSetRecord, proposal_set_id)
+    if record is None:
+        raise ApplicationError(404, "PROPOSAL_SET_NOT_FOUND", "proposal set was not found")
+    return _proposal_set_response(session, record)

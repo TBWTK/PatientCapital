@@ -17,6 +17,7 @@ updated: 2026-08-16
 | `price_snapshots` | manual legacy или MOEX-derived price, currency, as-of, max age и source | price/marketdata boundary | UUID |
 | `transactions` | append-only `BUY`/`SELL`: clean unit price, total НКД и fee | ledger service | UUID + unique idempotency key |
 | `recommendation_runs` | immutable input/output snapshots, amount, totals, reason и algorithm evidence | recommendation service | UUID |
+| `proposal_sets` | amount/profile version, ordered strategy metadata и refs на `1..3` runs | proposal application service | UUID |
 | portfolio response | quantity, cost/value/P&L, allocation и drift | derived application query | не хранится отдельной таблицей |
 | GigaChat admission report | model/prompt/corpus hashes, metrics, latency/usage и case evidence | file `reports/gigachat-admission-v1.json` | report/corpus version; не DB entity |
 
@@ -24,7 +25,6 @@ updated: 2026-08-16
 
 | Сущность | Назначение | Authority / invariant |
 | --- | --- | --- |
-| proposal set | один amount/snapshot и ordered refs на `1..3` admitted recommendation runs | proposal application service; immutable, не execution |
 | research evidence | normalized issuer/market/corporate-action/dividend facts и provenance | typed source adapter; source/fetched/observed/freshness/schema обязательны |
 | transaction draft | исходный text/image hash, extraction, resolved instrument, confidence и unknowns | transaction-intake service; immutable и unconfirmed |
 | draft decision | explicit confirm/reject и exact confirmed payload/version | append-only; только confirm может вызвать существующий transaction command |
@@ -35,8 +35,8 @@ updated: 2026-08-16
 Профиль создаёт следующую integer version; broker/fee fields являются частью той же profile version,
 а не отдельными таблицами. Asset identity стабильна, а параметры/target создают следующую
 `asset_versions` row. Price, transaction и recommendation rows append-only. PostgreSQL triggers
-отклоняют `UPDATE/DELETE` для `profile_versions`, `asset_versions`, `price_snapshots`, `transactions`
-и `recommendation_runs`.
+отклоняют `UPDATE/DELETE` для `profile_versions`, `asset_versions`, `price_snapshots`, `transactions`,
+`recommendation_runs` и `proposal_sets`.
 
 API поддерживает только `BUY` и `SELL`. Formal compensating-event link в schema отсутствует;
 исправление вводится новой фактической операцией с новым idempotency key и поясняющей `note`, если
@@ -58,8 +58,9 @@ profile/asset/price/position facts;
 не пересчитывается новой algorithm или policy version. `assets.id` является business identity;
 automatic mode materialизует только валидированный MOEX `SECID`, отдельного broker resolver нет.
 
-PC2 migrations additive: существующие profile/assets/prices/transactions/runs не переписываются.
-Proposal set ссылается на runs; transaction draft не меняет position. Resolver может предложить
+Migration `20260816_0003` additive: существующие profile/assets/prices/transactions/runs не
+переписываются. Proposal set хранит только admitted strategy metadata и UUID runs; DB trigger
+запрещает update/delete. Transaction draft не меняет position. Resolver может предложить
 identity только из typed instrument source и сохраняет кандидатов/причину выбора. Неоднозначный
 resolver result остаётся `unknown` до пользовательского выбора.
 

@@ -48,6 +48,20 @@ class StaticMarketDataProvider:
                 quote_kind="current",
                 turnover=Decimal("601551768"),
             ),
+            MarketCandidate(
+                asset_id="FUNDALT",
+                name="Альтернативный индексный фонд",
+                kind=InstrumentKind.EQUITY_INDEX_FUND,
+                currency="RUB",
+                lot_size=1,
+                unit_price=Decimal("120.00000000"),
+                price_as_of=calculated_at - timedelta(hours=1),
+                max_age=timedelta(days=4),
+                source_url="https://iss.moex.com/fundalt",
+                classification_url="https://www.moex.com/msn/etf",
+                quote_kind="current",
+                turnover=Decimal("1000"),
+            ),
         )
 
 
@@ -91,6 +105,8 @@ def test_amount_only_flow_materializes_market_evidence_and_does_not_trade() -> N
         assert Decimal(run["spent"]) <= Decimal("8000.00")
         assert run["lines"]
         assert all(item["source_url"].startswith("https://") for item in run["candidates"])
+        assert [item["asset_id"] for item in run["rejected_candidates"]] == ["FUNDALT"]
+        assert "ranking" in run["rejected_candidates"][0]["reason"]
 
         assets = client.get("/v1/assets").json()["assets"]
         assert {item["asset_id"] for item in assets if item["is_active"]} == {

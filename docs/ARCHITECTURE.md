@@ -65,7 +65,7 @@ evidence; transaction intake создаёт подтверждаемый draft; 
 | `persistence` | PostgreSQL repositories и migrations | health degraded; запись не подтверждается |
 | `marketdata` | allowlisted MOEX ISS transport и strict mapping в immutable candidate facts | timeout/schema/stale/unknown блокирует automatic run typed-ошибкой |
 | `selection policy` | versioned eligibility, maturity/liquidity ranking и class targets | пустой eligible set блокирует proposal; LLM fallback запрещён |
-| `strategy registry` *(PC2)* | упорядоченный набор admitted policies и выбор единственной recommended | недоступная policy исключается с видимой причиной; случайная замена запрещена |
+| `strategy registry` | упорядоченный набор admitted policies и выбор единственной recommended | недоступная policy исключается с видимой причиной; случайная замена запрещена |
 | `research` *(PC2)* | typed source adapters и immutable evidence для новых классов активов | stale/conflict/provider failure блокирует затронутую policy |
 | `transaction intake` *(PC2)* | text/image extraction, resolver, unknowns и explicit confirmation | draft остаётся unconfirmed; ledger write запрещён |
 | `monitor` *(PC2)* | scheduled evidence refresh и threshold/event alerts | idempotent no-op без trigger; transactions/orders недоступны |
@@ -84,19 +84,20 @@ evidence; transaction intake создаёт подтверждаемый draft; 
 | `GET` | `/v1/portfolio` | derived quantities, cost basis, value, P&L, allocation/drift |
 | `POST/GET` | `/v1/recommendations[/{id}]` | calculate/store or retrieve immutable domain run |
 | `POST` | `/v1/discovery/recommendations` | fetch/validate MOEX candidates, apply policy and persist deterministic proposal |
+| `POST/GET` | `/v1/proposal-sets[/{id}]` | create/retrieve immutable `1..3` admitted strategy refs; ledger не меняется |
 | `GET` | `/health/live`, `/health/ready` | process health отдельно от PostgreSQL readiness |
 
 Все денежные JSON-поля сериализуются decimal-строками. Ошибка имеет один envelope
 `{"error":{"code","message"}}`; transport не превращает domain unknown в HTTP 200.
 
-## Планируемые additive API contracts PC2
+## Additive API contracts PC2
 
 Существующий `/v1` остаётся совместимым. Имена уточняются canonical OpenAPI contract test до
 implementation, но capability boundaries фиксированы:
 
 | Capability | Команда/запрос | Authority / эффект |
 | --- | --- | --- |
-| Proposal set | create/get by id | сохраняет amount, portfolio/evidence snapshot и `1..3` run refs; ledger не меняется |
+| Proposal set *(implemented)* | `POST/GET /v1/proposal-sets[/{id}]` | сохраняет amount/profile version и `1..3` run refs; ledger не меняется |
 | Transaction draft | create from text/image; get by id | сохраняет extraction, resolver evidence, confidence/unknowns; transaction не создаёт |
 | Draft decision | confirm/reject with expected draft version | confirm принимает полный exact payload и единственный вызывает idempotent ledger command |
 | Analytics overview | read current derived view | только server-derived cashflow/result/income/drift/freshness; unsupported facts explicit |

@@ -155,6 +155,18 @@ class DiscoveryCandidateResponse(ContractModel):
     classification_url: str
 
 
+class RejectedDiscoveryCandidateResponse(ContractModel):
+    asset_id: str
+    name: str
+    instrument_type: Literal["ofz", "equity_index_fund"]
+    reason: str
+    unit_price: Decimal
+    lot_size: int
+    lot_cost: Decimal
+    price_as_of: datetime
+    source_url: str
+
+
 class RecommendationLineResponse(ContractModel):
     asset_id: str
     lots: int
@@ -190,6 +202,33 @@ class RecommendationResponse(ContractModel):
     horizon_years: int | None = None
     risk_level: str | None = None
     candidates: list[DiscoveryCandidateResponse] = Field(default_factory=list)
+    rejected_candidates: list[RejectedDiscoveryCandidateResponse] = Field(default_factory=list)
+    profile_version: int | None = None
+
+
+class ProposalSetCreate(ContractModel):
+    contribution: Decimal = Field(gt=0, decimal_places=2)
+
+
+class StrategyProposalResponse(ContractModel):
+    strategy_id: str
+    name: str
+    summary: str
+    why: str
+    risk_note: str
+    tradeoffs: list[str]
+    recommended: bool
+    recommendation: RecommendationResponse
+
+
+class ProposalSetResponse(ContractModel):
+    id: UUID
+    contribution: Decimal
+    currency: str
+    profile_version: int
+    recommended_strategy_id: str
+    strategies: list[StrategyProposalResponse] = Field(min_length=1, max_length=3)
+    created_at: datetime
 
 
 class ErrorDetail(ContractModel):

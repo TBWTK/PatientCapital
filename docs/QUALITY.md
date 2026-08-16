@@ -37,11 +37,11 @@ updated: 2026-08-16
 - [x] `Analytics`: allocation, cost basis, unrealized result и drift выводятся из одного ledger
   fixture без frontend-формул.
 
-## Planned PC2 capability evals
+## PC2 capability evals
 
-- [ ] `Strategy cards`: один amount возвращает `1..3` admitted strategies, ровно одну recommended;
+- [x] `Strategy cards`: один amount возвращает `1..3` admitted strategies, ровно одну recommended;
   при одной допустимой policy карточка одна, а financial lines равны исходному v1 run.
-- [ ] `Progressive evidence`: compact layer содержит действие/почему/риски, details доступны с
+- [x] `Progressive evidence`: compact layer содержит действие/почему/риски, details доступны с
   клавиатуры и screen reader и показывают exact source/freshness/policy/run evidence.
 - [ ] `Grounded research`: prose/citation не может создать asset/price/lot/target; stale, conflict,
   unsupported category и provider failure дают видимый blocked strategy.
@@ -156,7 +156,7 @@ git diff --check
 | PC-COMP-01 public personalized advice | human legal review | intended jurisdiction/operating model | external legal opinion | Public/commercial boundary approved | blocked |
 | PC-GIT-01 releasable default branch | Git + full gates | local `main` | status/log + handoff checks | Verified checkpoints, clean worktree after commit | passing |
 | PC-GIT-02 GitHub publication | external release | user-authorized GitHub remote | push + `git ls-remote --symref origin HEAD` + SHA comparison | `origin/main` exists, is GitHub HEAD, and equals clean local `main` | passing |
-| PC2-REQ-01 strategy proposal set | capability + API/component/a11y | current growth profile + fixed evidence | planned strategy/API/web suites | `1..3` admitted cards, one recommended, exact v1 numeric parity | planned |
+| PC2-REQ-01 strategy proposal set | capability + API/component/a11y | current growth profile + fixed/live MOEX evidence | proposal-set/API/MCP/migration/web suites + responsive browser | `1..3` admitted cards, one recommended, exact v1 numeric parity | passing |
 | PC2-REQ-02 transaction assistant | parser corpus + contract/integration/E2E | Russian text, supplied T-Invest screenshot, ambiguous/invalid fixtures | planned intake/API/MCP/web suites | Draft only; full confirmation creates exactly one ledger event | planned |
 | PC2-REQ-03 explainable analytics | ledger/cashflow capability + component/browser | contribution, trade, coupon/dividend, stale/unknown fixtures | planned analytics suites | Every displayed metric has one server authority or explicit unknown | planned |
 | PC2-REQ-04 dividend research policy | source/policy/capability + controlled live read | versioned issuer/dividend/liquidity/corporate-action corpus | planned research/policy suites | Only typed fresh eligible facts reach deterministic calculation | planned |
@@ -180,5 +180,6 @@ idempotency consistency; clean-volume Docker operational E2E; controlled live pr
 - parallel-write stress — single-user scope и DB locks проверены функционально, не под нагрузкой;
 - destructive restore rehearsal — documented, но RTO/RPO остаются unknown;
 - 10k-ledger/100-asset performance и saturation — expansion gate, а не доказанный MVP property.
-- Все PC2 строки выше — planned: текущий docs-only checkpoint не является evidence реализации.
+- PC2-REQ-01 имеет implementation evidence; остальные PC2 строки остаются planned до собственных
+  checkpoint gates.
 <!-- immune-project-engineering:quality:end -->

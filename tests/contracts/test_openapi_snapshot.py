@@ -20,6 +20,8 @@ PUBLIC_PATHS = {
     "/v1/recommendations",
     "/v1/recommendations/{run_id}",
     "/v1/discovery/recommendations",
+    "/v1/proposal-sets",
+    "/v1/proposal-sets/{proposal_set_id}",
 }
 
 PUBLIC_SCHEMAS = {
@@ -29,7 +31,9 @@ PUBLIC_SCHEMAS = {
     "PriceResponse",
     "ProfileResponse",
     "RecommendationResponse",
+    "RejectedDiscoveryCandidateResponse",
     "TransactionResponse",
+    "ProposalSetResponse",
 }
 
 

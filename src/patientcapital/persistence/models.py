@@ -152,3 +152,20 @@ class RecommendationRunRecord(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class ProposalSetRecord(Base):
+    __tablename__ = "proposal_sets"
+    __table_args__ = (CheckConstraint("contribution > 0"),)
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    contribution: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    profile_version: Mapped[int] = mapped_column(
+        ForeignKey("profile_versions.version", ondelete="RESTRICT"), nullable=False
+    )
+    recommended_strategy_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    strategies: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

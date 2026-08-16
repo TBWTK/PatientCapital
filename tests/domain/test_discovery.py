@@ -74,6 +74,8 @@ def test_five_year_balanced_policy_selects_liquid_near_maturity_ofz_and_index_fu
     ]
     assert "погаш" in selection.items[0].rationale.lower()
     assert "ликвид" in selection.items[1].rationale.lower()
+    assert [item.candidate.asset_id for item in selection.rejected] == ["OFZ-NEAR", "FUND-A"]
+    assert all("ranking" in item.reason for item in selection.rejected)
 
 
 def test_policy_renormalizes_to_affordable_class_in_small_budget() -> None:

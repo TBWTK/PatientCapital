@@ -26,9 +26,16 @@ class SelectedCandidate:
 
 
 @dataclass(frozen=True, slots=True)
+class RejectedCandidate:
+    candidate: MarketCandidate
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class MarketSelection:
     policy_version: str
     items: tuple[SelectedCandidate, ...]
+    rejected: tuple[RejectedCandidate, ...]
 
 
 def _anniversary(value: date, years: int) -> date:
@@ -144,4 +151,16 @@ def select_market_candidates(
                 "Самый ликвидный доступный фонд широкого индекса из source-backed реестра MOEX.",
             )
         )
-    return MarketSelection(DISCOVERY_POLICY_VERSION, tuple(selected))
+    selected_ids = {item.candidate.asset_id for item in selected}
+    rejected: list[RejectedCandidate] = []
+    for candidate in candidates:
+        if candidate.asset_id in selected_ids:
+            continue
+        if candidate.currency != "RUB":
+            reason = "Валюта инструмента не соответствует рублёвой policy."
+        elif candidate.lot_cost > contribution:
+            reason = "Стоимость целого лота превышает сумму пополнения."
+        else:
+            reason = "Инструмент уступил выбранному кандидату в детерминированном ranking policy."
+        rejected.append(RejectedCandidate(candidate, reason))
+    return MarketSelection(DISCOVERY_POLICY_VERSION, tuple(selected), tuple(rejected))

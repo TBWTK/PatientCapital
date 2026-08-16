@@ -17,10 +17,12 @@ from patientcapital.application.errors import ApplicationError
 from patientcapital.application.services import (
     create_discovery_recommendation,
     create_price,
+    create_proposal_set,
     create_recommendation,
     create_transaction,
     get_portfolio,
     get_profile,
+    get_proposal_set,
     get_recommendation,
     list_assets,
     put_asset,
@@ -38,6 +40,8 @@ from patientcapital.contracts import (
     PriceResponse,
     ProfilePut,
     ProfileResponse,
+    ProposalSetCreate,
+    ProposalSetResponse,
     RecommendationCreate,
     RecommendationResponse,
     TransactionCreate,
@@ -174,6 +178,20 @@ def create_app(
         session: SessionDependency,
     ) -> RecommendationResponse:
         return create_discovery_recommendation(session, payload, provider)
+
+    @app.post("/v1/proposal-sets", response_model=ProposalSetResponse, status_code=201)
+    def proposal_set_post(
+        payload: ProposalSetCreate,
+        session: SessionDependency,
+    ) -> ProposalSetResponse:
+        return create_proposal_set(session, payload, provider)
+
+    @app.get("/v1/proposal-sets/{proposal_set_id}", response_model=ProposalSetResponse)
+    def proposal_set_get(
+        proposal_set_id: UUID,
+        session: SessionDependency,
+    ) -> ProposalSetResponse:
+        return get_proposal_set(session, proposal_set_id)
 
     @app.get("/v1/recommendations/{run_id}", response_model=RecommendationResponse)
     def recommendation_get(run_id: UUID, session: SessionDependency) -> RecommendationResponse:

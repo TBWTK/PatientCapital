@@ -4,6 +4,7 @@ export type Profile = components["schemas"]["ProfileResponse"];
 export type Asset = components["schemas"]["AssetResponse"];
 export type Portfolio = components["schemas"]["PortfolioResponse"];
 export type Recommendation = components["schemas"]["RecommendationResponse"];
+export type ProposalSet = components["schemas"]["ProposalSetResponse"];
 export type Transaction = components["schemas"]["TransactionResponse"];
 
 const API_BASE = (

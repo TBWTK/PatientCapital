@@ -12,10 +12,12 @@ from sqlalchemy.orm import Session
 from patientcapital.application.errors import ApplicationError
 from patientcapital.application.services import (
     create_discovery_recommendation,
+    create_proposal_set,
     create_recommendation,
     create_transaction,
     get_portfolio,
     get_profile,
+    get_proposal_set,
     get_recommendation,
     list_assets,
 )
@@ -26,6 +28,8 @@ from patientcapital.contracts import (
     ErrorResponse,
     PortfolioResponse,
     ProfileResponse,
+    ProposalSetCreate,
+    ProposalSetResponse,
     RecommendationCreate,
     RecommendationResponse,
     TransactionCreate,
@@ -92,6 +96,17 @@ class AgentTools:
         return self._call(
             lambda session: create_discovery_recommendation(session, contribution, provider)
         )
+
+    def propose_strategy_set(self, contribution: ProposalSetCreate) -> ProposalSetResponse:
+        provider = self._market_data_provider
+        if provider is None:
+            raise AgentToolError(
+                "MARKET_DATA_NOT_CONFIGURED", "market data provider is unavailable"
+            )
+        return self._call(lambda session: create_proposal_set(session, contribution, provider))
+
+    def get_proposal_set(self, proposal_set_id: UUID) -> ProposalSetResponse:
+        return self._call(lambda session: get_proposal_set(session, proposal_set_id))
 
     def get_recommendation(self, run_id: UUID) -> RecommendationResponse:
         return self._call(lambda session: get_recommendation(session, run_id))

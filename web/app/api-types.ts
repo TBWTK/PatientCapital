@@ -175,6 +175,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/proposal-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Proposal Set Post */
+        post: operations["proposal_set_post_v1_proposal_sets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/proposal-sets/{proposal_set_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Proposal Set Get */
+        get: operations["proposal_set_get_v1_proposal_sets__proposal_set_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/recommendations/{run_id}": {
         parameters: {
             query?: never;
@@ -429,6 +463,34 @@ export interface components {
              */
             created_at: string;
         };
+        /** ProposalSetCreate */
+        ProposalSetCreate: {
+            /** Contribution */
+            contribution: number | string;
+        };
+        /** ProposalSetResponse */
+        ProposalSetResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Contribution */
+            contribution: string;
+            /** Currency */
+            currency: string;
+            /** Profile Version */
+            profile_version: number;
+            /** Recommended Strategy Id */
+            recommended_strategy_id: string;
+            /** Strategies */
+            strategies: components["schemas"]["StrategyProposalResponse"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
         /** RecommendationCreate */
         RecommendationCreate: {
             /** Contribution */
@@ -511,6 +573,55 @@ export interface components {
             risk_level?: string | null;
             /** Candidates */
             candidates?: components["schemas"]["DiscoveryCandidateResponse"][];
+            /** Rejected Candidates */
+            rejected_candidates?: components["schemas"]["RejectedDiscoveryCandidateResponse"][];
+            /** Profile Version */
+            profile_version?: number | null;
+        };
+        /** RejectedDiscoveryCandidateResponse */
+        RejectedDiscoveryCandidateResponse: {
+            /** Asset Id */
+            asset_id: string;
+            /** Name */
+            name: string;
+            /**
+             * Instrument Type
+             * @enum {string}
+             */
+            instrument_type: "ofz" | "equity_index_fund";
+            /** Reason */
+            reason: string;
+            /** Unit Price */
+            unit_price: string;
+            /** Lot Size */
+            lot_size: number;
+            /** Lot Cost */
+            lot_cost: string;
+            /**
+             * Price As Of
+             * Format: date-time
+             */
+            price_as_of: string;
+            /** Source Url */
+            source_url: string;
+        };
+        /** StrategyProposalResponse */
+        StrategyProposalResponse: {
+            /** Strategy Id */
+            strategy_id: string;
+            /** Name */
+            name: string;
+            /** Summary */
+            summary: string;
+            /** Why */
+            why: string;
+            /** Risk Note */
+            risk_note: string;
+            /** Tradeoffs */
+            tradeoffs: string[];
+            /** Recommended */
+            recommended: boolean;
+            recommendation: components["schemas"]["RecommendationResponse"];
         };
         /** TransactionCreate */
         TransactionCreate: {
@@ -1015,6 +1126,88 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RecommendationResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    proposal_set_post_v1_proposal_sets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProposalSetCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalSetResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    proposal_set_get_v1_proposal_sets__proposal_set_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                proposal_set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProposalSetResponse"];
                 };
             };
             /** @description Conflict */

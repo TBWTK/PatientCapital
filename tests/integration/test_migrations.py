@@ -23,6 +23,7 @@ def test_head_migration_creates_required_authorities() -> None:
         "price_snapshots",
         "transactions",
         "recommendation_runs",
+        "proposal_sets",
     }.issubset(set(inspector.get_table_names()))
     assert inspector.get_unique_constraints("transactions")
     transaction_columns = {item["name"]: item for item in inspector.get_columns("transactions")}
@@ -32,6 +33,7 @@ def test_head_migration_creates_required_authorities() -> None:
         "accrued_interest_total" in str(item.get("sqltext"))
         for item in inspector.get_check_constraints("transactions")
     )
+    assert inspector.get_foreign_keys("proposal_sets")
     engine.dispose()
 
 
@@ -52,4 +54,39 @@ def test_database_rejects_mutation_of_append_only_facts() -> None:
             )
         )
         connection.execute(text("UPDATE profile_versions SET broker_name = 'Mutated'"))
+    engine.dispose()
+
+
+def test_database_rejects_mutation_of_proposal_sets() -> None:
+    engine = create_engine(TEST_DATABASE_URL)
+    with (
+        pytest.raises(DBAPIError, match="immutable table proposal_sets"),
+        engine.begin() as connection,
+    ):
+        connection.execute(
+            text(
+                """
+                INSERT INTO profile_versions (
+                  version, base_currency, investment_horizon_years, risk_level,
+                  cash_buffer, broker_name, fee_rate, minimum_fee
+                ) VALUES (1, 'RUB', 5, 'growth', 0, 'Test', 0.001, 0)
+                """
+            )
+        )
+        connection.execute(
+            text(
+                """
+                INSERT INTO proposal_sets (
+                  id, contribution, currency, profile_version,
+                  recommended_strategy_id, strategies
+                ) VALUES (
+                  '00000000-0000-0000-0000-000000000010', 8000, 'RUB', 1,
+                  'five_year_core', '[]'::jsonb
+                )
+                """
+            )
+        )
+        connection.execute(
+            text("UPDATE proposal_sets SET recommended_strategy_id = 'mutated'")
+        )
     engine.dispose()

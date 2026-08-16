@@ -15,6 +15,8 @@ from patientcapital.contracts import (
     DiscoveryRecommendationCreate,
     PortfolioResponse,
     ProfileResponse,
+    ProposalSetCreate,
+    ProposalSetResponse,
     RecommendationCreate,
     RecommendationResponse,
     TransactionCreate,
@@ -162,6 +164,28 @@ def build_mcp_server(
     )
     def discover_contribution_tool(contribution: Decimal) -> RecommendationResponse:
         return tools.discover_contribution(DiscoveryRecommendationCreate(contribution=contribution))
+
+    @server.tool(
+        name="propose_strategy_set",
+        title="Propose contribution strategies",
+        description=(
+            "Create and persist an immutable set of one to three admitted user-facing strategies "
+            "for a user-supplied contribution. Each strategy contains an exact deterministic "
+            "recommendation run. This never records or places a trade."
+        ),
+        annotations=DISCOVER_PROPOSE,
+    )
+    def propose_strategy_set_tool(contribution: Decimal) -> ProposalSetResponse:
+        return tools.propose_strategy_set(ProposalSetCreate(contribution=contribution))
+
+    @server.tool(
+        name="get_proposal_set",
+        title="Get saved proposal set",
+        description="Retrieve one immutable strategy proposal set by UUID without recalculation.",
+        annotations=READ_ONLY,
+    )
+    def get_proposal_set_tool(proposal_set_id: UUID) -> ProposalSetResponse:
+        return tools.get_proposal_set(proposal_set_id)
 
     @server.tool(
         name="get_recommendation",

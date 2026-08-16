@@ -9,15 +9,15 @@ updated: 2026-08-16
 
 ## Active objective
 
-**Ready, not started — Assistant-first MVP v2 (`PC2-MVP`).** Превратить проверенный amount-only v1
+**In progress — Assistant-first MVP v2 (`PC2-MVP`).** Превратить проверенный amount-only v1
 в лаконичный продуктовый цикл `сумма → выбор стратегии → подтверждение исполнения → обновлённая
 аналитика`, добавить source-backed расширение universe и наблюдение без автоматической торговли.
 
 ## Acceptance criteria
 
-- [ ] Один денежный input создаёт immutable proposal set из `1..3` зарегистрированных стратегий;
+- [x] Один денежный input создаёт immutable proposal set из `1..3` зарегистрированных стратегий;
   одна допустимая карточка помечена рекомендуемой, а отсутствующие варианты не выдумываются.
-- [ ] Карточка сначала показывает действие, обоснование, вложенную сумму/остаток и риски; security,
+- [x] Карточка сначала показывает действие, обоснование, вложенную сумму/остаток и риски; security,
   lot/price/fee, freshness, sources, rejected candidates и policy/run versions скрыты в доступном
   progressive-disclosure блоке.
 - [ ] LLM/search может добавлять цитируемый research context, но инструмент, цена, lot, target,
@@ -42,20 +42,23 @@ updated: 2026-08-16
 
 ## Current verified state
 
-- v1 завершён и проверен: deterministic five-year allocation, strict delayed MOEX discovery для
-  ОФЗ/широких индексных фондов, immutable evidence, bond НКД, API/web/MCP и Docker smoke.
+- `PC2-1 Product shell` завершён: `POST/GET /v1/proposal-sets`, immutable `proposal_sets`, registry
+  только из admitted strategies, API/MCP parity и compact-first web-карточка поверх неизменённого
+  v1 deterministic run.
+- Основная навигация уже использует Обзор, Пополнить, Ассистент, Профиль; ручной ledger editor
+  сохранён внутри «Расширенного ввода операции», но transaction drafts/uploads ещё не реализованы.
 - Локальный portfolio содержит подтверждённую BUY `SU26226RMFS9`; его числовая evidence не должна
   измениться при migration v2.
-- Product-gap воспроизведён: один технически перегруженный result, manual dropdown ledger, узкий
-  universe, нет transaction drafts/uploads, richer analytics и recurring monitoring.
-- Документационный контракт PC2-MVP закреплён в README, ROADMAP, ARCHITECTURE, QUALITY, DATA,
-  SECURITY, OPERATIONS, AUDIT и ADR 0004. Product code в этом checkpoint не изменён.
-- Docs evidence 16.08.2026: project-control audit `PASS` с ожидаемыми `10` unchecked PC2 criteria,
-  IMMUNE docs phase `PASS`, resume summary восстановил objective/next step, `git diff --check` прошёл.
+- Оставшийся product-gap: нет transaction drafts/uploads, richer analytics, dividend research policy
+  и recurring monitoring.
+- PC2-1 evidence 16.08.2026: `145 passed`, branch coverage `94.23%`; Ruff/mypy/OpenAPI; web build,
+  typecheck, lint, SSR, `4` component tests + axe; MCP/API/migration tests; healthy Compose; browser
+  desktop `1440px` и mobile `390px` без horizontal overflow.
 
 ## Changed areas
 
-- Только product/architecture/data/security/operations/quality/agent документация для PC2-MVP.
+- Additive `proposal_sets` migration/model, strategy registry/application/API/MCP contracts,
+  generated web types, compact strategy/progressive-evidence UI, новая IA, tests и документы.
 
 ## Decisions made
 
@@ -68,22 +71,22 @@ updated: 2026-08-16
 
 ## Next exact step
 
-После пользовательской цели `Реализуй PatientCapital Assistant-first MVP v2` начать checkpoint
-`PC2-1 Product shell`: написать failing capability/component contracts для proposal cards,
-progressive disclosure и новой навигации, затем реализовать их поверх неизменённого v1 core.
+Начать `PC2-2 Transaction assistant` с versioned parser corpus: принять Russian text и supplied
+T-Invest screenshot как два intake transport, доказать draft-only/ambiguity/upload-safety contract,
+затем добавить additive draft/decision schema и UI confirmation flow.
 
 ## Blockers
 
-- Конкретный screenshot extractor не выбран. `PC2-2` должен сначала провести admission на
-  versioned screenshot corpus; непрошедший extractor не подключается, а text draft остаётся рабочим.
+- Конкретный screenshot extractor ещё не допущен. `PC2-2` сначала проводит admission на versioned
+  screenshot corpus; непрошедший extractor не подключается, а text draft остаётся рабочим.
 - Дополнительные стратегии и dividend-stock universe не появляются до собственных policy/evidence
-  gates. Это не блокирует `PC2-1` и core-карточку.
+  gates. Это не блокирует уже готовую core-карточку.
 - Публичный/коммерческий режим остаётся заблокирован до legal, identity, privacy и licensing review.
 
 ## Non-goals
 
-- Product code, schema migration, provider connection или schedule в текущем docs-only checkpoint.
-- Broker orders, автоматический SELL/rebalance, гарантии доходности и LLM-owned financial facts.
+- Broker orders, автоматическое превращение proposal в transaction, SELL/rebalance, гарантии
+  доходности и LLM-owned financial facts.
 - Public SaaS, auth/RBAC/multi-user, derivatives, margin, tax optimization и real-time claim.
 
 ## Verification

@@ -37,7 +37,8 @@ amount-only discovery рублёвых ОФЗ и фондов широкого �
 версионированную пятилетнюю policy, журнал BUY/SELL с отдельным НКД, портфельную аналитику,
 immutable recommendation runs, web и Codex tools.
 
-Следующий **Assistant-first MVP v2** добавляет четыре связных capability:
+**Assistant-first MVP v2** реализуется по проверяемым checkpoint; product shell/proposal sets уже
+готовы, transaction assistant, analytics, research universe и monitoring остаются в работе:
 
 1. `amount → proposal set`: одна рекомендуемая и до двух альтернативных стратегических карточек;
    неподдерживаемые варианты не генерируются для количества.

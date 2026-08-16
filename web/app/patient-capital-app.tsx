@@ -6,17 +6,18 @@ import {
   type Asset,
   type Portfolio,
   type Profile,
+  type ProposalSet,
   type Recommendation,
   request,
 } from "./api";
 
-type View = "overview" | "contribution" | "ledger" | "settings";
+type View = "overview" | "contribution" | "assistant" | "settings";
 type Notice = { kind: "error" | "success"; text: string } | null;
 
 const nav: { id: View; label: string; mark: string }[] = [
   { id: "overview", label: "Обзор", mark: "⌁" },
-  { id: "contribution", label: "Пополнение", mark: "+" },
-  { id: "ledger", label: "Операции", mark: "↕" },
+  { id: "contribution", label: "Пополнить", mark: "+" },
+  { id: "assistant", label: "Ассистент", mark: "↕" },
   { id: "settings", label: "Профиль", mark: "○" },
 ];
 
@@ -154,7 +155,7 @@ function Overview({
         </header>
         {portfolio.assets.length === 0 ? (
           <div className="soft-empty">
-            Сделок пока нет. Добавьте первую покупку в разделе «Операции».
+            Сделок пока нет. Запишите первую покупку через «Ассистент».
           </div>
         ) : (
           <div className="asset-table" role="table" aria-label="Активы портфеля">
@@ -186,32 +187,104 @@ function Overview({
   );
 }
 
+function RecommendationEvidence({ result }: { result: Recommendation }) {
+  const candidates = result.candidates ?? [];
+  const rejectedCandidates = result.rejected_candidates ?? [];
+  return (
+    <div className="evidence-body">
+      {candidates.length > 0 && (
+        <div className="candidate-grid" aria-label="Подобранные инструменты">
+          {candidates.map((candidate) => (
+            <article key={candidate.asset_id}>
+              <header><i>{candidate.instrument_type === "ofz" ? "ОФЗ" : "ФОНД"}</i><b>{percent(candidate.target_weight)}</b></header>
+              <h3>{candidate.name}</h3>
+              <p>{candidate.rationale}</p>
+              <dl>
+                <div><dt>Код</dt><dd>{candidate.asset_id}</dd></div>
+                <div><dt>Цена / пай</dt><dd>{money(candidate.unit_price, result.currency)}</dd></div>
+                <div><dt>Лот</dt><dd>{candidate.lot_size} · {money(candidate.lot_cost, result.currency)}</dd></div>
+                {candidate.maturity_date && <div><dt>Погашение</dt><dd>{new Intl.DateTimeFormat("ru-RU").format(new Date(`${candidate.maturity_date}T00:00:00Z`))}</dd></div>}
+                {candidate.yield_percent != null && <div><dt>Доходность MOEX</dt><dd>{candidate.yield_percent}%</dd></div>}
+                <div><dt>Цена на</dt><dd>{shortDateTime(candidate.price_as_of)}</dd></div>
+              </dl>
+              <footer><a href={candidate.source_url} target="_blank" rel="noreferrer">Котировка MOEX ↗</a><a href={candidate.classification_url} target="_blank" rel="noreferrer">Класс инструмента ↗</a></footer>
+            </article>
+          ))}
+        </div>
+      )}
+      {rejectedCandidates.length > 0 && (
+        <details className="rejected-details">
+          <summary>Не выбранные policy кандидаты · {rejectedCandidates.length}</summary>
+          <div>
+            {rejectedCandidates.map((candidate) => (
+              <article key={candidate.asset_id}>
+                <span><b>{candidate.name}</b><small>{candidate.asset_id} · лот {candidate.lot_size} · {money(candidate.lot_cost, result.currency)}</small></span>
+                <p>{candidate.reason}</p>
+                <a href={candidate.source_url} target="_blank" rel="noreferrer">Источник ↗</a>
+              </article>
+            ))}
+          </div>
+        </details>
+      )}
+      <div className="market-warning">Данные MOEX задержанные. Перед фактической покупкой проверьте цену у брокера. Это предложение, не заявка и не обещание доходности.</div>
+      <div className="result-summary">
+        <span>Активы <b>{money(result.gross, result.currency)}</b></span>
+        <span>Комиссии <b>{money(result.fees, result.currency)}</b></span>
+        <span>Остаток <b>{money(result.leftover, result.currency)}</b></span>
+      </div>
+      {result.lines.length === 0 ? (
+        <div className="soft-empty">Лоты не помещаются в доступную сумму. {result.reason}</div>
+      ) : (
+        <div className="plan-lines">
+          {result.lines.map((line, index) => (
+            <article key={line.asset_id}>
+              <span className="line-number">{String(index + 1).padStart(2, "0")}</span>
+              <div><h3>{candidates.find((item) => item.asset_id === line.asset_id)?.name ?? line.asset_id}</h3><p>{line.asset_id} · {line.lots} лот. · {line.quantity} шт. × {money(line.unit_price, result.currency)}</p></div>
+              <div className="drift-change"><span>{money(line.pre_drift, result.currency)}</span><i>→</i><b>{money(line.post_drift, result.currency)}</b><small>отклонение от цели</small></div>
+              <strong>{money(line.total, result.currency)}</strong>
+            </article>
+          ))}
+        </div>
+      )}
+      <footer className="audit-line">
+        <span>Алгоритм {result.algorithm_version}</span>
+        {result.policy_version && <span>Policy {result.policy_version}</span>}
+        <span>Run {result.id.slice(0, 8)}</span>
+        <span>Hash {result.input_hash.slice(0, 10)}</span>
+      </footer>
+    </div>
+  );
+}
+
 function Contribution({
   currency,
   result,
   onResult,
   onSaved,
+  onAssistant,
 }: {
   currency: string;
-  result: Recommendation | null;
-  onResult: (value: Recommendation) => void;
+  result: ProposalSet | null;
+  onResult: (value: ProposalSet) => void;
   onSaved: () => Promise<void>;
+  onAssistant: () => void;
 }) {
   const [amount, setAmount] = useState("8000");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
-  const candidates = result?.candidates ?? [];
+  const [selectedStrategy, setSelectedStrategy] = useState<string | null>(null);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setNotice(null);
+    setSelectedStrategy(null);
     try {
-      const run = await request<Recommendation>("/v1/discovery/recommendations", {
+      const proposalSet = await request<ProposalSet>("/v1/proposal-sets", {
         method: "POST",
         body: JSON.stringify({ contribution: amount }),
       });
-      onResult(run);
+      onResult(proposalSet);
       await onSaved();
     } catch (error) {
       setNotice({ kind: "error", text: errorText(error) });
@@ -225,28 +298,20 @@ function Contribution({
       <section className="page-intro">
         <p className="eyebrow">Автоподбор · 5 лет</p>
         <h1>Скажите только сумму</h1>
-        <p>PatientCapital сам проверит доступные ОФЗ и фонд акций на MOEX, а затем рассчитает целые лоты, комиссию и остаток.</p>
+        <p>PatientCapital проверит допущенные инструменты и покажет до трёх понятных стратегий. Точные котировки, лоты и версии расчёта останутся внутри каждой карточки.</p>
       </section>
       <section className="chat-panel" aria-label="Диалог подбора">
         <div className="chat-avatar" aria-hidden="true">PC</div>
         <div className="chat-bubble assistant">
           <b>PatientCapital</b>
-          <p>Сколько рублей вы готовы направить сейчас? Я использую ваш риск-профиль и горизонт 5 лет. Предложение не совершит сделку.</p>
+          <p>Сколько рублей вы готовы направить сейчас? Я использую ваш риск-профиль и горизонт 5 лет. Ни одно предложение не совершит сделку.</p>
         </div>
       </section>
       <form className="contribution-form" onSubmit={submit}>
         <label>
           Сумма пополнения
           <span className="money-input">
-            <input
-              aria-label="Сумма пополнения"
-              type="number"
-              min="0"
-              step="0.01"
-              required
-              value={amount}
-              onChange={(event) => setAmount(event.target.value)}
-            />
+            <input aria-label="Сумма пополнения" type="number" min="0" step="0.01" required value={amount} onChange={(event) => setAmount(event.target.value)} />
             <b>{currency}</b>
           </span>
         </label>
@@ -256,65 +321,51 @@ function Contribution({
       </form>
       {notice && <div className={`notice ${notice.kind}`}>{notice.text}</div>}
       {result && (
-        <section className="result-card" aria-live="polite">
-          <div className="user-query"><span>Вы</span><p>У меня есть {money(result.contribution, result.currency)}. Что можно купить на {result.horizon_years ?? 5} лет?</p></div>
+        <section className="proposal-set" aria-live="polite">
+          <div className="user-query"><span>Вы</span><p>У меня есть {money(result.contribution, result.currency)}. Что можно купить на 5 лет?</p></div>
           <header className="section-heading">
-            <div><p className="eyebrow">Проверяемое предложение</p><h2>{money(result.spent, result.currency)} к покупке</h2></div>
-            <span className="status-pill">Предложение · не исполнено</span>
+            <div><p className="eyebrow">Варианты действий</p><h2>Выберите подход</h2></div>
+            <span className="status-pill">Предложения · не исполнены</span>
           </header>
-          {candidates.length > 0 && (
-            <div className="candidate-grid" aria-label="Подобранные инструменты">
-              {candidates.map((candidate) => (
-                <article key={candidate.asset_id}>
-                  <header><i>{candidate.instrument_type === "ofz" ? "ОФЗ" : "ФОНД"}</i><b>{percent(candidate.target_weight)}</b></header>
-                  <h3>{candidate.name}</h3>
-                  <p>{candidate.rationale}</p>
-                  <dl>
-                    <div><dt>Код</dt><dd>{candidate.asset_id}</dd></div>
-                    <div><dt>Цена / пай</dt><dd>{money(candidate.unit_price, result.currency)}</dd></div>
-                    <div><dt>Лот</dt><dd>{candidate.lot_size} · {money(candidate.lot_cost, result.currency)}</dd></div>
-                    {candidate.maturity_date && <div><dt>Погашение</dt><dd>{new Intl.DateTimeFormat("ru-RU").format(new Date(`${candidate.maturity_date}T00:00:00Z`))}</dd></div>}
-                    {candidate.yield_percent != null && <div><dt>Доходность MOEX</dt><dd>{candidate.yield_percent}%</dd></div>}
-                    <div><dt>Цена на</dt><dd>{shortDateTime(candidate.price_as_of)}</dd></div>
-                  </dl>
-                  <footer><a href={candidate.source_url} target="_blank" rel="noreferrer">Котировка MOEX ↗</a><a href={candidate.classification_url} target="_blank" rel="noreferrer">Класс инструмента ↗</a></footer>
+          <div className="strategy-grid">
+            {result.strategies.map((strategy, index) => {
+              const recommendation = strategy.recommendation;
+              const selected = selectedStrategy === strategy.strategy_id;
+              return (
+                <article className={`strategy-card${selected ? " selected" : ""}`} key={strategy.strategy_id}>
+                  <header>
+                    <span className="strategy-number">Вариант {index + 1}</span>
+                    {strategy.recommended && <span className="recommended-pill">Рекомендуется</span>}
+                  </header>
+                  <h2>{strategy.name}</h2>
+                  <p className="strategy-summary">{strategy.summary}</p>
+                  <div className="strategy-why"><b>Почему</b><p>{strategy.why}</p></div>
+                  <div className="strategy-money">
+                    <span>К покупке <b>{money(recommendation.spent, recommendation.currency)}</b></span>
+                    <span>Остаток <b>{money(recommendation.leftover, recommendation.currency)}</b></span>
+                  </div>
+                  <p className="risk-note">{strategy.risk_note}</p>
+                  <ul>{strategy.tradeoffs.map((tradeoff) => <li key={tradeoff}>{tradeoff}</li>)}</ul>
+                  <button className="button primary" type="button" onClick={() => setSelectedStrategy(strategy.strategy_id)}>
+                    {selected ? "Вариант выбран" : "Выбрать этот вариант"}
+                  </button>
+                  <details className="evidence-details">
+                    <summary>Расчёт и источники</summary>
+                    <RecommendationEvidence result={recommendation} />
+                  </details>
+                  {selected && <div className="selection-next"><span>После покупки пришлите чек или опишите сделку Ассистенту.</span><button type="button" onClick={onAssistant}>Открыть Ассистент →</button></div>}
                 </article>
-              ))}
-            </div>
-          )}
-          <div className="market-warning">Данные MOEX задержанные. Перед фактической покупкой проверьте цену у брокера. Это предложение, не заявка и не обещание доходности.</div>
-          <div className="result-summary">
-            <span>Активы <b>{money(result.gross, result.currency)}</b></span>
-            <span>Комиссии <b>{money(result.fees, result.currency)}</b></span>
-            <span>Остаток <b>{money(result.leftover, result.currency)}</b></span>
+              );
+            })}
           </div>
-          {result.lines.length === 0 ? (
-            <div className="soft-empty">Лоты не помещаются в доступную сумму. {result.reason}</div>
-          ) : (
-            <div className="plan-lines">
-              {result.lines.map((line, index) => (
-                <article key={line.asset_id}>
-                  <span className="line-number">{String(index + 1).padStart(2, "0")}</span>
-                  <div><h3>{candidates.find((item) => item.asset_id === line.asset_id)?.name ?? line.asset_id}</h3><p>{line.asset_id} · {line.lots} лот. · {line.quantity} шт. × {money(line.unit_price, result.currency)}</p></div>
-                  <div className="drift-change"><span>{money(line.pre_drift, result.currency)}</span><i>→</i><b>{money(line.post_drift, result.currency)}</b><small>отклонение от цели</small></div>
-                  <strong>{money(line.total, result.currency)}</strong>
-                </article>
-              ))}
-            </div>
-          )}
-          <footer className="audit-line">
-            <span>Алгоритм {result.algorithm_version}</span>
-            {result.policy_version && <span>Policy {result.policy_version}</span>}
-            <span>Run {result.id.slice(0, 8)}</span>
-            <span>Hash {result.input_hash.slice(0, 10)}</span>
-          </footer>
+          <footer className="proposal-audit">Набор {result.id.slice(0, 8)} · профиль v{result.profile_version} · создан {shortDateTime(result.created_at)}</footer>
         </section>
       )}
     </div>
   );
 }
 
-function Ledger({ assets, onSaved }: { assets: Asset[]; onSaved: () => Promise<void> }) {
+function Assistant({ assets, onSaved }: { assets: Asset[]; onSaved: () => Promise<void> }) {
   const activeAssets = assets.filter((asset) => asset.is_active);
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState(false);
@@ -369,22 +420,32 @@ function Ledger({ assets, onSaved }: { assets: Asset[]; onSaved: () => Promise<v
   return (
     <div className="workspace-stack narrow">
       <section className="page-intro">
-        <p className="eyebrow">Ручной ввод</p>
-        <h1>Записать операцию</h1>
-        <p>PatientCapital не подключён к брокеру и не исполняет заявки.</p>
+        <p className="eyebrow">Операции через диалог</p>
+        <h1>Ассистент операций</h1>
+        <p>Опишите фактическую покупку или загрузите брокерский чек. Ассистент подготовит черновик, но запишет операцию только после вашей проверки и подтверждения.</p>
       </section>
-      <form className="form-card two-column" onSubmit={submit}>
-        <label>Актив<select required value={selectedAssetId} onChange={(e) => updateAsset(e.target.value)}><option value="">Выберите актив</option>{activeAssets.map((asset) => <option key={asset.asset_id} value={asset.asset_id}>{asset.asset_id} · {asset.name}</option>)}</select></label>
-        <label>Сторона<select value={form.side} onChange={(e) => setForm({ ...form, side: e.target.value })}><option value="BUY">Покупка</option><option value="SELL">Продажа</option></select></label>
-        <label>Количество<input required type="number" min="1" step="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></label>
-        <label>Цена за единицу<input required type="number" min="0.00000001" step="any" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} /></label>
-        <label>НКД всего<input required type="number" min="0" step="0.01" value={form.accrued_interest_total} onChange={(e) => setForm({ ...form, accrued_interest_total: e.target.value })} /></label>
-        <label>Комиссия<input required type="number" min="0" step="0.01" value={form.fee} onChange={(e) => setForm({ ...form, fee: e.target.value })} /></label>
-        <label>Валюта<input required pattern="[A-Z]{3}" value={selectedCurrency} onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })} /></label>
-        <label>Дата и время<input required type="datetime-local" value={form.occurred_at} onChange={(e) => setForm({ ...form, occurred_at: e.target.value })} /></label>
-        <label>Заметка<input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Необязательно" /></label>
-        <div className="form-actions"><button className="button primary" disabled={busy || activeAssets.length === 0}>{busy ? "Сохраняем…" : "Записать операцию"}</button></div>
-      </form>
+      <section className="assistant-composer" aria-label="Диалог записи операции">
+        <div className="chat-panel">
+          <div className="chat-avatar" aria-hidden="true">PC</div>
+          <div className="chat-bubble assistant"><b>PatientCapital</b><p>Пришлите текст или скриншот операции. На следующем этапе здесь появится проверяемый черновик со всеми извлечёнными полями.</p></div>
+        </div>
+        <div className="composer-placeholder"><span>Например: «Купил 7 ОФЗ 26226 по 992,04 ₽…»</span><button type="button" disabled>Добавить скриншот</button></div>
+      </section>
+      <details className="advanced-ledger">
+        <summary>Расширенный ввод операции</summary>
+        <form className="form-card two-column" onSubmit={submit}>
+          <label>Актив<select required value={selectedAssetId} onChange={(e) => updateAsset(e.target.value)}><option value="">Выберите актив</option>{activeAssets.map((asset) => <option key={asset.asset_id} value={asset.asset_id}>{asset.asset_id} · {asset.name}</option>)}</select></label>
+          <label>Сторона<select value={form.side} onChange={(e) => setForm({ ...form, side: e.target.value })}><option value="BUY">Покупка</option><option value="SELL">Продажа</option></select></label>
+          <label>Количество<input required type="number" min="1" step="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></label>
+          <label>Цена за единицу<input required type="number" min="0.00000001" step="any" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} /></label>
+          <label>НКД всего<input required type="number" min="0" step="0.01" value={form.accrued_interest_total} onChange={(e) => setForm({ ...form, accrued_interest_total: e.target.value })} /></label>
+          <label>Комиссия<input required type="number" min="0" step="0.01" value={form.fee} onChange={(e) => setForm({ ...form, fee: e.target.value })} /></label>
+          <label>Валюта<input required pattern="[A-Z]{3}" value={selectedCurrency} onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })} /></label>
+          <label>Дата и время<input required type="datetime-local" value={form.occurred_at} onChange={(e) => setForm({ ...form, occurred_at: e.target.value })} /></label>
+          <label>Заметка<input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Необязательно" /></label>
+          <div className="form-actions"><button className="button primary" disabled={busy || activeAssets.length === 0}>{busy ? "Сохраняем…" : "Записать операцию"}</button></div>
+        </form>
+      </details>
       {activeAssets.length === 0 && <div className="notice error">Сначала создайте автоматическое предложение в разделе «Пополнение» — выбранные инструменты появятся здесь.</div>}
       {notice && <div className={`notice ${notice.kind}`}>{notice.text}</div>}
     </div>
@@ -458,7 +519,7 @@ export function PatientCapitalApp() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
-  const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
+  const [proposalSet, setProposalSet] = useState<ProposalSet | null>(null);
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
@@ -500,8 +561,8 @@ export function PatientCapitalApp() {
           {loading ? <div className="loading-state" role="status"><span />Загружаем ваш капитал…</div> : (
             <>
               {view === "overview" && <Overview portfolio={portfolio} profile={profile} onContribution={() => setView("contribution")} onSettings={() => setView("settings")} />}
-              {view === "contribution" && <Contribution currency={profile?.base_currency ?? "RUB"} result={recommendation} onResult={setRecommendation} onSaved={refresh} />}
-              {view === "ledger" && <Ledger assets={assets} onSaved={refresh} />}
+              {view === "contribution" && <Contribution currency={profile?.base_currency ?? "RUB"} result={proposalSet} onResult={setProposalSet} onSaved={refresh} onAssistant={() => setView("assistant")} />}
+              {view === "assistant" && <Assistant assets={assets} onSaved={refresh} />}
               {view === "settings" && <Settings profile={profile} assets={assets} onRefresh={refresh} />}
             </>
           )}

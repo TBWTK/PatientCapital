@@ -44,14 +44,29 @@ describe("PatientCapitalApp", () => {
     expect(screen.getByText("Demo Broker")).toBeTruthy();
   });
 
-  it("starts the primary flow from 8000 rubles and renders sourced automatic candidates", async () => {
+  it("renders one recommended strategy card and progressively discloses exact evidence", async () => {
     const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
       const path = String(input);
       if (path.endsWith("/v1/profile")) return json({ version: 3, base_currency: "RUB", investment_horizon_years: 5, risk_level: "balanced", cash_buffer: "0.00", broker_name: "Demo Broker", fee_rate: "0.001", minimum_fee: "1.00", created_at: "2026-08-15T00:00:00Z" });
       if (path.endsWith("/v1/assets")) return json({ assets: [] });
       if (path.endsWith("/v1/portfolio")) return json({ currency: "RUB", total_market_value: "0.00", total_cost_basis: "0.00", total_unrealized_pnl: "0.00", assets: [] });
-      if (path.endsWith("/v1/discovery/recommendations") && init?.method === "POST") return json({
-        id: "00000000-0000-0000-0000-000000000001",
+      if (path.endsWith("/v1/proposal-sets") && init?.method === "POST") return json({
+        id: "00000000-0000-0000-0000-000000000010",
+        contribution: "8000.00",
+        currency: "RUB",
+        profile_version: 3,
+        recommended_strategy_id: "five_year_core",
+        created_at: "2026-08-15T09:00:01Z",
+        strategies: [{
+          strategy_id: "five_year_core",
+          name: "Основной план",
+          summary: "Вернуть портфель ближе к целевой структуре.",
+          why: "Учитывает ваш профиль, текущие позиции и комиссии.",
+          risk_note: "Стоимость активов может снижаться.",
+          tradeoffs: ["Следует долгосрочной структуре.", "Не исполняет заявку."],
+          recommended: true,
+          recommendation: {
+          id: "00000000-0000-0000-0000-000000000001",
         algorithm_version: "contribution-greedy-v1",
         input_hash: "a".repeat(64),
         calculated_at: "2026-08-15T09:00:00Z",
@@ -85,21 +100,45 @@ describe("PatientCapitalApp", () => {
           source_url: "https://iss.moex.com/ofz",
           classification_url: "https://www.moex.com/ru/marketdata/",
         }],
+        rejected_candidates: [{
+          asset_id: "FUNDALT",
+          name: "Альтернативный фонд",
+          instrument_type: "equity_index_fund",
+          reason: "Инструмент уступил выбранному кандидату в детерминированном ranking policy.",
+          unit_price: "120.00000000",
+          lot_size: 1,
+          lot_cost: "120.00",
+          price_as_of: "2026-08-14T20:50:44Z",
+          source_url: "https://iss.moex.com/fundalt",
+        }],
         lines: [{ asset_id: "SU26218RMFS6", lots: 9, lot_size: 1, quantity: 9, unit_price: "818.21000000", current_value: "0.00", target_value: "4800.00", pre_drift: "-4800.00", post_drift: "2563.89", gross: "7363.89", fee: "7.36", total: "7371.25" }],
+        profile_version: 3,
+      }}],
       }, 201);
       return json({ error: { code: "UNEXPECTED", message: path } }, 500);
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<PatientCapitalApp />);
+    const { container } = render(<PatientCapitalApp />);
     await screen.findByText("Demo Broker");
-    fireEvent.click(screen.getAllByRole("button", { name: /Пополнение/ })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /Пополн/ })[0]);
     expect((screen.getByLabelText("Сумма пополнения") as HTMLInputElement).value).toBe("8000");
     fireEvent.click(screen.getByRole("button", { name: "Подобрать активы" }));
 
-    expect((await screen.findAllByRole("heading", { name: "ОФЗ 26218" })).length).toBe(2);
+    expect(await screen.findByRole("heading", { name: "Основной план" })).toBeTruthy();
+    expect(screen.getByText("Рекомендуется")).toBeTruthy();
+    const evidence = screen.getByText("Расчёт и источники").closest("details");
+    expect(evidence?.open).toBe(false);
+    fireEvent.click(screen.getByText("Расчёт и источники"));
+    expect(evidence?.open).toBe(true);
+    expect(screen.getAllByRole("heading", { name: "ОФЗ 26218" }).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Не выбранные policy кандидаты/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Котировка MOEX ↗" }).getAttribute("href")).toBe("https://iss.moex.com/ofz");
-    const discoveryCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/v1/discovery/recommendations"));
+    const accessibility = await axe.run(container, {
+      rules: { "color-contrast": { enabled: false } },
+    });
+    expect(accessibility.violations.map((violation) => violation.id)).toEqual([]);
+    const discoveryCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/v1/proposal-sets"));
     expect(discoveryCall?.[1]?.body).toBe(JSON.stringify({ contribution: "8000" }));
   });
 
@@ -119,7 +158,8 @@ describe("PatientCapitalApp", () => {
 
     render(<PatientCapitalApp />);
     await screen.findByText("Т-Инвестиции");
-    fireEvent.click(screen.getAllByRole("button", { name: /Операции/ })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: /Ассистент/ })[0]);
+    fireEvent.click(screen.getByText("Расширенный ввод операции"));
     expect(screen.queryByRole("option", { name: /Asset A/ })).toBeNull();
     fireEvent.change(screen.getByLabelText("Количество"), { target: { value: "7" } });
     fireEvent.change(screen.getByLabelText("Цена за единицу"), { target: { value: "992.04" } });

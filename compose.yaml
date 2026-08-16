@@ -78,5 +78,27 @@ services:
     tmpfs:
       - /tmp
 
+  monitor:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    command: ["patientcapital-monitor"]
+    environment:
+      APP_ENV: production
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-patientcapital}:${POSTGRES_PASSWORD:-patientcapital}@db:5432/${POSTGRES_DB:-patientcapital}
+      MOEX_ISS_BASE_URL: https://iss.moex.com/iss
+      MOEX_TIMEOUT_SECONDS: ${MOEX_TIMEOUT_SECONDS:-10}
+      MOEX_MAX_AGE_SECONDS: ${MOEX_MAX_AGE_SECONDS:-345600}
+      MONITOR_SCHEDULE: ${MONITOR_SCHEDULE:-06:00,10:00,14:00,18:00}
+      MONITOR_TIMEZONE: ${MONITOR_TIMEZONE:-Europe/Moscow}
+      GIGACHAT_ENABLED: "false"
+    depends_on:
+      api:
+        condition: service_healthy
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+
 volumes:
   patientcapital-postgres:

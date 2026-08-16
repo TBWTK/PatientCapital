@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, File, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, File, Query, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -36,12 +36,16 @@ from patientcapital.application.services import (
 )
 from patientcapital.config import Settings
 from patientcapital.contracts import (
+    AlertAcknowledgeCreate,
+    AlertAcknowledgementResponse,
     AnalyticsOverviewResponse,
     AssetListResponse,
     AssetPut,
     AssetResponse,
     DiscoveryRecommendationCreate,
     ErrorResponse,
+    MonitorAlertListResponse,
+    MonitorRunListResponse,
     PortfolioResponse,
     PriceCreate,
     PriceResponse,
@@ -61,6 +65,7 @@ from patientcapital.contracts import (
 from patientcapital.domain.errors import InvalidAllocationInput
 from patientcapital.marketdata.models import MarketDataProvider
 from patientcapital.marketdata.moex import MoexIssProvider
+from patientcapital.monitoring.service import acknowledge_alert, list_alerts, list_monitor_runs
 from patientcapital.persistence.database import Database
 from patientcapital.transaction_intake.image import ImageTextExtractor, TesseractImageExtractor
 
@@ -247,6 +252,40 @@ def create_app(
     @app.get("/v1/analytics/overview", response_model=AnalyticsOverviewResponse)
     def analytics_overview_get(session: SessionDependency) -> AnalyticsOverviewResponse:
         return get_analytics_overview(session)
+
+    @app.get("/v1/alerts", response_model=MonitorAlertListResponse)
+    def alerts_get(
+        session: SessionDependency,
+        include_acknowledged: bool = True,
+        limit: int = Query(default=100, ge=1, le=100),
+    ) -> MonitorAlertListResponse:
+        return list_alerts(
+            session,
+            include_acknowledged=include_acknowledged,
+            limit=limit,
+        )
+
+    @app.post(
+        "/v1/alerts/{alert_id}/acknowledgements",
+        response_model=AlertAcknowledgementResponse,
+        status_code=201,
+    )
+    def alert_acknowledgement_post(
+        alert_id: UUID,
+        _: AlertAcknowledgeCreate,
+        response: Response,
+        session: SessionDependency,
+    ) -> AlertAcknowledgementResponse:
+        result, created = acknowledge_alert(session, alert_id)
+        response.status_code = 201 if created else 200
+        return result
+
+    @app.get("/v1/monitor-runs", response_model=MonitorRunListResponse)
+    def monitor_runs_get(
+        session: SessionDependency,
+        limit: int = Query(default=20, ge=1, le=100),
+    ) -> MonitorRunListResponse:
+        return list_monitor_runs(session, limit=limit)
 
     @app.post("/v1/recommendations", response_model=RecommendationResponse, status_code=201)
     def recommendation_post(

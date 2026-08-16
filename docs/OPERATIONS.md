@@ -56,7 +56,7 @@ PostgreSQL должен стать healthy до API. API entrypoint выполн
 ## Logs и диагностика
 
 ```bash
-docker compose logs --tail=200 db api web
+docker compose logs --tail=200 db api web monitor
 docker compose ps
 docker compose config --quiet
 ```
@@ -64,9 +64,13 @@ docker compose config --quiet
 `/health/live` доказывает только процесс API; `/health/ready` отдельно доказывает DB dependency.
 Product metrics/SLO/alerts не реализованы и обязательны до любого production/public режима.
 
-После PC2 monitor health/readiness должны различать scheduler process, last successful evidence
-refresh и provider degradation. Provider failure не делает существующий ledger недоступным и не
-создаёт повторный alert; stale status остаётся видимым в web.
+Monitor запускается отдельным Compose service `monitor`: после общей migration entrypoint выполняет
+`patientcapital-monitor`, наблюдает слоты `06:00,10:00,14:00,18:00 Europe/Moscow` и пишет каждый
+outcome в `monitor_runs`. API позволяет отличить успешный no-op/alert от `provider_error`; worker
+не импортирует transaction/order command. Process state проверяется через `docker compose ps`,
+последний immutable outcome — через `/v1/monitor-runs` и logs. Внешний watchdog пока отсутствует.
+Provider failure не делает существующий ledger недоступным, сохраняется отдельным error-run и не
+создаёт alert; состояние остаётся видимым через API/MCP.
 
 ## Shutdown и очистка
 
@@ -105,11 +109,11 @@ Restore **destructive** для target DB. В текущем handoff full restore
 `api`/`web`, сохраните текущий dump и используйте отдельный Compose project/volume для rehearsal.
 
 ```bash
-docker compose stop api web
+docker compose stop api web monitor
 docker compose exec -T db sh -c 'dropdb -U "$POSTGRES_USER" --if-exists "$POSTGRES_DB" && createdb -U "$POSTGRES_USER" "$POSTGRES_DB"'
 docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --exit-on-error' \
   < patientcapital.dump
-docker compose up --wait api web
+docker compose up --wait api web monitor
 ```
 
 Application rollback безопасен только если старая версия понимает текущую DB schema. Migration
@@ -127,8 +131,8 @@ downgrade удаляет tables/data и не является operational rollba
 ## Известные operational limits
 
 - Auth, RBAC, TLS termination, remote access, HA, automated backups, monitoring и alerting отсутствуют.
-- PC2 worker и alert persistence пока planned; local upload extractor/draft persistence и
-  source-backed dividend research policy реализованы.
+- Monitor worker и immutable run/alert/acknowledgement persistence реализованы; внешний watchdog и
+  отдельный container healthcheck для долгого sleep-процесса пока отсутствуют.
 - Capacity выше 10 000 ledger events и proposal latency на 100 assets не измерены.
 - PostgreSQL backup artifact проверен на читаемый catalog; destructive restore rehearsal не запущен.
 - Base-image/dependency audit — point-in-time evidence 15.08.2026, а не бессрочная гарантия.

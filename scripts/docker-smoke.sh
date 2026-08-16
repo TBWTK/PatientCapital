@@ -37,7 +37,7 @@ proposal="$(curl --fail --silent --show-error \
   --url "$api_base/v1/discovery/recommendations")"
 
 printf '%s' "$proposal" \
-  | jq -e '.mode == "automatic" and .horizon_years == 5 and .policy_version == "five-year-moex-v1" and (.candidates | length >= 1) and (.lines | length >= 1) and ((.spent | tonumber) <= 8000)' >/dev/null
+  | jq -e '.mode == "automatic" and .horizon_years == 5 and .policy_version == "five-year-moex-v2" and (.candidates | length >= 1) and (.lines | length >= 1) and ((.spent | tonumber) <= 8000)' >/dev/null
 
 asset_id="$(printf '%s' "$proposal" | jq -r '.candidates[0].asset_id')"
 

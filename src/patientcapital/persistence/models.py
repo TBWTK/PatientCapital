@@ -214,3 +214,71 @@ class TransactionDraftDecisionRecord(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class MonitorRunRecord(Base):
+    __tablename__ = "monitor_runs"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_monitor_runs_idempotency_key"),
+        CheckConstraint("status IN ('no_change', 'alerts_created', 'provider_error', 'blocked')"),
+        CheckConstraint("alerts_created >= 0"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    provider: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    alerts_created: Mapped[int] = mapped_column(Integer, nullable=False)
+    input_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    result_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class MonitorAlertRecord(Base):
+    __tablename__ = "monitor_alerts"
+    __table_args__ = (
+        UniqueConstraint("dedupe_key", name="uq_monitor_alerts_dedupe_key"),
+        CheckConstraint(
+            "kind IN ('allocation_drift', 'price_move', 'research_expiring', "
+            "'corporate_action_review')"
+        ),
+        CheckConstraint("severity IN ('info', 'warning')"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    monitor_run_id: Mapped[UUID] = mapped_column(
+        ForeignKey("monitor_runs.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    dedupe_key: Mapped[str] = mapped_column(String(200), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    asset_id: Mapped[str] = mapped_column(
+        ForeignKey("assets.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class MonitorAlertAcknowledgementRecord(Base):
+    __tablename__ = "monitor_alert_acknowledgements"
+    __table_args__ = (
+        UniqueConstraint("alert_id", name="uq_monitor_alert_acknowledgements_alert_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    alert_id: Mapped[UUID] = mapped_column(
+        ForeignKey("monitor_alerts.id", ondelete="RESTRICT"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

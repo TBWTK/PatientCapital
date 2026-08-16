@@ -384,4 +384,43 @@ describe("PatientCapitalApp", () => {
     expect(new Headers(uploadCall?.[1]?.headers).has("Content-Type")).toBe(false);
     expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/v1/transactions"))).toBe(false);
   });
+
+  it("shows deterministic monitor alerts and acknowledges without creating a trade", async () => {
+    const alert = {
+      id: "00000000-0000-0000-0000-000000000040",
+      monitor_run_id: "00000000-0000-0000-0000-000000000041",
+      kind: "price_move",
+      severity: "warning",
+      asset_id: "SU26226RMFS9",
+      title: "Цена заметно изменилась",
+      message: "Цена изменилась относительно предыдущего снимка. Операция не создана.",
+      evidence: { absolute_move: "0.12000000", threshold: "0.10000000" },
+      created_at: "2026-08-16T07:01:00Z",
+      acknowledgement: null,
+    };
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/v1/profile")) return json({ version: 4, base_currency: "RUB", investment_horizon_years: 5, risk_level: "growth", cash_buffer: "0.00", broker_name: "Т-Инвестиции", fee_rate: "0.0005", minimum_fee: "0.00", created_at: "2026-08-15T22:03:40Z" });
+      if (path.endsWith("/v1/assets")) return json({ assets: [] });
+      if (path.endsWith("/v1/portfolio")) return json({ currency: "RUB", total_market_value: "0.00", total_cost_basis: "0.00", total_unrealized_pnl: "0.00", assets: [] });
+      if (path.endsWith("/v1/analytics/overview")) return json(analyticsOverview());
+      if (path.includes("/v1/alerts?")) return json({ alerts: [alert] });
+      if (path.endsWith(`/v1/alerts/${alert.id}/acknowledgements`) && init?.method === "POST") return json({ id: "00000000-0000-0000-0000-000000000042", alert_id: alert.id, created_at: "2026-08-16T07:02:00Z" }, 201);
+      return json({ error: { code: "UNEXPECTED", message: path } }, 500);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { container } = render(<PatientCapitalApp />);
+    await screen.findByText("Т-Инвестиции");
+    fireEvent.click(screen.getAllByRole("button", { name: /Ассистент/ })[0]);
+    expect(await screen.findByRole("heading", { name: "Наблюдение портфеля" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Цена заметно изменилась" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Принять к сведению" }));
+    expect(await screen.findByText(/Принято/)).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/v1/transactions"))).toBe(false);
+    const accessibility = await axe.run(container, {
+      rules: { "color-contrast": { enabled: false } },
+    });
+    expect(accessibility.violations.map((violation) => violation.id)).toEqual([]);
+  });
 });

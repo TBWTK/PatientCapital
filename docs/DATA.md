@@ -30,7 +30,7 @@ updated: 2026-08-16
 | research evidence *(implemented in run snapshot)* | normalized issuer/market/corporate-action/dividend facts и provenance | typed source adapter; source/observed/freshness/schema/policy обязательны |
 | transaction draft *(implemented)* | исходный text/image hash, extraction, resolved instrument, confidence и unknowns | transaction-intake service; immutable и unconfirmed |
 | draft decision *(implemented)* | explicit confirm/reject и exact confirmed payload/version | append-only; только confirm может вызвать существующий transaction command |
-| monitor run / alert | schedule/policy/input/result и trigger/no-op evidence | monitor service; immutable, без transaction/order side effect |
+| monitor run / alert / acknowledgement *(implemented)* | schedule/policy/input/result, trigger/no-op/error evidence и user acknowledgement | monitor service; immutable, без transaction/order side effect |
 
 ## Lifecycle и версии
 
@@ -38,7 +38,8 @@ updated: 2026-08-16
 а не отдельными таблицами. Asset identity стабильна, а параметры/target создают следующую
 `asset_versions` row. Price, transaction и recommendation rows append-only. PostgreSQL triggers
 отклоняют `UPDATE/DELETE` для `profile_versions`, `asset_versions`, `price_snapshots`, `transactions`,
-`recommendation_runs`, `proposal_sets`, `transaction_drafts` и `transaction_draft_decisions`.
+`recommendation_runs`, `proposal_sets`, `transaction_drafts`, `transaction_draft_decisions`,
+`monitor_runs`, `monitor_alerts` и `monitor_alert_acknowledgements`.
 
 API поддерживает только `BUY` и `SELL`. Formal compensating-event link в schema отсутствует;
 исправление вводится новой фактической операцией с новым idempotency key и поясняющей `note`, если
@@ -73,11 +74,13 @@ gate. Evidence не является отдельной mutable таблицей
 immutable recommendation run. `five-year-moex-v2` использует числа из него только в eligibility;
 security identity, price, lot и turnover всё равно принадлежат строгому ISS adapter.
 
-Migrations `20260816_0003` и `20260816_0004` additive: существующие profile/assets/prices/
+Migrations `20260816_0003`…`20260816_0006` additive: существующие profile/assets/prices/
 transactions/runs не переписываются. Proposal set хранит только admitted strategy metadata и UUID
 runs. Draft хранит extraction snapshot; unique append-only decision ссылается на transaction только
-после атомарного confirm. DB triggers запрещают update/delete. Resolver принимает только известную
-asset identity; неоднозначный или отсутствующий результат остаётся `unknown` до выбора пользователя.
+после атомарного confirm. Monitor сохраняет slot/policy/provider outcome, daily-deduplicated alert и
+не более одного acknowledgement. DB triggers запрещают update/delete. Resolver принимает только
+известную asset identity; неоднозначный или отсутствующий результат остаётся `unknown` до выбора
+пользователя.
 
 ## Provenance и чувствительность
 

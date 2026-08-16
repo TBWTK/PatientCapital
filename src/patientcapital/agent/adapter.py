@@ -26,11 +26,14 @@ from patientcapital.application.services import (
     list_assets,
 )
 from patientcapital.contracts import (
+    AlertAcknowledgementResponse,
     AnalyticsOverviewResponse,
     AssetListResponse,
     DiscoveryRecommendationCreate,
     ErrorDetail,
     ErrorResponse,
+    MonitorAlertListResponse,
+    MonitorRunListResponse,
     PortfolioResponse,
     ProfileResponse,
     ProposalSetCreate,
@@ -45,6 +48,7 @@ from patientcapital.contracts import (
 )
 from patientcapital.domain.errors import InvalidAllocationInput
 from patientcapital.marketdata.models import MarketDataProvider
+from patientcapital.monitoring.service import acknowledge_alert, list_alerts, list_monitor_runs
 from patientcapital.persistence.database import Database
 
 ResultT = TypeVar("ResultT")
@@ -92,6 +96,24 @@ class AgentTools:
 
     def get_analytics_overview(self) -> AnalyticsOverviewResponse:
         return self._call(get_analytics_overview)
+
+    def list_alerts(self, *, include_acknowledged: bool = True) -> MonitorAlertListResponse:
+        return self._call(
+            lambda session: list_alerts(
+                session,
+                include_acknowledged=include_acknowledged,
+            )
+        )
+
+    def list_monitor_runs(self) -> MonitorRunListResponse:
+        return self._call(list_monitor_runs)
+
+    def acknowledge_alert(self, alert_id: UUID) -> AlertAcknowledgementResponse:
+        def acknowledge(session: Session) -> AlertAcknowledgementResponse:
+            response, _created = acknowledge_alert(session, alert_id)
+            return response
+
+        return self._call(acknowledge)
 
     def propose_contribution(self, contribution: RecommendationCreate) -> RecommendationResponse:
         return self._call(lambda session: create_recommendation(session, contribution))

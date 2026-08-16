@@ -68,7 +68,7 @@ evidence; transaction intake создаёт подтверждаемый draft; 
 | `strategy registry` | упорядоченный набор admitted policies и выбор единственной recommended | недоступная policy исключается с видимой причиной; случайная замена запрещена |
 | `research` *(implemented)* | `dividend-research-evidence-v1`, primary corpus и `dividend-quality-v1` для новых классов | stale/incomplete/coverage/governance/action/liquidity failure исключает candidate |
 | `transaction intake` *(PC2)* | text/image extraction, resolver, unknowns и explicit confirmation | draft остаётся unconfirmed; ledger write запрещён |
-| `monitor` *(PC2)* | scheduled evidence refresh и threshold/event alerts | idempotent no-op без trigger; transactions/orders недоступны |
+| `monitor` *(implemented)* | четыре scheduled evidence refresh в день и threshold/event alerts | idempotent no-op без trigger; provider error видим; transactions/orders недоступны |
 | `web` | Обзор, Пополнить, Ассистент, Профиль и progressive-disclosure UX | сохраняет draft или показывает точную ошибку API |
 | `agent tools` | узкие get/propose/record операции для Codex chat/sub-agent | те же схемы/permissions, что application service |
 | `GigaChat eval adapter` | offline admission нового provider/model | любой провал оставляет runtime выключенным; deterministic result не зависит от model prose |
@@ -91,6 +91,9 @@ evidence; transaction intake создаёт подтверждаемый draft; 
 | `POST/GET` | `/v1/recommendations[/{id}]` | calculate/store or retrieve immutable domain run |
 | `POST` | `/v1/discovery/recommendations` | fetch/validate MOEX candidates, apply policy and persist deterministic proposal |
 | `POST/GET` | `/v1/proposal-sets[/{id}]` | create/retrieve immutable `1..3` admitted strategy refs; ledger не меняется |
+| `GET` | `/v1/alerts` | immutable threshold/event alerts с evidence и acknowledgement state |
+| `POST` | `/v1/alerts/{id}/acknowledgements` | append-only отметка ознакомления; ledger не меняется |
+| `GET` | `/v1/monitor-runs` | outcomes scheduled наблюдений, включая явный provider error |
 | `GET` | `/health/live`, `/health/ready` | process health отдельно от PostgreSQL readiness |
 
 Все денежные JSON-поля сериализуются decimal-строками. Ошибка имеет один envelope
@@ -112,7 +115,7 @@ implementation, но capability boundaries фиксированы:
 | Transaction draft *(implemented)* | `POST text/image/manual`, `GET` by id | сохраняет extraction, resolver evidence, confidence/unknowns; transaction не создаёт |
 | Draft decision *(implemented)* | `POST /{id}/decisions` с expected version | confirm принимает полный exact payload и единственный вызывает idempotent ledger command |
 | Analytics overview *(implemented)* | `GET /v1/analytics/overview` | server-derived value/cost/realized/unrealized/drift/freshness/activity; unsupported cashflow/income explicit |
-| Alerts | list/acknowledge | immutable monitor evidence и user acknowledgement; trade side effects отсутствуют |
+| Alerts *(implemented)* | `GET /v1/alerts`, acknowledge, `GET /v1/monitor-runs` | immutable monitor evidence и user acknowledgement; trade side effects отсутствуют |
 
 Transport для image — bounded multipart upload. JPEG/PNG проверяются по MIME, magic bytes, размеру
 и pixels; local Tesseract имеет timeout, а private tmpfs artifacts удаляются сразу после OCR.

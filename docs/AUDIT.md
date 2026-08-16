@@ -15,10 +15,10 @@ text/image transaction intake, richer overview, более широкий resear
 наблюдение. ADR 0004 ограничивает опасные интерпретации: модель не владеет финансовыми фактами,
 extraction не равен confirmation, наблюдение не равно сделке, а новый asset class требует policy.
 
-Конкретный screenshot extractor и dividend-stock selection policy пока не admitted. Это не блокирует
-первый product-shell checkpoint: core-карточка строится на проверенном v1. Соответствующие stages
-останавливаются fail-loud, если admission/evidence не пройдены. Контекста по-прежнему недостаточно
-для commercial/multi-user SaaS, broker execution, real-time feed или допуска внешней модели.
+Local screenshot extractor, первая dividend-stock selection policy и threshold monitor прошли
+собственные admission gates. Они остаются fail-closed: OCR создаёт draft, research лишь допускает
+typed candidate, monitor — только immutable alert. Контекста по-прежнему недостаточно для
+commercial/multi-user SaaS, broker execution, real-time feed или допуска внешней модели.
 
 ## Аудит уточнённого продуктового направления
 
@@ -91,7 +91,8 @@ auth/multi-tenancy и Internet exposure.
   prices/transactions/runs, FastAPI `/v1` и canonical OpenAPI snapshot.
 - Product: Vinext/React поверхности overview/contribution/ledger/settings; browser QA desktop/mobile,
   component/SSR/a11y evidence.
-- Agent: six-tool local MCP, strict arguments, HTTP parity и explicit transaction boundary.
+- Agent: allowlisted local MCP, strict arguments, HTTP parity, alert read/ack и explicit transaction
+  boundary; tool запуска monitor отсутствует.
   `codex mcp list` и `codex mcp get patientcapital --json` подтверждают enabled STDIO registration,
   указывающую на `.venv/bin/patientcapital-mcp` этого repository. Официальная документация Codex
   описывает тот же shared config/CLI inspection contract: <https://developers.openai.com/codex/mcp>.
@@ -99,9 +100,9 @@ auth/multi-tenancy и Internet exposure.
   20% intent accuracy; runtime mode отсутствует.
 - Docker: pinned non-root/read-only API/web images, Postgres volume, loopback ports, migration/health
   ordering и isolated clean-volume smoke.
-- Verification: 84 Python tests, 95.45% branch coverage, Ruff/mypy/build, web tests/type/lint/build,
-  Docker smoke, dependency/secret/container checks. Exact evidence и unknown находятся в `STATE.md`
-  и `QUALITY.md`.
+- Verification: после PC2-5 `212` Python tests и `94.15%` branch coverage, Ruff/mypy/OpenAPI,
+  generated TS, `7` web component/axe tests, build/SSR/lint/typecheck, live Docker worker/browser и
+  migration/ledger inspection. Exact evidence и unknown находятся в `STATE.md` и `QUALITY.md`.
 
 ## Архитектурные варианты
 
@@ -177,6 +178,5 @@ E2E, secret/dependency/container inspection и controlled live GigaChat corpus. 
 
 ## Решение о начале реализации
 
-`approved to start PC2-MVP locally`. Product shell можно строить поверх verified v1 немедленно;
-extractor, новые strategies и monitor переходят свои gates последовательно. Public/commercial,
+`PC2-MVP implemented locally; final releasable handoff audit active`. Public/commercial,
 broker/order, real-time feed и новый LLM остаются `blocked` до отдельных requirements и evidence.

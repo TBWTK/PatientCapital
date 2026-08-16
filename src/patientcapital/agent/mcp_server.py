@@ -11,9 +11,12 @@ from mcp.types import ToolAnnotations
 from patientcapital.agent.adapter import AgentTools
 from patientcapital.config import Settings
 from patientcapital.contracts import (
+    AlertAcknowledgementResponse,
     AnalyticsOverviewResponse,
     AssetListResponse,
     DiscoveryRecommendationCreate,
+    MonitorAlertListResponse,
+    MonitorRunListResponse,
     PortfolioResponse,
     ProfileResponse,
     ProposalSetCreate,
@@ -155,6 +158,41 @@ def build_mcp_server(
     )
     def get_analytics_overview_tool() -> AnalyticsOverviewResponse:
         return tools.get_analytics_overview()
+
+    @server.tool(
+        name="list_alerts",
+        title="List portfolio observation alerts",
+        description=(
+            "Read deterministic threshold alerts verbatim. Alerts never prove or create a trade."
+        ),
+        annotations=READ_ONLY,
+    )
+    def list_alerts_tool(include_acknowledged: bool = True) -> MonitorAlertListResponse:
+        return tools.list_alerts(include_acknowledged=include_acknowledged)
+
+    @server.tool(
+        name="list_monitor_runs",
+        title="List scheduled observation runs",
+        description=(
+            "Read immutable monitor outcomes, including visible blocked state and provider errors, "
+            "without rerunning."
+        ),
+        annotations=READ_ONLY,
+    )
+    def list_monitor_runs_tool() -> MonitorRunListResponse:
+        return tools.list_monitor_runs()
+
+    @server.tool(
+        name="acknowledge_alert",
+        title="Acknowledge portfolio alert",
+        description=(
+            "Append a user acknowledgement to an existing alert. This never changes the ledger "
+            "or places a broker order."
+        ),
+        annotations=RECORD,
+    )
+    def acknowledge_alert_tool(alert_id: UUID) -> AlertAcknowledgementResponse:
+        return tools.acknowledge_alert(alert_id)
 
     @server.tool(
         name="propose_contribution",

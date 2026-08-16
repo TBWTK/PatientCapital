@@ -26,6 +26,9 @@ def test_head_migration_creates_required_authorities() -> None:
         "proposal_sets",
         "transaction_drafts",
         "transaction_draft_decisions",
+        "monitor_runs",
+        "monitor_alerts",
+        "monitor_alert_acknowledgements",
     }.issubset(set(inspector.get_table_names()))
     assert inspector.get_unique_constraints("transactions")
     transaction_columns = {item["name"]: item for item in inspector.get_columns("transactions")}
@@ -37,6 +40,8 @@ def test_head_migration_creates_required_authorities() -> None:
     )
     assert inspector.get_foreign_keys("proposal_sets")
     assert inspector.get_foreign_keys("transaction_draft_decisions")
+    assert inspector.get_foreign_keys("monitor_alerts")
+    assert inspector.get_foreign_keys("monitor_alert_acknowledgements")
     engine.dispose()
 
 
@@ -117,4 +122,28 @@ def test_database_rejects_mutation_of_transaction_drafts() -> None:
             )
         )
         connection.execute(text("UPDATE transaction_drafts SET source_kind = 'manual'"))
+    engine.dispose()
+
+
+def test_database_rejects_mutation_of_monitor_runs() -> None:
+    engine = create_engine(TEST_DATABASE_URL)
+    with (
+        pytest.raises(DBAPIError, match="immutable table monitor_runs"),
+        engine.begin() as connection,
+    ):
+        connection.execute(
+            text(
+                """
+                INSERT INTO monitor_runs (
+                  id, idempotency_key, policy_version, scheduled_for, observed_at,
+                  provider, status, alerts_created, input_snapshot, result_snapshot
+                ) VALUES (
+                  '00000000-0000-0000-0000-000000000030', 'monitor-test-key',
+                  'monitor-threshold-v1', now(), now(), 'test', 'no_change', 0,
+                  '{}'::jsonb, '{}'::jsonb
+                )
+                """
+            )
+        )
+        connection.execute(text("UPDATE monitor_runs SET status = 'alerts_created'"))
     engine.dispose()

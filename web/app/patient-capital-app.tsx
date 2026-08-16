@@ -3,8 +3,10 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
+  type AlertAcknowledgement,
   type AnalyticsOverview,
   type Asset,
+  type MonitorAlert,
   type Portfolio,
   type Profile,
   type ProposalSet,
@@ -423,7 +425,17 @@ function Contribution({
   );
 }
 
-function Assistant({ assets, onSaved }: { assets: Asset[]; onSaved: () => Promise<void> }) {
+function Assistant({
+  assets,
+  alerts,
+  onSaved,
+  onAcknowledge,
+}: {
+  assets: Asset[];
+  alerts: MonitorAlert[];
+  onSaved: () => Promise<void>;
+  onAcknowledge: (alertId: string) => Promise<void>;
+}) {
   const knownAssets = assets;
   const defaultAsset = knownAssets.find((asset) => asset.is_active) ?? knownAssets[0];
   const [notice, setNotice] = useState<Notice>(null);
@@ -604,12 +616,49 @@ function Assistant({ assets, onSaved }: { assets: Asset[]; onSaved: () => Promis
     occurred_at: "дата, время и часовой пояс",
   };
 
+  const acknowledgeMonitor = async (alertId: string) => {
+    setNotice(null);
+    try {
+      await onAcknowledge(alertId);
+    } catch (error) {
+      setNotice({ kind: "error", text: errorText(error) });
+    }
+  };
+
   return (
     <div className="workspace-stack narrow">
       <section className="page-intro">
         <p className="eyebrow">Операции через диалог</p>
         <h1>Ассистент операций</h1>
         <p>Опишите фактическую покупку или загрузите брокерский чек. Ассистент подготовит черновик, но запишет операцию только после вашей проверки и подтверждения.</p>
+      </section>
+      <section className="monitor-panel" aria-labelledby="monitor-title">
+        <header className="section-heading">
+          <div>
+            <p className="eyebrow">4 проверки в день</p>
+            <h2 id="monitor-title">Наблюдение портфеля</h2>
+          </div>
+          <span>{alerts.length ? `${alerts.length} требуют внимания` : "Новых сигналов нет"}</span>
+        </header>
+        {alerts.length === 0 ? (
+          <p className="monitor-empty">PatientCapital проверяет цены, отклонения и срок действия research evidence. Наблюдение не создаёт операций и не отправляет заявки брокеру.</p>
+        ) : (
+          <div className="monitor-alerts">
+            {alerts.map((alert) => (
+              <article className={alert.severity} key={alert.id}>
+                <header><span>{alert.asset_id}</span><time dateTime={alert.created_at}>{shortDateTime(alert.created_at)}</time></header>
+                <h3>{alert.title}</h3>
+                <p>{alert.message}</p>
+                <footer>
+                  <details><summary>Проверенные факты</summary><pre>{JSON.stringify(alert.evidence, null, 2)}</pre></details>
+                  {alert.acknowledgement == null ? (
+                    <button type="button" onClick={() => void acknowledgeMonitor(alert.id)}>Принять к сведению</button>
+                  ) : <span>Принято {shortDateTime(alert.acknowledgement.created_at)}</span>}
+                </footer>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
       <section className="assistant-composer" aria-label="Диалог записи операции">
         <div className="chat-panel">
@@ -731,7 +780,7 @@ function Settings({
         <section className="form-card discovery-info">
           <div className="form-title"><span>02</span><div><h2>Автоматический подбор</h2><p>MOEX ISS + deterministic policy</p></div></div>
           <ol>
-            <li><b>Поиск.</b><span>Проверяем активные рублёвые ОФЗ и фонды широкого индекса.</span></li>
+            <li><b>Поиск.</b><span>Проверяем рублёвые ОФЗ, фонды широкого индекса и допущенные research-policy дивидендные акции.</span></li>
             <li><b>Контроль.</b><span>Цена, лот, валюта, дата и источник проходят строгую валидацию.</span></li>
             <li><b>Расчёт.</b><span>Движок учитывает риск, бюджет, резерв, комиссии и текущие позиции.</span></li>
           </ol>
@@ -750,16 +799,18 @@ export function PatientCapitalApp() {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
   const [proposalSet, setProposalSet] = useState<ProposalSet | null>(null);
+  const [alerts, setAlerts] = useState<MonitorAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const refresh = async () => {
     setConnectionError(null);
-    const [profileResult, assetsResult, portfolioResult, analyticsResult] = await Promise.allSettled([
+    const [profileResult, assetsResult, portfolioResult, analyticsResult, alertsResult] = await Promise.allSettled([
       request<Profile>("/v1/profile"),
       request<{ assets: Asset[] }>("/v1/assets"),
       request<Portfolio>("/v1/portfolio"),
       request<AnalyticsOverview>("/v1/analytics/overview"),
+      request<{ alerts: MonitorAlert[] }>("/v1/alerts?include_acknowledged=false"),
     ]);
     if (profileResult.status === "fulfilled") setProfile(profileResult.value);
     else if (!(profileResult.reason instanceof ApiError && profileResult.reason.status === 404)) setConnectionError(errorText(profileResult.reason));
@@ -769,7 +820,19 @@ export function PatientCapitalApp() {
     else if (!(portfolioResult.reason instanceof ApiError && [404, 422].includes(portfolioResult.reason.status))) setConnectionError(errorText(portfolioResult.reason));
     if (analyticsResult.status === "fulfilled") setAnalytics(analyticsResult.value);
     else if (!(analyticsResult.reason instanceof ApiError && [404, 422].includes(analyticsResult.reason.status))) setConnectionError(errorText(analyticsResult.reason));
+    if (alertsResult.status === "fulfilled") setAlerts(alertsResult.value.alerts ?? []);
+    else setConnectionError(errorText(alertsResult.reason));
     setLoading(false);
+  };
+
+  const acknowledge = async (alertId: string) => {
+    const acknowledgement = await request<AlertAcknowledgement>(`/v1/alerts/${alertId}/acknowledgements`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    setAlerts((current) => current.map((alert) => (
+      alert.id === alertId ? { ...alert, acknowledgement } : alert
+    )));
   };
 
   useEffect(() => {
@@ -795,7 +858,7 @@ export function PatientCapitalApp() {
             <>
               {view === "overview" && <Overview portfolio={portfolio} analytics={analytics} profile={profile} onContribution={() => setView("contribution")} onSettings={() => setView("settings")} />}
               {view === "contribution" && <Contribution currency={profile?.base_currency ?? "RUB"} result={proposalSet} onResult={setProposalSet} onSaved={refresh} onAssistant={() => setView("assistant")} />}
-              {view === "assistant" && <Assistant assets={assets} onSaved={refresh} />}
+              {view === "assistant" && <Assistant assets={assets} alerts={alerts} onSaved={refresh} onAcknowledge={acknowledge} />}
               {view === "settings" && <Settings profile={profile} assets={assets} onRefresh={refresh} />}
             </>
           )}

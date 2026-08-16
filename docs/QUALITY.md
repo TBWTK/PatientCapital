@@ -55,9 +55,9 @@ updated: 2026-08-16
   unrealized result и income; unsupported goal/income fact отображается explicit unknown.
 - [x] `Dividend policy admission`: fixed issuer/corporate-action/liquidity/dividend fixtures дают
   reproducible eligibility/ranking; missing fundamentals и unsustainable/ambiguous dividend block.
-- [ ] `Monitor no-trade`: fake clock `3..4/day`, duplicate ticks и provider outage дают idempotent
+- [x] `Monitor no-trade`: fake clock `4/day`, duplicate ticks и provider outage дают idempotent
   run/no-op/alert evidence; transaction count и отсутствие order client остаются доказуемыми.
-- [ ] `PC2 migration`: существующая `SU26226RMFS9` ledger evidence и v1 runs неизменны до/после
+- [x] `PC2 migration`: существующая `SU26226RMFS9` ledger evidence и v1 runs неизменны до/после
   additive migration; rollback/restore caveat видим.
 
 ## Regression gates
@@ -66,10 +66,10 @@ updated: 2026-08-16
 - [x] Repository/migration tests на dedicated PostgreSQL `_test` database, включая immutable
   trigger и fail-closed защиту от product database cleanup (16.08.2026).
 - [x] Canonical OpenAPI SHA-256 snapshot, generated TypeScript surface и negative API contracts.
-- [x] Frontend typecheck, `4` component tests, SSR, axe semantic scan и desktop/mobile browser flow
+- [x] Frontend typecheck, `7` component tests, SSR, axe semantic scan и desktop/mobile browser flow
   (16.08.2026).
-- [x] MCP discovery, strict arguments, structured output, stdio process, HTTP parity, expected
-  errors и exact transaction replay (`6` wire tests, 15.08.2026).
+- [x] MCP discovery, monitor read/ack, strict arguments, structured output, stdio process, HTTP
+  parity, expected errors и exact transaction replay (`10` wire tests, 16.08.2026).
 - [x] Committed-secret scan, container negative assertions и dependency audits: `0` Python/npm
   advisories (15.08.2026).
 - [x] Clean-volume Docker smoke: health → profile → live discovery/proposal → separately confirmed
@@ -160,9 +160,9 @@ git diff --check
 | PC2-REQ-02 transaction assistant | parser corpus + contract/integration/E2E | Russian text, supplied T-Invest screenshot, ambiguous/invalid fixtures | unit/API/MCP/migration/web suites + real Docker OCR/browser | Draft only; full confirmation creates exactly one ledger event | passing |
 | PC2-REQ-03 explainable analytics | ledger/cashflow capability + component/browser | BUY→SELL, unsupported cashflow/income, stale-price fixtures | analytics API/MCP/component/a11y/browser suites | Every displayed metric has one server authority or explicit unknown | passing |
 | PC2-REQ-04 dividend research policy | source/policy/capability + controlled live read | versioned issuer/dividend/liquidity/corporate-action corpus | research/model/domain/provider/API/web suites + live Docker/browser read | Only typed fresh eligible facts reach deterministic calculation; max category target 20%; no dividend capture | passing |
-| PC2-REQ-05 scheduled monitoring | fake-clock/property/resilience/Docker | trigger/no-trigger/duplicate/outage fixtures | planned monitor/worker suites | `3..4/day` observations, idempotent alerts, zero transaction/order effects | planned |
+| PC2-REQ-05 scheduled monitoring | fake-clock/property/resilience/Docker | trigger/no-trigger/duplicate/outage fixtures | monitor policy/worker/API/MCP/migration/component suites + live worker run | `4/day` observations, idempotent daily alerts, visible outage, zero transaction/order effects | passing |
 | PC2-RISK-01 upload/privacy | security/boundary/retention | malformed MIME/magic, oversized bytes/pixels, timeout, real screenshot | image unit suite + Docker `/tmp` inspection | Bounded local parse, private immediate cleanup, no external send | passing |
-| PC2-RISK-02 compatibility | migration/contract/regression | copy of current local schema facts | migration rehearsal + full existing gates | Existing profile/ledger/runs unchanged and readable | planned |
+| PC2-RISK-02 compatibility | migration/contract/regression | current local schema facts | additive `0005` migration + full existing gates + ledger/API inspection | Existing profile/ledger/runs unchanged and readable | passing |
 
 ## Портфель проверок
 
@@ -180,6 +180,6 @@ idempotency consistency; clean-volume Docker operational E2E; controlled live pr
 - parallel-write stress — single-user scope и DB locks проверены функционально, не под нагрузкой;
 - destructive restore rehearsal — documented, но RTO/RPO остаются unknown;
 - 10k-ledger/100-asset performance и saturation — expansion gate, а не доказанный MVP property.
-- PC2-REQ-01/02/03/04 имеют implementation evidence; monitoring и финальный compatibility gate
-  остаются planned до собственных checkpoints.
+- PC2-REQ-01/02/03/04/05 и compatibility gate имеют implementation evidence; остаётся финальный
+  project/IMMUNE/Git handoff audit.
 <!-- immune-project-engineering:quality:end -->

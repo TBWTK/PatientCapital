@@ -29,6 +29,7 @@ gigachat = []
 [project.scripts]
 patientcapital-mcp = "patientcapital.agent.mcp_server:main"
 patientcapital-gigachat-eval = "patientcapital.evals.gigachat:main"
+patientcapital-monitor = "patientcapital.monitoring.worker:main"
 
 [dependency-groups]
 dev = [

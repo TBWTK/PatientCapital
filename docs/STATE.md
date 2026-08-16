@@ -33,9 +33,9 @@ updated: 2026-08-16
 - [x] Новый asset class допускается только отдельной versioned research/selection policy и eval.
   Dividend-stock policy проверяет фундаментальные, дивидендные, liquidity, governance,
   corporate-action и concentration facts; dividend capture не является core default.
-- [ ] Monitor может собирать данные `3..4` раза в день, но создаёт alert/proposal только по
+- [x] Monitor собирает данные `4` раза в день, но создаёт alert только по
   зарегистрированному событию или threshold; SELL и broker order никогда не выполняются самими.
-- [ ] Web использует четыре основных раздела — Обзор, Пополнить, Ассистент, Профиль — и проходит
+- [x] Web использует четыре основных раздела — Обзор, Пополнить, Ассистент, Профиль — и проходит
   desktop/mobile, keyboard, screen-reader, error-recovery и sensitive-upload проверки.
 - [ ] Schema/API/MCP/data/retention/security/Docker/docs обновлены согласованно; migration совместима
   с существующим ledger, full regression и isolated Docker E2E проходят на releasable `main`.
@@ -60,7 +60,10 @@ updated: 2026-08-16
   validated ISS security/price/lot и deterministic target.
 - Локальный portfolio содержит подтверждённую BUY `SU26226RMFS9`; его числовая evidence не должна
   измениться при migration v2.
-- Оставшийся product-gap: recurring monitoring и финальная cross-surface проверка.
+- `PC2-5 Monitoring` завершён: `monitor-threshold-v1`, четыре московских слота, immutable
+  run/alert/acknowledgement, daily dedupe, явный provider-error и API/MCP/web read/ack surfaces.
+  Worker не импортирует transaction/order use case.
+- Оставшийся product-gap: финальный cross-surface/Git handoff audit.
 - PC2-1 evidence 16.08.2026: `145 passed`, branch coverage `94.23%`; Ruff/mypy/OpenAPI; web build,
   typecheck, lint, SSR, `4` component tests + axe; MCP/API/migration tests; healthy Compose; browser
   desktop `1440px` и mobile `390px` без horizontal overflow.
@@ -76,11 +79,16 @@ updated: 2026-08-16
   `8 000 RUB` after the configured buffer, and created `0` transactions. Browser exposed research
   only inside nested details with four primary citations. Existing OFZ 26226 stayed `7` units,
   cost basis `7 142.91 RUB`, market value `7 143.71 RUB`, unrealized `0.80 RUB`.
+- PC2-5 evidence 16.08.2026: `214 passed`, branch coverage `94.49%`; Ruff/mypy/OpenAPI/generated TS;
+  web build/typecheck/lint/SSR/`7` component tests + axe; migrations `20260816_0005..0006`; healthy Compose
+  с отдельным worker. Live worker сохранил threshold alert для `SU26226RMFS9`, создал `0`
+  transactions; browser показал compact alert и exact evidence. Ledger остался одной BUY:
+  `7 × 992.04`, НКД `195.16`, fee `3.47`, cost basis `7 142.91 RUB`.
 
 ## Changed areas
 
-- Typed `dividend-research-evidence-v1`, reviewed primary corpus, `dividend-quality-v1`, MOEX share
-  mapping, `five-year-moex-v2`, immutable API evidence и nested progressive-disclosure web UI.
+- `monitor-threshold-v1`, worker schedule, additive immutable monitor schema, API/MCP alert surfaces,
+  Assistant observation UI и Docker monitor role.
 
 ## Decisions made
 
@@ -95,8 +103,8 @@ updated: 2026-08-16
 
 ## Next exact step
 
-Начать `PC2-5 Monitoring`: определить immutable monitor run/alert schema, fake-clock schedule
-`4/day`, versioned event/threshold policy и доказать idempotent no-op/alert без transaction/order.
+Завершить `PC2-MVP handoff`: выполнить full web/Python/docs/IMMUNE/Git gates, isolated Docker
+migration smoke, подтвердить clean releasable branch и синхронизировать `main` с `origin/main`.
 
 ## Blockers
 

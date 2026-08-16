@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     moex_iss_base_url: str = "https://iss.moex.com/iss"
     moex_timeout_seconds: float = Field(default=10.0, gt=0, le=30)
     moex_max_age_seconds: int = Field(default=345_600, gt=0, le=604_800)
+    monitor_schedule: str = "06:00,10:00,14:00,18:00"
+    monitor_timezone: str = "Europe/Moscow"
     upload_max_bytes: int = Field(default=8_388_608, gt=0, le=20_000_000)
     upload_max_pixels: int = Field(default=20_000_000, gt=0, le=40_000_000)
     ocr_timeout_seconds: float = Field(default=20.0, gt=0, le=60)

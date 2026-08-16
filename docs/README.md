@@ -37,9 +37,9 @@ amount-only discovery рублёвых ОФЗ и фондов широкого �
 версионированную пятилетнюю policy, журнал BUY/SELL с отдельным НКД, портфельную аналитику,
 immutable recommendation runs, web и Codex tools.
 
-**Assistant-first MVP v2** реализуется по проверяемым checkpoint; product shell/proposal sets и
-transaction assistant, explainable analytics и первый research-universe gate уже готовы; monitoring
-остаётся в работе:
+**Assistant-first MVP v2** реализован по проверяемым checkpoint: product shell/proposal sets,
+transaction assistant, explainable analytics, первый research-universe gate и scheduled monitoring
+работают в одном локальном контуре:
 
 1. `amount → proposal set`: одна рекомендуемая и до двух альтернативных стратегических карточек;
    неподдерживаемые варианты не генерируются для количества.
@@ -48,8 +48,9 @@ transaction assistant, explainable analytics и первый research-universe g
 3. `evidence → broader research`: новые классы активов допускаются только зарегистрированной
    source-backed policy со своими eligibility/risk/eval gates; первой расширяемой категорией
    являются дивидендные акции, но не краткосрочный dividend capture как core-стратегия.
-4. `observe → alert`: сбор данных может выполняться три-четыре раза в день, но рекомендация
-   появляется только по версионированному событию/порогу и никогда не исполняется автоматически.
+4. `observe → alert`: отдельный worker собирает данные четыре раза в день; immutable alert появляется
+   только по версионированному событию/порогу, подтверждение означает лишь ознакомление и никогда не
+   создаёт transaction или broker order.
 
 Первая допущенная dividend-stock policy — `dividend-quality-v1`: только профиль «рост», максимум
 20% target на категорию, минимум три прибыльных и три дивидендных периода, покрытая выплата,

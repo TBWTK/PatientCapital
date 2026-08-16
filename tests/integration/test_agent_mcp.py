@@ -1,6 +1,7 @@
 import asyncio
 import sys
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from typing import Any, cast
 
 from fastapi.testclient import TestClient
@@ -9,10 +10,12 @@ from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.types import CallToolResult, ListToolsResult, TextContent
 
 from patientcapital.agent.mcp_server import build_mcp_server
+from patientcapital.monitoring.service import run_monitor
 from patientcapital.persistence.database import Database
 from tests.integration.conftest import TEST_DATABASE_URL
 from tests.integration.helpers import seed_two_assets
 from tests.integration.test_discovery_recommendation_api import StaticMarketDataProvider
+from tests.integration.test_monitoring_api import MonitorProvider, _seed
 
 
 async def _with_mcp[ResultT](operation: Callable[[Client], Awaitable[ResultT]]) -> ResultT:
@@ -42,6 +45,9 @@ def test_mcp_discovery_is_allowlisted_typed_and_permission_annotated() -> None:
     assert set(by_name) == {
         "get_profile",
         "get_analytics_overview",
+        "list_alerts",
+        "list_monitor_runs",
+        "acknowledge_alert",
         "discover_contribution",
         "list_assets",
         "get_portfolio",
@@ -59,6 +65,10 @@ def test_mcp_discovery_is_allowlisted_typed_and_permission_annotated() -> None:
     assert by_name["get_portfolio"].annotations.open_world_hint is False
     assert by_name["get_analytics_overview"].annotations is not None
     assert by_name["get_analytics_overview"].annotations.read_only_hint is True
+    assert by_name["list_alerts"].annotations is not None
+    assert by_name["list_alerts"].annotations.read_only_hint is True
+    assert by_name["acknowledge_alert"].annotations is not None
+    assert by_name["acknowledge_alert"].annotations.idempotent_hint is True
     assert by_name["propose_contribution"].annotations is not None
     assert by_name["propose_contribution"].annotations.read_only_hint is False
     assert by_name["propose_contribution"].annotations.idempotent_hint is False
@@ -97,12 +107,52 @@ def test_real_stdio_entrypoint_negotiates_and_lists_tools() -> None:
         "discover_contribution",
         "get_portfolio",
         "get_analytics_overview",
+        "list_alerts",
+        "list_monitor_runs",
+        "acknowledge_alert",
         "propose_strategy_set",
         "propose_contribution",
         "create_transaction_draft",
         "decide_transaction_draft",
         "record_transaction",
     }
+
+
+def test_mcp_reads_and_acknowledges_monitor_alert_without_trade(client: TestClient) -> None:
+    _seed(client)
+    database = Database(TEST_DATABASE_URL)
+    with database.sessions() as session:
+        run_monitor(
+            session,
+            MonitorProvider(),
+            scheduled_for=datetime(2026, 8, 16, 7, 0, tzinfo=UTC),
+            observed_at=datetime(2026, 8, 16, 7, 1, tzinfo=UTC),
+        )
+
+    async def monitor_tools(mcp_client: Client) -> tuple[CallToolResult, ...]:
+        alerts = await mcp_client.call_tool("list_alerts", {})
+        alert_id = cast(dict[str, Any], alerts.structured_content)["alerts"][0]["id"]
+        acknowledgement = await mcp_client.call_tool(
+            "acknowledge_alert",
+            {"alert_id": alert_id},
+        )
+        runs = await mcp_client.call_tool("list_monitor_runs", {})
+        return alerts, acknowledgement, runs
+
+    try:
+        async def execute(mcp_client: Client) -> tuple[CallToolResult, ...]:
+            return await monitor_tools(mcp_client)
+
+        alerts, acknowledgement, runs = asyncio.run(_with_mcp(execute))
+    finally:
+        database.close()
+
+    assert cast(dict[str, Any], alerts.structured_content)["alerts"][0]["kind"] == (
+        "price_move"
+    )
+    assert cast(dict[str, Any], acknowledgement.structured_content)["alert_id"]
+    assert cast(dict[str, Any], runs.structured_content)["runs"][0]["alerts_created"] == 2
+    assert client.get("/v1/portfolio").json()["assets"][0]["quantity"] == 10
 
 
 def test_mcp_amount_only_discovery_persists_the_same_run_as_http(client: TestClient) -> None:

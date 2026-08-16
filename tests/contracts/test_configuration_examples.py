@@ -37,6 +37,8 @@ def test_env_example_is_coherent_and_secret_free() -> None:
     assert example["MOEX_ISS_BASE_URL"] == "https://iss.moex.com/iss"
     assert 0 < int(example["MOEX_TIMEOUT_SECONDS"]) <= 30
     assert 0 < int(example["MOEX_MAX_AGE_SECONDS"]) <= 604_800
+    assert example["MONITOR_SCHEDULE"] == "06:00,10:00,14:00,18:00"
+    assert example["MONITOR_TIMEZONE"] == "Europe/Moscow"
     assert 0 < int(example["UPLOAD_MAX_BYTES"]) <= 10 * 1024 * 1024
     assert 0 < int(example["UPLOAD_MAX_PIXELS"]) <= 25_000_000
     assert 0 < int(example["OCR_TIMEOUT_SECONDS"]) <= 30

@@ -8,6 +8,8 @@ export type Recommendation = components["schemas"]["RecommendationResponse"];
 export type ProposalSet = components["schemas"]["ProposalSetResponse"];
 export type Transaction = components["schemas"]["TransactionResponse"];
 export type TransactionDraft = components["schemas"]["TransactionDraftResponse"];
+export type MonitorAlert = components["schemas"]["MonitorAlertResponse"];
+export type AlertAcknowledgement = components["schemas"]["AlertAcknowledgementResponse"];
 
 const API_BASE = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"

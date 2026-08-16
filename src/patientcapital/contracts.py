@@ -238,6 +238,51 @@ class AnalyticsOverviewResponse(ContractModel):
     recent_activity: list[TransactionResponse]
 
 
+class AlertAcknowledgeCreate(ContractModel):
+    pass
+
+
+class AlertAcknowledgementResponse(ContractModel):
+    id: UUID
+    alert_id: UUID
+    created_at: datetime
+
+
+class MonitorAlertResponse(ContractModel):
+    id: UUID
+    monitor_run_id: UUID
+    kind: Literal[
+        "allocation_drift", "price_move", "research_expiring", "corporate_action_review"
+    ]
+    severity: Literal["info", "warning"]
+    asset_id: str
+    title: str
+    message: str
+    evidence: dict[str, object]
+    created_at: datetime
+    acknowledgement: AlertAcknowledgementResponse | None
+
+
+class MonitorAlertListResponse(ContractModel):
+    alerts: list[MonitorAlertResponse]
+
+
+class MonitorRunResponse(ContractModel):
+    id: UUID
+    policy_version: str
+    scheduled_for: datetime
+    observed_at: datetime
+    provider: str
+    status: Literal["no_change", "alerts_created", "provider_error", "blocked"]
+    error_code: str | None
+    alerts_created: int
+    created_at: datetime
+
+
+class MonitorRunListResponse(ContractModel):
+    runs: list[MonitorRunResponse]
+
+
 class RecommendationCreate(ContractModel):
     contribution: Decimal = Field(ge=0, decimal_places=2)
 

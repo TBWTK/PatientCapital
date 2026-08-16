@@ -48,7 +48,7 @@ def test_amount_creates_one_admitted_recommended_strategy_without_trading() -> N
         assert strategy["strategy_id"] == "five_year_core"
         assert strategy["name"] == "Основной план"
         assert strategy["recommended"] is True
-        assert strategy["recommendation"]["policy_version"] == "five-year-moex-v2"
+        assert strategy["recommendation"]["policy_version"] == "market-intelligence-v1"
         assert strategy["recommendation"]["risk_level"] == "growth"
         assert Decimal(strategy["recommendation"]["spent"]) <= Decimal("8000.00")
         assert strategy["recommendation"]["lines"]

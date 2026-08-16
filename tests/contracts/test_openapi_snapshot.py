@@ -31,6 +31,7 @@ PUBLIC_PATHS = {
     "/v1/discovery/recommendations",
     "/v1/proposal-sets",
     "/v1/proposal-sets/{proposal_set_id}",
+    "/v1/market-research/latest",
 }
 
 PUBLIC_SCHEMAS = {
@@ -42,6 +43,8 @@ PUBLIC_SCHEMAS = {
     "DividendResearchResponse",
     "MonitorAlertResponse",
     "MonitorRunResponse",
+    "MarketResearchStatusResponse",
+    "MarketSearchResponse",
     "PortfolioResponse",
     "PriceResponse",
     "PriceFreshnessAssetResponse",

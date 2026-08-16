@@ -25,6 +25,12 @@ updated: 2026-08-16
 | PC2-3 Analytics | Главная объясняет стоимость, денежные потоки, результат, доход, drift и freshness | Ledger/cashflow fixtures + API/component/chart/a11y/browser evidence | done |
 | PC2-4 Research universe | Dividend-stock category доступна только через source-backed versioned policy | Source contracts + policy/capability/negative/live-read-only gates | done |
 | PC2-5 Monitoring | Сбор `3..4/day` создаёт только threshold/event alerts и никогда не торгует | Clock/idempotency/provider-failure/no-order/resilience/Docker worker tests | done |
+| PC3 intent/architecture | Динамический search отделён от ranking/calculation и восстановим без чата | ADR 0005 + state/data/security/quality coherence + docs audit | done |
+| PC3-1 Dynamic scanner | TQOB/TQBR и dividend history дают persisted immutable snapshot без ticker allowlist | Provider contracts + migration + cache/failure/capacity tests | done |
+| PC3-2 Budget ranking | Сумма и portfolio snapshot выбирают инструменты по versioned market evidence | Capability/property/metamorphic tests + exact trace | done |
+| PC3-3 Background/on-demand | Worker обновляет `4/day`, stale request делает bounded live refresh | Clock/idempotency/resilience/API/MCP tests | done |
+| PC3-4 Explainable product | Web показывает scan freshness/coverage/why/rejected alternatives | Generated types + component/a11y/browser/Docker live journey | done |
+| PC3 handoff | PC3 contracts, implementation, data и operations говорят одну правду | Full regression, live MOEX inspection, clean releasable checkpoint | done |
 | PC2-MVP handoff | Все PC2 acceptance доказаны, existing ledger сохранён, docs/code/Git согласованы | Migration rehearsal + full regression + Docker E2E + browser QA + IMMUNE audit | done |
 
 Допустимые статусы: `planned`, `active`, `blocked`, `done`.

@@ -45,6 +45,7 @@ def test_mcp_discovery_is_allowlisted_typed_and_permission_annotated() -> None:
     assert set(by_name) == {
         "get_profile",
         "get_analytics_overview",
+        "get_latest_market_research",
         "list_alerts",
         "list_monitor_runs",
         "acknowledge_alert",
@@ -65,6 +66,9 @@ def test_mcp_discovery_is_allowlisted_typed_and_permission_annotated() -> None:
     assert by_name["get_portfolio"].annotations.open_world_hint is False
     assert by_name["get_analytics_overview"].annotations is not None
     assert by_name["get_analytics_overview"].annotations.read_only_hint is True
+    assert by_name["get_latest_market_research"].annotations is not None
+    assert by_name["get_latest_market_research"].annotations.read_only_hint is True
+    assert by_name["get_latest_market_research"].annotations.open_world_hint is False
     assert by_name["list_alerts"].annotations is not None
     assert by_name["list_alerts"].annotations.read_only_hint is True
     assert by_name["acknowledge_alert"].annotations is not None
@@ -186,7 +190,7 @@ def test_mcp_amount_only_discovery_persists_the_same_run_as_http(client: TestCli
     assert result.is_error is False
     run = cast(dict[str, Any], result.structured_content)
     assert run["mode"] == "automatic"
-    assert run["policy_version"] == "five-year-moex-v2"
+    assert run["policy_version"] == "market-intelligence-v1"
     assert {item["asset_id"] for item in cast(list[dict[str, Any]], run["candidates"])} == {
         "SU26218RMFS6",
         "EQMX",
@@ -251,6 +255,15 @@ def test_mcp_missing_profile_is_a_machine_coded_tool_error() -> None:
     result = _run(get_missing_profile)
     assert result.is_error is True
     assert '"code":"PROFILE_NOT_CONFIGURED"' in _error_text(result)
+
+
+def test_mcp_missing_market_research_is_a_machine_coded_tool_error() -> None:
+    async def get_missing_market_research(mcp_client: Client) -> CallToolResult:
+        return await mcp_client.call_tool("get_latest_market_research", {})
+
+    result = _run(get_missing_market_research)
+    assert result.is_error is True
+    assert '"code":"MARKET_RESEARCH_NOT_FOUND"' in _error_text(result)
 
 
 def test_mcp_proposal_is_the_same_immutable_run_retrieved_by_http(

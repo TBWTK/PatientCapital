@@ -18,6 +18,7 @@ from patientcapital.application.services import (
     create_transaction_draft_from_text,
     decide_transaction_draft,
     get_analytics_overview,
+    get_latest_market_research,
     get_portfolio,
     get_profile,
     get_proposal_set,
@@ -32,6 +33,7 @@ from patientcapital.contracts import (
     DiscoveryRecommendationCreate,
     ErrorDetail,
     ErrorResponse,
+    MarketResearchStatusResponse,
     MonitorAlertListResponse,
     MonitorRunListResponse,
     PortfolioResponse,
@@ -107,6 +109,9 @@ class AgentTools:
 
     def list_monitor_runs(self) -> MonitorRunListResponse:
         return self._call(list_monitor_runs)
+
+    def get_latest_market_research(self) -> MarketResearchStatusResponse:
+        return self._call(get_latest_market_research)
 
     def acknowledge_alert(self, alert_id: UUID) -> AlertAcknowledgementResponse:
         def acknowledge(session: Session) -> AlertAcknowledgementResponse:

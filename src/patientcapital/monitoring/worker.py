@@ -9,12 +9,35 @@ from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from patientcapital.config import Settings
+from patientcapital.market_intelligence.service import acquire_market_research
+from patientcapital.marketdata.errors import MarketDataError
+from patientcapital.marketdata.models import MarketCandidate, MarketDataProvider
 from patientcapital.marketdata.moex import MoexIssProvider
 from patientcapital.monitoring.service import run_monitor
 from patientcapital.persistence.database import Database
 
 Clock = Callable[[], datetime]
 Sleeper = Callable[[float], None]
+
+
+class _SnapshotProvider:
+    def __init__(self, name: str, candidates: tuple[MarketCandidate, ...]) -> None:
+        self.name = name
+        self._candidates = candidates
+
+    def discover(self, *, calculated_at: datetime) -> tuple[MarketCandidate, ...]:
+        del calculated_at
+        return self._candidates
+
+
+class _FailedSnapshotProvider:
+    def __init__(self, name: str, error: MarketDataError) -> None:
+        self.name = name
+        self._error = error
+
+    def discover(self, *, calculated_at: datetime) -> tuple[MarketCandidate, ...]:
+        del calculated_at
+        raise self._error
 
 
 def parse_monitor_schedule(value: str) -> tuple[time, ...]:
@@ -86,6 +109,7 @@ def run_worker(
         base_url=settings.moex_iss_base_url,
         timeout_seconds=settings.moex_timeout_seconds,
         max_age_seconds=settings.moex_max_age_seconds,
+        stock_prefilter_limit=settings.market_research_stock_prefilter_limit,
     )
     database = Database(settings.database_url)
     try:
@@ -93,9 +117,27 @@ def run_worker(
             observed_at = clock()
             scheduled_for = latest_due_slot(observed_at, schedule, timezone)
             with database.sessions() as session:
+                monitor_provider: MarketDataProvider
+                try:
+                    acquired = acquire_market_research(
+                        session,
+                        provider,
+                        observed_at=observed_at,
+                        cache_seconds=settings.market_research_cache_seconds,
+                        force=True,
+                        idempotency_key=(
+                            "monitor-slot:"
+                            f"{scheduled_for.astimezone(UTC).isoformat()}"
+                        ),
+                    )
+                    monitor_provider = _SnapshotProvider(
+                        acquired.record.provider, acquired.candidates
+                    )
+                except MarketDataError as error:
+                    monitor_provider = _FailedSnapshotProvider(provider.name, error)
                 result = run_monitor(
                     session,
-                    provider,
+                    monitor_provider,
                     scheduled_for=scheduled_for,
                     observed_at=observed_at,
                 )

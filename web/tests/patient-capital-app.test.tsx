@@ -162,9 +162,21 @@ describe("PatientCapitalApp", () => {
         leftover: "102.11",
         reason: "ALLOCATED",
         mode: "automatic",
-        policy_version: "five-year-moex-v2",
+        policy_version: "market-intelligence-v1",
         horizon_years: 5,
         risk_level: "growth",
+        search: {
+          snapshot_id: "00000000-0000-0000-0000-000000000099",
+          mode: "live",
+          scan_policy_version: "moex-board-scan-v1",
+          provider: "moex-iss",
+          observed_at: "2026-08-15T09:00:00Z",
+          expires_at: "2026-08-15T13:00:00Z",
+          universe_size: 321,
+          candidate_count: 26,
+          enriched_count: 12,
+          kind_counts: { ofz: 54, equity_index_fund: 3, dividend_stock: 12 },
+        },
         candidates: [{
           asset_id: "SU26218RMFS6",
           name: "ОФЗ 26218",
@@ -198,6 +210,7 @@ describe("PatientCapitalApp", () => {
           research: {
             schema_version: "dividend-research-evidence-v1",
             policy_version: "dividend-quality-v1",
+            scope: "full_quality",
             observed_at: "2026-08-16T00:00:00Z",
             max_age_seconds: 15552000,
             reporting_period_end: "2025-12-31",
@@ -208,6 +221,11 @@ describe("PatientCapitalApp", () => {
             governance_program_member: true,
             corporate_action_status: "no_material_action_identified",
             summary: "Проверенный контекст из первичных источников.",
+            annual_dividend_per_share: null,
+            historical_dividend_yield_percent: null,
+            last_registry_close_date: null,
+            listing_level: null,
+            unknown_facts: [],
             citations: [
               { kind: "fundamentals", title: "МСФО-результаты", url: "https://www.moex.com/n98156" },
               { kind: "dividends", title: "Дивидендная история", url: "https://www.moex.com/a2656" },
@@ -239,19 +257,22 @@ describe("PatientCapitalApp", () => {
     await screen.findByText("Demo Broker");
     fireEvent.click(screen.getAllByRole("button", { name: /Пополн/ })[0]);
     expect((screen.getByLabelText("Сумма пополнения") as HTMLInputElement).value).toBe("8000");
-    fireEvent.click(screen.getByRole("button", { name: "Подобрать активы" }));
+    fireEvent.click(screen.getByRole("button", { name: "Исследовать рынок и подобрать" }));
 
     expect(await screen.findByRole("heading", { name: "Основной план" })).toBeTruthy();
     expect(screen.getByText("Рекомендуется")).toBeTruthy();
+    expect(screen.getByText("LIVE SEARCH")).toBeTruthy();
+    expect(screen.getByText("Просмотрено 321 инструментов")).toBeTruthy();
+    expect(screen.getByText(/Допущено 26 · углублённо проверено 12/)).toBeTruthy();
     const evidence = screen.getByText("Расчёт и источники").closest("details");
     expect(evidence?.open).toBe(false);
     fireEvent.click(screen.getByText("Расчёт и источники"));
     expect(evidence?.open).toBe(true);
     expect(screen.getAllByRole("heading", { name: "ОФЗ 26218" }).length).toBeGreaterThan(0);
     expect(screen.getByRole("heading", { name: "Московская биржа" })).toBeTruthy();
-    const research = screen.getByText("Почему акция прошла проверку").closest("details");
+    const research = screen.getByText("Почему акция прошла полную проверку").closest("details");
     expect(research?.open).toBe(false);
-    fireEvent.click(screen.getByText("Почему акция прошла проверку"));
+    fireEvent.click(screen.getByText("Почему акция прошла полную проверку"));
     expect(research?.open).toBe(true);
     expect(screen.getByRole("link", { name: "МСФО-результаты ↗" }).getAttribute("href")).toBe("https://www.moex.com/n98156");
     expect(screen.getByText(/dividend capture не используется/)).toBeTruthy();

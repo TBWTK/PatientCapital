@@ -163,6 +163,13 @@ git diff --check
 | PC2-REQ-05 scheduled monitoring | fake-clock/property/resilience/Docker | trigger/no-trigger/duplicate/outage fixtures | monitor policy/worker/API/MCP/migration/component suites + live worker run | `4/day` observations, idempotent daily alerts, visible outage, zero transaction/order effects | passing |
 | PC2-RISK-01 upload/privacy | security/boundary/retention | malformed MIME/magic, oversized bytes/pixels, timeout, real screenshot | image unit suite + Docker `/tmp` inspection | Bounded local parse, private immediate cleanup, no external send | passing |
 | PC2-RISK-02 compatibility | migration/contract/regression | current local schema facts | additive `0005` migration + full existing gates + ledger/API inspection | Existing profile/ledger/runs unchanged and readable | passing |
+| PC3-REQ-01 dynamic universe | provider contract + capability | synthetic full-board pages + controlled live TQOB/TQBR | provider/unit/live inspection | Active RUB OFZ/shares discovered without SECID list; counts and sources persisted | passing |
+| PC3-REQ-02 evidence ranking | domain/property/metamorphic | competing yield/maturity/turnover/dividend-history/budget fixtures | discovery policy suite | Changing material evidence can change winner; changing only input order cannot | passing |
+| PC3-REQ-03 snapshot refresh | repository/clock/resilience | missing/fresh/stale cache + outage fixtures | market-intelligence integration suite | Fresh cache reused; stale refreshes; failure visible without whitelist fallback | passing |
+| PC3-REQ-04 background scan | worker/idempotency/Docker | four Moscow slots + duplicate/restart/provider failure | worker tests + Compose live run | One immutable snapshot per slot; scan precedes monitor; zero transactions | passing |
+| PC3-REQ-05 explainable search | API/MCP/component/a11y/browser | `8k/50k`, warm/cold, selected/rejected candidates | contracts + web tests + browser | Scan id/mode/time/coverage and ranking reasons visible; exact run replay | passing |
+| PC3-RISK-01 false fundamentals | negative/eval/content inspection | market-screened stock without issuer fundamentals | policy/API/web assertions | Scope and unknowns visible; no invented profitability/payout/governance claim | passing |
+| PC3-RISK-02 provider fan-out | boundary/performance/resilience | large board, bounded top-N, slow/error dividend endpoints | provider tests + controlled live timing | External fan-out capped; cold run bounded; partial evidence explicit | passing |
 
 ## Портфель проверок
 

@@ -171,6 +171,37 @@ class ProposalSetRecord(Base):
     )
 
 
+class MarketResearchSnapshotRecord(Base):
+    __tablename__ = "market_research_snapshots"
+    __table_args__ = (
+        UniqueConstraint(
+            "idempotency_key", name="uq_market_research_snapshots_idempotency_key"
+        ),
+        CheckConstraint("status IN ('succeeded', 'provider_error')"),
+        CheckConstraint("universe_size >= 0"),
+        CheckConstraint("candidate_count >= 0 AND candidate_count <= universe_size"),
+        CheckConstraint("enriched_count >= 0"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    scan_policy_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    provider: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    universe_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    candidate_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    enriched_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind_counts: Mapped[dict[str, int]] = mapped_column(JSONB, nullable=False)
+    candidates: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class TransactionDraftRecord(Base):
     __tablename__ = "transaction_drafts"
     __table_args__ = (

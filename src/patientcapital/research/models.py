@@ -23,6 +23,7 @@ _PRIMARY_SOURCE_HOSTS = frozenset(
 
 
 class ResearchFactKind(StrEnum):
+    LISTING = "listing"
     FUNDAMENTALS = "fundamentals"
     DIVIDENDS = "dividends"
     GOVERNANCE = "governance"
@@ -40,6 +41,11 @@ class CorporateActionStatus(StrEnum):
     NO_MATERIAL_ACTION_IDENTIFIED = "no_material_action_identified"
     MATERIAL = "material"
     UNKNOWN = "unknown"
+
+
+class ResearchScope(StrEnum):
+    FULL_QUALITY = "full_quality"
+    MARKET_SCREEN = "market_screen"
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,15 +77,21 @@ class DividendResearchEvidence:
     policy_version: str
     observed_at: datetime
     max_age: timedelta
-    reporting_period_end: date
-    profitable_years: int
+    reporting_period_end: date | None
+    profitable_years: int | None
     dividend_years: int
-    payout_ratio_percent: Decimal
+    payout_ratio_percent: Decimal | None
     balance_sheet_status: BalanceSheetStatus
-    governance_program_member: bool
+    governance_program_member: bool | None
     corporate_action_status: CorporateActionStatus
     summary: str
     citations: tuple[ResearchCitation, ...]
+    scope: ResearchScope = ResearchScope.FULL_QUALITY
+    annual_dividend_per_share: Decimal | None = None
+    historical_dividend_yield_percent: Decimal | None = None
+    last_registry_close_date: date | None = None
+    listing_level: int | None = None
+    unknown_facts: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.schema_version.strip() or not self.policy_version.strip():
@@ -94,19 +106,25 @@ class DividendResearchEvidence:
             raise InvalidAllocationInput(
                 "INVALID_RESEARCH_EVIDENCE", "research max_age must be positive"
             )
-        if self.reporting_period_end > self.observed_at.date():
+        if (
+            self.reporting_period_end is not None
+            and self.reporting_period_end > self.observed_at.date()
+        ):
             raise InvalidAllocationInput(
                 "INVALID_RESEARCH_EVIDENCE", "research reporting period cannot be in the future"
             )
-        for name, value in (
+        year_counts = (
             ("profitable_years", self.profitable_years),
             ("dividend_years", self.dividend_years),
-        ):
-            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        )
+        for name, value in year_counts:
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, int) or value < 0
+            ):
                 raise InvalidAllocationInput(
                     "INVALID_RESEARCH_EVIDENCE", f"{name} must be a non-negative integer"
                 )
-        if (
+        if self.payout_ratio_percent is not None and (
             not isinstance(self.payout_ratio_percent, Decimal)
             or not self.payout_ratio_percent.is_finite()
             or self.payout_ratio_percent < 0
@@ -114,7 +132,9 @@ class DividendResearchEvidence:
             raise InvalidAllocationInput(
                 "INVALID_RESEARCH_EVIDENCE", "payout ratio must be a non-negative finite Decimal"
             )
-        if not isinstance(self.governance_program_member, bool):
+        if self.governance_program_member is not None and not isinstance(
+            self.governance_program_member, bool
+        ):
             raise InvalidAllocationInput(
                 "INVALID_RESEARCH_EVIDENCE", "governance status must be boolean"
             )
@@ -123,7 +143,53 @@ class DividendResearchEvidence:
                 "INVALID_RESEARCH_EVIDENCE", "research summary is required"
             )
         kinds = [citation.kind for citation in self.citations]
-        required = set(ResearchFactKind)
+        if self.scope is ResearchScope.FULL_QUALITY:
+            required = {
+                ResearchFactKind.FUNDAMENTALS,
+                ResearchFactKind.DIVIDENDS,
+                ResearchFactKind.GOVERNANCE,
+                ResearchFactKind.CORPORATE_ACTIONS,
+            }
+            if (
+                self.reporting_period_end is None
+                or self.profitable_years is None
+                or self.payout_ratio_percent is None
+                or self.governance_program_member is None
+            ):
+                raise InvalidAllocationInput(
+                    "INVALID_RESEARCH_EVIDENCE",
+                    "full-quality research requires every material gate",
+                )
+        else:
+            required = {ResearchFactKind.LISTING, ResearchFactKind.DIVIDENDS}
+            required_unknowns = {
+                "profitability",
+                "payout",
+                "balance",
+                "governance",
+                "corporate_actions",
+            }
+            numeric = (
+                self.annual_dividend_per_share,
+                self.historical_dividend_yield_percent,
+            )
+            if (
+                self.policy_version != "dividend-market-screen-v1"
+                or self.listing_level not in {1, 2}
+                or any(
+                    value is None
+                    or not isinstance(value, Decimal)
+                    or not value.is_finite()
+                    or value < 0
+                    for value in numeric
+                )
+                or set(self.unknown_facts) != required_unknowns
+            ):
+                raise InvalidAllocationInput(
+                    "INVALID_RESEARCH_EVIDENCE",
+                    "market-screen research requires listing, dividend metrics "
+                    "and explicit unknowns",
+                )
         if set(kinds) != required or len(kinds) != len(required):
             raise InvalidAllocationInput(
                 "INVALID_RESEARCH_EVIDENCE",

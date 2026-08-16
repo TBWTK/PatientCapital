@@ -232,6 +232,21 @@ function RecommendationEvidence({ result }: { result: Recommendation }) {
   const rejectedCandidates = result.rejected_candidates ?? [];
   return (
     <div className="evidence-body">
+      {result.search && (
+        <section className="search-trace" aria-label="Охват исследования рынка">
+          <div>
+            <i>{result.search.mode === "live" ? "LIVE SEARCH" : "FRESH CACHE"}</i>
+            <b>Просмотрено {result.search.universe_size} инструментов</b>
+            <span>
+              Допущено {result.search.candidate_count} · углублённо проверено {result.search.enriched_count}
+            </span>
+          </div>
+          <div>
+            <span>Снимок {shortDateTime(result.search.observed_at)}</span>
+            <small>{result.search.scan_policy_version} · {result.search.snapshot_id.slice(0, 8)}</small>
+          </div>
+        </section>
+      )}
       {candidates.length > 0 && (
         <div className="candidate-grid" aria-label="Подобранные инструменты">
           {candidates.map((candidate) => (
@@ -245,26 +260,33 @@ function RecommendationEvidence({ result }: { result: Recommendation }) {
                 <div><dt>Лот</dt><dd>{candidate.lot_size} · {money(candidate.lot_cost, result.currency)}</dd></div>
                 {candidate.maturity_date && <div><dt>Погашение</dt><dd>{new Intl.DateTimeFormat("ru-RU").format(new Date(`${candidate.maturity_date}T00:00:00Z`))}</dd></div>}
                 {candidate.yield_percent != null && <div><dt>Доходность MOEX</dt><dd>{candidate.yield_percent}%</dd></div>}
+                {candidate.next_coupon_date && <div><dt>Следующий купон</dt><dd>{new Intl.DateTimeFormat("ru-RU").format(new Date(`${candidate.next_coupon_date}T00:00:00Z`))}</dd></div>}
+                {candidate.coupon_percent != null && <div><dt>Ставка купона</dt><dd>{candidate.coupon_percent}%</dd></div>}
                 <div><dt>Цена на</dt><dd>{shortDateTime(candidate.price_as_of)}</dd></div>
+                {candidate.score != null && <div><dt>Ranking score</dt><dd>{candidate.score}</dd></div>}
               </dl>
               {candidate.research && (
                 <details className="research-details">
-                  <summary>Почему акция прошла проверку</summary>
+                  <summary>{candidate.research.scope === "market_screen" ? "Что проверил market screen" : "Почему акция прошла полную проверку"}</summary>
                   <p>{candidate.research.summary}</p>
                   <dl>
-                    <div><dt>Прибыльные периоды</dt><dd>{candidate.research.profitable_years}</dd></div>
+                    {candidate.research.profitable_years != null && <div><dt>Прибыльные периоды</dt><dd>{candidate.research.profitable_years}</dd></div>}
                     <div><dt>Дивидендные периоды</dt><dd>{candidate.research.dividend_years}</dd></div>
-                    <div><dt>Выплата от прибыли</dt><dd>{candidate.research.payout_ratio_percent}%</dd></div>
-                    <div><dt>Баланс</dt><dd>{candidate.research.balance_sheet_status === "no_debt" ? "Без долга" : candidate.research.balance_sheet_status === "adequate_capital" ? "Капитал достаточен" : "Не допущен"}</dd></div>
-                    <div><dt>Corporate action</dt><dd>{candidate.research.corporate_action_status === "no_material_action_identified" ? "Не выявлено" : "Не допущен"}</dd></div>
+                    {candidate.research.payout_ratio_percent != null && <div><dt>Выплата от прибыли</dt><dd>{candidate.research.payout_ratio_percent}%</dd></div>}
+                    {candidate.research.annual_dividend_per_share != null && <div><dt>Последний год истории</dt><dd>{money(candidate.research.annual_dividend_per_share, result.currency)} на акцию</dd></div>}
+                    {candidate.research.historical_dividend_yield_percent != null && <div><dt>Историческая доходность</dt><dd>{candidate.research.historical_dividend_yield_percent}%</dd></div>}
+                    <div><dt>Scope</dt><dd>{candidate.research.scope === "market_screen" ? "Рыночный скрининг" : "Полная quality-проверка"}</dd></div>
                     <div><dt>Research на</dt><dd>{shortDateTime(candidate.research.observed_at)}</dd></div>
                   </dl>
+                  {(candidate.research.unknown_facts ?? []).length > 0 && (
+                    <p className="research-unknown">Не проверено этим источником: {(candidate.research.unknown_facts ?? []).join(", ")}.</p>
+                  )}
                   <nav aria-label={`Первичные источники ${candidate.asset_id}`}>
                     {candidate.research.citations.map((citation) => (
                       <a key={citation.kind} href={citation.url} target="_blank" rel="noreferrer">{citation.title} ↗</a>
                     ))}
                   </nav>
-                  <small>Policy {candidate.research.policy_version} · dividend capture не используется</small>
+                  <small>Policy {candidate.research.policy_version} · прошлая выплата не является прогнозом · dividend capture не используется</small>
                 </details>
               )}
               <footer><a href={candidate.source_url} target="_blank" rel="noreferrer">Котировка MOEX ↗</a><a href={candidate.classification_url} target="_blank" rel="noreferrer">Класс инструмента ↗</a></footer>
@@ -280,6 +302,7 @@ function RecommendationEvidence({ result }: { result: Recommendation }) {
               <article key={candidate.asset_id}>
                 <span><b>{candidate.name}</b><small>{candidate.asset_id} · лот {candidate.lot_size} · {money(candidate.lot_cost, result.currency)}</small></span>
                 <p>{candidate.reason}</p>
+                {candidate.score != null && <small>Score {candidate.score}</small>}
                 <a href={candidate.source_url} target="_blank" rel="noreferrer">Источник ↗</a>
               </article>
             ))}
@@ -358,7 +381,7 @@ function Contribution({
       <section className="page-intro">
         <p className="eyebrow">Автоподбор · 5 лет</p>
         <h1>Скажите только сумму</h1>
-        <p>PatientCapital проверит допущенные инструменты и покажет до трёх понятных стратегий. Точные котировки, лоты и версии расчёта останутся внутри каждой карточки.</p>
+        <p>PatientCapital проверит свежий снимок рынка или запустит новый поиск по MOEX, затем покажет до трёх понятных стратегий. Источники, охват, котировки и причины отсева останутся внутри карточки.</p>
       </section>
       <section className="chat-panel" aria-label="Диалог подбора">
         <div className="chat-avatar" aria-hidden="true">PC</div>
@@ -376,7 +399,7 @@ function Contribution({
           </span>
         </label>
         <button className="button primary large" disabled={busy}>
-          {busy ? "Ищу и считаю…" : "Подобрать активы"}
+          {busy ? "Изучаю рынок и считаю…" : "Исследовать рынок и подобрать"}
         </button>
       </form>
       {notice && <div className={`notice ${notice.kind}`}>{notice.text}</div>}

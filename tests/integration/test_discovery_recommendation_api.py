@@ -113,7 +113,7 @@ def test_amount_only_flow_materializes_market_evidence_and_does_not_trade() -> N
         assert run["mode"] == "automatic"
         assert run["horizon_years"] == 5
         assert run["risk_level"] == "balanced"
-        assert run["policy_version"] == "five-year-moex-v2"
+        assert run["policy_version"] == "market-intelligence-v1"
         assert [(item["asset_id"], item["target_weight"]) for item in run["candidates"]] == [
             ("SU26218RMFS6", "0.60000000"),
             ("EQMX", "0.40000000"),

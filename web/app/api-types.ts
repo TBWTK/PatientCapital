@@ -345,6 +345,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/market-research/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Market Research Latest Get */
+        get: operations["market_research_latest_get_v1_market_research_latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/proposal-sets/{proposal_set_id}": {
         parameters: {
             query?: never;
@@ -522,6 +539,18 @@ export interface components {
             maturity_date?: string | null;
             /** Yield Percent */
             yield_percent?: string | null;
+            /** Next Coupon Date */
+            next_coupon_date?: string | null;
+            /** Coupon Percent */
+            coupon_percent?: string | null;
+            /** Coupon Value */
+            coupon_value?: string | null;
+            /** Score */
+            score?: string | null;
+            /** Rank Factors */
+            rank_factors?: {
+                [key: string]: string;
+            };
             /** Source Url */
             source_url: string;
             /** Classification Url */
@@ -540,30 +569,33 @@ export interface components {
             /** Policy Version */
             policy_version: string;
             /**
+             * Scope
+             * @default full_quality
+             * @enum {string}
+             */
+            scope: "full_quality" | "market_screen";
+            /**
              * Observed At
              * Format: date-time
              */
             observed_at: string;
             /** Max Age Seconds */
             max_age_seconds: number;
-            /**
-             * Reporting Period End
-             * Format: date
-             */
-            reporting_period_end: string;
+            /** Reporting Period End */
+            reporting_period_end?: string | null;
             /** Profitable Years */
-            profitable_years: number;
+            profitable_years?: number | null;
             /** Dividend Years */
             dividend_years: number;
             /** Payout Ratio Percent */
-            payout_ratio_percent: string;
+            payout_ratio_percent?: string | null;
             /**
              * Balance Sheet Status
              * @enum {string}
              */
             balance_sheet_status: "no_debt" | "adequate_capital" | "concern" | "unknown";
             /** Governance Program Member */
-            governance_program_member: boolean;
+            governance_program_member?: boolean | null;
             /**
              * Corporate Action Status
              * @enum {string}
@@ -573,6 +605,16 @@ export interface components {
             summary: string;
             /** Citations */
             citations: components["schemas"]["ResearchCitationResponse"][];
+            /** Annual Dividend Per Share */
+            annual_dividend_per_share?: string | null;
+            /** Historical Dividend Yield Percent */
+            historical_dividend_yield_percent?: string | null;
+            /** Last Registry Close Date */
+            last_registry_close_date?: string | null;
+            /** Listing Level */
+            listing_level?: number | null;
+            /** Unknown Facts */
+            unknown_facts?: string[];
         };
         /** ErrorDetail */
         ErrorDetail: {
@@ -584,6 +626,87 @@ export interface components {
         /** ErrorResponse */
         ErrorResponse: {
             error: components["schemas"]["ErrorDetail"];
+        };
+        /** MarketResearchStatusResponse */
+        MarketResearchStatusResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "succeeded" | "provider_error";
+            /** Scan Policy Version */
+            scan_policy_version: string;
+            /** Provider */
+            provider: string;
+            /** Error Code */
+            error_code: string | null;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Universe Size */
+            universe_size: number;
+            /** Candidate Count */
+            candidate_count: number;
+            /** Enriched Count */
+            enriched_count: number;
+            /** Kind Counts */
+            kind_counts: {
+                [key: string]: number;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** MarketSearchResponse */
+        MarketSearchResponse: {
+            /**
+             * Snapshot Id
+             * Format: uuid
+             */
+            snapshot_id: string;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "live" | "cached";
+            /** Scan Policy Version */
+            scan_policy_version: string;
+            /** Provider */
+            provider: string;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Universe Size */
+            universe_size: number;
+            /** Candidate Count */
+            candidate_count: number;
+            /** Enriched Count */
+            enriched_count: number;
+            /** Kind Counts */
+            kind_counts: {
+                [key: string]: number;
+            };
         };
         /** MonitorAlertListResponse */
         MonitorAlertListResponse: {
@@ -950,6 +1073,7 @@ export interface components {
             rejected_candidates?: components["schemas"]["RejectedDiscoveryCandidateResponse"][];
             /** Profile Version */
             profile_version?: number | null;
+            search?: components["schemas"]["MarketSearchResponse"] | null;
         };
         /** RejectedDiscoveryCandidateResponse */
         RejectedDiscoveryCandidateResponse: {
@@ -977,6 +1101,12 @@ export interface components {
             price_as_of: string;
             /** Source Url */
             source_url: string;
+            /** Score */
+            score?: string | null;
+            /** Rank Factors */
+            rank_factors?: {
+                [key: string]: string;
+            };
         };
         /** ResearchCitationResponse */
         ResearchCitationResponse: {
@@ -984,7 +1114,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "fundamentals" | "dividends" | "governance" | "corporate_actions";
+            kind: "listing" | "fundamentals" | "dividends" | "governance" | "corporate_actions";
             /** Title */
             title: string;
             /** Url */
@@ -2052,6 +2182,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProposalSetResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    market_research_latest_get_v1_market_research_latest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarketResearchStatusResponse"];
                 };
             };
             /** @description Conflict */

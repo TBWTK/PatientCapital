@@ -292,7 +292,7 @@ class DiscoveryRecommendationCreate(ContractModel):
 
 
 class ResearchCitationResponse(ContractModel):
-    kind: Literal["fundamentals", "dividends", "governance", "corporate_actions"]
+    kind: Literal["listing", "fundamentals", "dividends", "governance", "corporate_actions"]
     title: str
     url: str
 
@@ -300,19 +300,25 @@ class ResearchCitationResponse(ContractModel):
 class DividendResearchResponse(ContractModel):
     schema_version: str
     policy_version: str
+    scope: Literal["full_quality", "market_screen"] = "full_quality"
     observed_at: datetime
     max_age_seconds: int
-    reporting_period_end: date
-    profitable_years: int
+    reporting_period_end: date | None = None
+    profitable_years: int | None = None
     dividend_years: int
-    payout_ratio_percent: Decimal
+    payout_ratio_percent: Decimal | None = None
     balance_sheet_status: Literal["no_debt", "adequate_capital", "concern", "unknown"]
-    governance_program_member: bool
+    governance_program_member: bool | None = None
     corporate_action_status: Literal[
         "no_material_action_identified", "material", "unknown"
     ]
     summary: str
     citations: list[ResearchCitationResponse]
+    annual_dividend_per_share: Decimal | None = None
+    historical_dividend_yield_percent: Decimal | None = None
+    last_registry_close_date: date | None = None
+    listing_level: int | None = None
+    unknown_facts: list[str] = Field(default_factory=list)
 
 
 class DiscoveryCandidateResponse(ContractModel):
@@ -329,6 +335,11 @@ class DiscoveryCandidateResponse(ContractModel):
     turnover: Decimal
     maturity_date: date | None = None
     yield_percent: Decimal | None = None
+    next_coupon_date: date | None = None
+    coupon_percent: Decimal | None = None
+    coupon_value: Decimal | None = None
+    score: Decimal | None = None
+    rank_factors: dict[str, str] = Field(default_factory=dict)
     source_url: str
     classification_url: str
     research: DividendResearchResponse | None = None
@@ -344,6 +355,36 @@ class RejectedDiscoveryCandidateResponse(ContractModel):
     lot_cost: Decimal
     price_as_of: datetime
     source_url: str
+    score: Decimal | None = None
+    rank_factors: dict[str, str] = Field(default_factory=dict)
+
+
+class MarketSearchResponse(ContractModel):
+    snapshot_id: UUID
+    mode: Literal["live", "cached"]
+    scan_policy_version: str
+    provider: str
+    observed_at: datetime
+    expires_at: datetime
+    universe_size: int
+    candidate_count: int
+    enriched_count: int
+    kind_counts: dict[str, int]
+
+
+class MarketResearchStatusResponse(ContractModel):
+    id: UUID
+    status: Literal["succeeded", "provider_error"]
+    scan_policy_version: str
+    provider: str
+    error_code: str | None
+    observed_at: datetime
+    expires_at: datetime
+    universe_size: int
+    candidate_count: int
+    enriched_count: int
+    kind_counts: dict[str, int]
+    created_at: datetime
 
 
 class RecommendationLineResponse(ContractModel):
@@ -383,6 +424,7 @@ class RecommendationResponse(ContractModel):
     candidates: list[DiscoveryCandidateResponse] = Field(default_factory=list)
     rejected_candidates: list[RejectedDiscoveryCandidateResponse] = Field(default_factory=list)
     profile_version: int | None = None
+    search: MarketSearchResponse | None = None
 
 
 class ProposalSetCreate(ContractModel):

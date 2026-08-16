@@ -47,6 +47,9 @@ broker order capability.
 | Sensitive screenshot retention | raw file never in DB/Git/backup; private temp удаляется до ответа draft | host administrator can inspect live process/tmpfs во время OCR |
 | Research/source injection | primary-host allowlist, four typed gate citations, provenance/freshness/schema/policy; prose cannot materialize facts | exchange/issuer source can still be wrong or incomplete |
 | Monitoring churn or duplicate alert | versioned thresholds, idempotent run/alert keys, no transaction/order tool | noisy but non-executing recommendations |
+| Market-wide request amplification | board fetch + deterministic liquidity prefilter + bounded dividend fan-out/timeouts | MOEX availability/rate limits can block a cold proposal |
+| Screen presented as fundamental audit | typed `market_screen` scope, explicit unknown fields and source URLs | historical dividends do not predict future payments |
+| Stale cache silently reused | persisted expiry, fail-loud stale/provider error, immutable scan id in proposal | delayed MOEX facts remain non-real-time even when fresh by policy |
 
 ## Условия эксплуатации MVP
 

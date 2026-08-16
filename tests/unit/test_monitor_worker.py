@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from patientcapital.config import Settings
+from patientcapital.marketdata.errors import MarketDataError
 from patientcapital.monitoring import worker as worker_module
 from patientcapital.monitoring.worker import (
     latest_due_slot,
@@ -90,8 +91,28 @@ def test_worker_runs_latest_slot_once_and_closes_database(
             FakeDatabase.closed = True
 
     class FakeProvider:
+        name = "fake-provider"
+
         def __init__(self, **kwargs: object) -> None:
             assert kwargs["max_age_seconds"] == 345_600
+
+    class FakeAcquired:
+        class Record:
+            provider = "fake-provider"
+
+        record = Record()
+        candidates = ()
+
+    def fake_acquire(
+        session: object,
+        provider: object,
+        **kwargs: object,
+    ) -> FakeAcquired:
+        assert session is not None and provider is not None
+        assert kwargs["cache_seconds"] == 14_400
+        assert kwargs["force"] is True
+        assert str(kwargs["idempotency_key"]).startswith("monitor-slot:")
+        return FakeAcquired()
 
     def fake_run_monitor(
         session: object,
@@ -107,6 +128,7 @@ def test_worker_runs_latest_slot_once_and_closes_database(
     current = datetime(2026, 8, 16, 9, 30, tzinfo=UTC)
     monkeypatch.setattr(worker_module, "Database", FakeDatabase)
     monkeypatch.setattr(worker_module, "MoexIssProvider", FakeProvider)
+    monkeypatch.setattr(worker_module, "acquire_market_research", fake_acquire)
     monkeypatch.setattr(worker_module, "run_monitor", fake_run_monitor)
     with pytest.raises(WorkerStopped):
         worker_module.run_worker(
@@ -119,3 +141,16 @@ def test_worker_runs_latest_slot_once_and_closes_database(
         (datetime(2026, 8, 16, 10, 0, tzinfo=ZoneInfo("Europe/Moscow")), current)
     ]
     assert FakeDatabase.closed is True
+
+
+def test_snapshot_provider_wrappers_preserve_candidates_and_provider_errors() -> None:
+    snapshot = worker_module._SnapshotProvider("snapshot-provider", ())
+    assert snapshot.name == "snapshot-provider"
+    assert snapshot.discover(calculated_at=datetime.now(UTC)) == ()
+
+    source_error = MarketDataError("MOEX_UNAVAILABLE", "market source is unavailable")
+    failed = worker_module._FailedSnapshotProvider("failed-provider", source_error)
+    assert failed.name == "failed-provider"
+    with pytest.raises(MarketDataError) as raised:
+        failed.discover(calculated_at=datetime.now(UTC))
+    assert raised.value is source_error

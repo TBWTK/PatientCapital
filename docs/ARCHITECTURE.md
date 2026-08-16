@@ -188,10 +188,38 @@ fresh reviewed evidence; минимум три прибыльных и три д
 corporate action; RUB, доступный целый lot и дневной turnover не ниже `10 000 000 RUB`. Target
 категории ограничен `20%`; при любом отказе исходная OFZ/fund policy продолжает работать без акции.
 
-Production allowlist v1 содержит MOEX (`RU000A0JR4A1`, TQBR, ordinary share). Corpus observed
-16.08.2026 имеет max age 180 дней; после этого акция автоматически исключается до reviewed refresh.
-Добавление нового тикера требует primary corpus, негативных fixtures и нового regression, а не
-редактирования prompt.
+Эта production allowlist была границей PC2 и заменяется в PC3 dynamic board enumeration. Reviewed
+MOEX corpus остаётся историческим full-quality evidence, но не является единственным источником
+identity. Dynamic dividend-history screen имеет более узкий scope и обязан показывать unknown
+fundamentals/governance/corporate actions вместо имитации полного issuer audit.
+
+## Dynamic Market Intelligence PC3
+
+`market-intelligence` владеет ровно тремя решениями: когда snapshot свеж, какие публичные MOEX facts
+в него попали и каков typed coverage. `marketdata/moex` владеет transport/schema mapping;
+`domain/discovery` — budget/profile ranking; `planner` — quantities/fees. Ни один слой не копирует
+чужое решение.
+
+```mermaid
+flowchart LR
+  Worker["Worker · 4/day"] --> Scan["MOEX TQOB/TQBR scan"]
+  Request["Amount request"] --> Fresh{"Fresh snapshot ≤4h?"}
+  Fresh -- no --> Scan
+  Scan --> Prefilter["Typed listing/liquidity prefilter"]
+  Prefilter --> Enrich["Bounded dividend-history enrichment"]
+  Enrich --> Snapshot[("Immutable market snapshot")]
+  Fresh -- yes --> Snapshot
+  Snapshot --> Rank["market-intelligence-v1 ranking"]
+  Rank --> Core["Lot/fee deterministic planner"]
+  Core --> Proposal[("Immutable proposal run")]
+  Proposal --> Explain["Web/MCP evidence"]
+```
+
+Cold provider/schema failure создаёт видимый failed/blocked outcome и не использует прежний
+allowlist. Large TQBR universe не создаёт unbounded N+1: dividend enrichment получает только top-N
+active RUB listing-level candidates после marketdata prefilter. Broad-index funds пока используют
+reviewed classification registry, потому что MOEX `IFTF` описывает форму инструмента, не underlying
+strategy.
 
 ## Flow нового пополнения
 

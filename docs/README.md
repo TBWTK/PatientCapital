@@ -30,7 +30,7 @@ PatientCapital — локальный инвестиционный ассист�
 - **GigaChat** проверен как экспериментальный внешний provider и отклонён live-gate; runtime mode
   отсутствует. Другая модель/версия может появиться только после нового admission по тем же порогам.
 
-## Текущее состояние и целевой MVP v2
+## Текущее состояние и Market Intelligence MVP
 
 Текущий проверенный v1 уже имеет одного локального пользователя, профиль брокера и комиссий,
 amount-only discovery рублёвых ОФЗ и фондов широкого индекса через delayed MOEX ISS,
@@ -58,6 +58,14 @@ transaction assistant, explainable analytics, первый research-universe gat
 Первый allowlisted инструмент — обыкновенная акция MOEX; цена/лот/оборот поступают из ISS, а
 research context — из reviewed primary-source corpus. Policy не ранжирует акции по дивидендной
 доходности и не реализует dividend capture.
+
+Активный `PC3-MI` устраняет этот статический предел. Фоновый scanner четыре раза в день перечисляет
+активные рублёвые инструменты MOEX, сохраняет immutable market snapshot, а запрос суммы использует
+его только пока он свежий и иначе выполняет bounded live refresh. SECID ОФЗ и dividend-stock
+кандидатов не перечисляются в коде. Versioned policy хранит trace: universe coverage, доступность
+лота, maturity/yield/liquidity для ОФЗ и listing/dividend-history/liquidity для акций. MOEX-only
+дивидендный screen явно не называется полным фундаментальным аудитом; неподтверждённые измерения
+остаются `unknown`, а не заполняются моделью.
 
 Целевая web-навигация: **Обзор**, **Пополнить**, **Ассистент**, **Профиль**. Ручной ledger editor
 остаётся доступным как advanced/recovery fallback, но не является основным пользовательским путём.
@@ -113,6 +121,7 @@ broker execution, публикацию, ослабление quality gates ил�
 - [ADR 0002: deterministic core и model admission](decisions/0002-deterministic-core-and-model-admission.md)
 - [ADR 0003: автоматический подбор через MOEX](decisions/0003-automatic-moex-discovery.md)
 - [ADR 0004: assistant-first продуктовый цикл](decisions/0004-assistant-first-product-loop.md)
+- [ADR 0005: динамический Market Intelligence](decisions/0005-dynamic-market-intelligence.md)
 
 <!-- immune-project-engineering:docs:start -->
 - [Аудит и достаточность контекста](AUDIT.md)

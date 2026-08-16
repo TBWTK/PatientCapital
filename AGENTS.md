@@ -24,8 +24,9 @@
 - Unexpected or incomplete financial state must be explicit (`unknown`, validation error, or a
   blocked recommendation); do not silently default material inputs.
 - The MVP never places broker orders and must not present itself as a licensed investment adviser.
-- For the assistant-first MVP v2, treat `docs/decisions/0004-assistant-first-product-loop.md` as the
-  cross-boundary interaction contract and execute the active stages from `docs/STATE.md`/`ROADMAP.md`.
+- For the active Market Intelligence stage, treat
+  `docs/decisions/0005-dynamic-market-intelligence.md` as the cross-boundary discovery contract;
+  ADR 0004 continues to own the assistant-first interaction and transaction boundary.
 
 ## PatientCapital MCP tools
 

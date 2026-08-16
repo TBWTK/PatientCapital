@@ -7,6 +7,7 @@ import pytest
 from patientcapital.marketdata.errors import MarketDataError
 from patientcapital.marketdata.models import InstrumentKind
 from patientcapital.marketdata.moex import MoexIssProvider
+from patientcapital.research.models import ResearchScope
 
 NOW = datetime(2026, 8, 15, 9, 0, tzinfo=UTC)
 
@@ -52,8 +53,40 @@ def _handler(request: httpx.Request) -> httpx.Response:
                 ),
             },
         )
-    asset_id = request.url.path.rsplit("/", 1)[-1].removesuffix(".json")
-    is_stock = asset_id == "MOEX"
+    if request.url.path.endswith("/dividends.json"):
+        asset_id = request.url.path.split("/")[-2]
+        return httpx.Response(
+            200,
+            json={
+                "dividends": _block(
+                    ["secid", "registryclosedate", "value", "currencyid"],
+                    [
+                        [asset_id, "2025-07-18", 30, "RUB"],
+                        [asset_id, "2024-07-18", 25, "RUB"],
+                        [asset_id, "2023-07-18", 20, "RUB"],
+                    ],
+                )
+            },
+        )
+    rows = [
+        ["EQMX", "EQMX ETF", 1, "A", "SUR", "J", "IFTF", "RU000EQMX", 1],
+        ["SBMX", "SBMX ETF", 1, "A", "SUR", "J", "IFTF", "RU000SBMX", 1],
+        ["TMOS", "TMOS ETF", 1, "A", "SUR", "J", "IFTF", "RU000TMOS", 1],
+        ["SBER", "Сбербанк", 10, "A", "SUR", "1", "EQIN", "RU000SBER", 1],
+        ["MOEX", "МосБиржа", 10, "A", "SUR", "1", "EQIN", "RU000MOEX", 1],
+        ["THIRD", "Третья", 10, "A", "SUR", "1", "EQIN", "RU000THIRD", 1],
+    ]
+    market = [
+        [asset_id, 117.35, 122.85, 117.35, turnover, "2026-08-14 23:50:43"]
+        for asset_id, turnover in (
+            ("EQMX", 601551768),
+            ("SBMX", 501551768),
+            ("TMOS", 401551768),
+            ("SBER", 1601551768),
+            ("MOEX", 1201551768),
+            ("THIRD", 201551768),
+        )
+    ]
     return httpx.Response(
         200,
         json={
@@ -67,21 +100,13 @@ def _handler(request: httpx.Request) -> httpx.Response:
                     "SECTYPE",
                     "INSTRID",
                     "ISIN",
+                    "LISTLEVEL",
                 ],
-                [[
-                    asset_id,
-                    "МосБиржа" if is_stock else f"{asset_id} ETF",
-                    10 if is_stock else 1,
-                    "A",
-                    "SUR",
-                    "1" if is_stock else "J",
-                    "EQIN" if is_stock else "IFTF",
-                    "RU000A0JR4A1" if is_stock else "RU000TEST",
-                ]],
+                rows,
             ),
             "marketdata": _block(
                 ["SECID", "LAST", "MARKETPRICE", "LCURRENTPRICE", "VALTODAY", "SYSTIME"],
-                [[asset_id, 117.35, 122.85, 117.35, 601551768, "2026-08-14 23:50:43"]],
+                market,
             ),
         },
     )
@@ -89,7 +114,8 @@ def _handler(request: httpx.Request) -> httpx.Response:
 
 def test_provider_maps_strict_moex_facts_and_dirty_ofz_cost() -> None:
     with httpx.Client(transport=httpx.MockTransport(_handler)) as client:
-        result = MoexIssProvider(client=client).discover(calculated_at=NOW)
+        scan = MoexIssProvider(client=client, stock_prefilter_limit=2).scan(calculated_at=NOW)
+        result = scan.candidates
 
     ofz = next(item for item in result if item.kind is InstrumentKind.OFZ)
     assert ofz.unit_price == Decimal("818.21000000")
@@ -102,15 +128,17 @@ def test_provider_maps_strict_moex_facts_and_dirty_ofz_cost() -> None:
     assert {item.asset_id for item in funds} == {"EQMX", "SBMX", "TMOS"}
     assert all(item.classification_url == "https://www.moex.com/msn/etf" for item in funds)
     stocks = [item for item in result if item.kind is InstrumentKind.DIVIDEND_STOCK]
-    assert [item.asset_id for item in stocks] == ["MOEX"]
+    assert [item.asset_id for item in stocks] == ["SBER", "MOEX"]
     assert stocks[0].lot_size == 10
     assert stocks[0].research is not None
+    assert stocks[0].research.scope is ResearchScope.MARKET_SCREEN
+    assert stocks[0].research.dividend_years == 3
     assert {citation.kind.value for citation in stocks[0].research.citations} == {
-        "fundamentals",
+        "listing",
         "dividends",
-        "governance",
-        "corporate_actions",
     }
+    assert scan.enriched_count == 2
+    assert scan.universe_size == 7
 
 
 def test_provider_rejects_malformed_moex_block() -> None:

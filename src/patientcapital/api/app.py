@@ -25,6 +25,7 @@ from patientcapital.application.services import (
     create_transaction_draft_manual,
     decide_transaction_draft,
     get_analytics_overview,
+    get_latest_market_research,
     get_portfolio,
     get_profile,
     get_proposal_set,
@@ -44,6 +45,7 @@ from patientcapital.contracts import (
     AssetResponse,
     DiscoveryRecommendationCreate,
     ErrorResponse,
+    MarketResearchStatusResponse,
     MonitorAlertListResponse,
     MonitorRunListResponse,
     PortfolioResponse,
@@ -88,6 +90,7 @@ def create_app(
         base_url=resolved.moex_iss_base_url,
         timeout_seconds=resolved.moex_timeout_seconds,
         max_age_seconds=resolved.moex_max_age_seconds,
+        stock_prefilter_limit=resolved.market_research_stock_prefilter_limit,
     )
     extractor = image_text_extractor or TesseractImageExtractor(
         max_bytes=resolved.upload_max_bytes,
@@ -302,14 +305,30 @@ def create_app(
         payload: DiscoveryRecommendationCreate,
         session: SessionDependency,
     ) -> RecommendationResponse:
-        return create_discovery_recommendation(session, payload, provider)
+        return create_discovery_recommendation(
+            session,
+            payload,
+            provider,
+            market_research_cache_seconds=resolved.market_research_cache_seconds,
+        )
 
     @app.post("/v1/proposal-sets", response_model=ProposalSetResponse, status_code=201)
     def proposal_set_post(
         payload: ProposalSetCreate,
         session: SessionDependency,
     ) -> ProposalSetResponse:
-        return create_proposal_set(session, payload, provider)
+        return create_proposal_set(
+            session,
+            payload,
+            provider,
+            market_research_cache_seconds=resolved.market_research_cache_seconds,
+        )
+
+    @app.get("/v1/market-research/latest", response_model=MarketResearchStatusResponse)
+    def market_research_latest_get(
+        session: SessionDependency,
+    ) -> MarketResearchStatusResponse:
+        return get_latest_market_research(session)
 
     @app.get("/v1/proposal-sets/{proposal_set_id}", response_model=ProposalSetResponse)
     def proposal_set_get(

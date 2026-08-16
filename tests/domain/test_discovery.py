@@ -39,7 +39,7 @@ def candidate(
     )
 
 
-def test_five_year_balanced_policy_selects_liquid_near_maturity_ofz_and_index_fund() -> None:
+def test_five_year_balanced_policy_selects_best_maturity_fit_and_index_fund() -> None:
     candidates = (
         candidate(
             "OFZ-NEAR",
@@ -69,12 +69,12 @@ def test_five_year_balanced_policy_selects_liquid_near_maturity_ofz_and_index_fu
 
     assert selection.policy_version == DISCOVERY_POLICY_VERSION
     assert [(item.candidate.asset_id, item.target_weight) for item in selection.items] == [
-        ("OFZ-LIQUID", Decimal("0.60000000")),
+        ("OFZ-NEAR", Decimal("0.60000000")),
         ("FUND-B", Decimal("0.40000000")),
     ]
     assert "погаш" in selection.items[0].rationale.lower()
     assert "ликвид" in selection.items[1].rationale.lower()
-    assert [item.candidate.asset_id for item in selection.rejected] == ["OFZ-NEAR", "FUND-A"]
+    assert [item.candidate.asset_id for item in selection.rejected] == ["OFZ-LIQUID", "FUND-A"]
     assert all("ranking" in item.reason for item in selection.rejected)
 
 

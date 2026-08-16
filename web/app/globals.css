@@ -352,3 +352,22 @@ input:focus, select:focus, textarea:focus { border-color: var(--green); box-shad
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+.search-trace {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}
+
+.search-trace > div { display: grid; gap: 4px; }
+.search-trace > div:last-child { text-align: right; }
+.search-trace i { color: var(--accent); font-size: .72rem; font-style: normal; font-weight: 800; letter-spacing: .08em; }
+.search-trace span, .search-trace small, .research-unknown { color: var(--muted); }
+
+@media (max-width: 640px) {
+  .search-trace { display: grid; }
+  .search-trace > div:last-child { text-align: left; }
+}

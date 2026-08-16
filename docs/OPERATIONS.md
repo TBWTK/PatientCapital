@@ -32,6 +32,9 @@ example предназначено для запуска Python с host; Compose
 GigaChat fields не включают runtime mode и используются только при явно запущенном future re-eval.
 `MOEX_ISS_BASE_URL` allowlisted кодом и не может быть перенаправлен на произвольный host;
 `MOEX_TIMEOUT_SECONDS` и `MOEX_MAX_AGE_SECONDS` задают fail-closed transport/freshness границы.
+`MARKET_RESEARCH_CACHE_SECONDS` ограничивает reuse persisted universe (`14400`, максимум сутки), а
+`MARKET_RESEARCH_STOCK_PREFILTER_LIMIT` ограничивает per-security dividend fan-out. Увеличивать его
+без live latency/rate-limit evidence нельзя.
 
 Планируемая PC2 config должна иметь безопасные явные defaults: `MONITOR_RUNS_PER_DAY` принимает
 только `3` или `4`; расписание хранится с timezone, а missed/duplicate ticks идемпотентны. Upload
@@ -67,8 +70,12 @@ Product metrics/SLO/alerts не реализованы и обязательны
 Monitor запускается отдельным Compose service `monitor`: после общей migration entrypoint выполняет
 `patientcapital-monitor`, наблюдает слоты `06:00,10:00,14:00,18:00 Europe/Moscow` и пишет каждый
 outcome в `monitor_runs`. API позволяет отличить успешный no-op/alert от `provider_error`; worker
-не импортирует transaction/order command. Process state проверяется через `docker compose ps`,
-последний immutable outcome — через `/v1/monitor-runs` и logs. Внешний watchdog пока отсутствует.
+не импортирует transaction/order command. Перед portfolio alert evaluation тот же process создаёт
+или идемпотентно переиспользует market
+research snapshot для слота. Cold proposal также выполняет scan, если свежего snapshot нет; это
+ожидаемо более медленный путь, и его status/ошибка возвращаются пользователю.
+Process state проверяется через `docker compose ps`, последний immutable outcome — через
+`/v1/monitor-runs` и logs. Внешний watchdog пока отсутствует.
 Provider failure не делает существующий ledger недоступным, сохраняется отдельным error-run и не
 создаёт alert; состояние остаётся видимым через API/MCP.
 

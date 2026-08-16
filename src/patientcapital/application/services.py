@@ -22,6 +22,8 @@ from patientcapital.contracts import (
     DiscoveryCandidateResponse,
     DiscoveryRecommendationCreate,
     DividendResearchResponse,
+    MarketResearchStatusResponse,
+    MarketSearchResponse,
     PortfolioAssetResponse,
     PortfolioResponse,
     PriceCreate,
@@ -64,6 +66,12 @@ from patientcapital.domain.transaction_intake import (
     KnownAsset,
     ParsedTransaction,
     parse_transaction_text,
+)
+from patientcapital.market_intelligence.service import (
+    AcquiredMarketResearch,
+    acquire_market_research,
+    latest_market_research,
+    serialize_candidate,
 )
 from patientcapital.marketdata.errors import MarketDataError
 from patientcapital.marketdata.models import MarketCandidate, MarketDataProvider
@@ -855,7 +863,12 @@ def _recommendation_response(
 
 
 def _discovery_candidate_response(
-    item: MarketCandidate, *, target_weight: Decimal, rationale: str
+    item: MarketCandidate,
+    *,
+    target_weight: Decimal,
+    rationale: str,
+    score: Decimal,
+    rank_factors: dict[str, str],
 ) -> DiscoveryCandidateResponse:
     return DiscoveryCandidateResponse(
         asset_id=item.asset_id,
@@ -871,12 +884,18 @@ def _discovery_candidate_response(
         turnover=item.turnover,
         maturity_date=item.maturity_date,
         yield_percent=item.yield_percent,
+        next_coupon_date=item.next_coupon_date,
+        coupon_percent=item.coupon_percent,
+        coupon_value=item.coupon_value,
+        score=score,
+        rank_factors=rank_factors,
         source_url=item.source_url,
         classification_url=item.classification_url,
         research=(
             DividendResearchResponse(
                 schema_version=item.research.schema_version,
                 policy_version=item.research.policy_version,
+                scope=item.research.scope.value,
                 observed_at=item.research.observed_at,
                 max_age_seconds=int(item.research.max_age.total_seconds()),
                 reporting_period_end=item.research.reporting_period_end,
@@ -895,6 +914,13 @@ def _discovery_candidate_response(
                     )
                     for citation in item.research.citations
                 ],
+                annual_dividend_per_share=item.research.annual_dividend_per_share,
+                historical_dividend_yield_percent=(
+                    item.research.historical_dividend_yield_percent
+                ),
+                last_registry_close_date=item.research.last_registry_close_date,
+                listing_level=item.research.listing_level,
+                unknown_facts=list(item.research.unknown_facts),
             )
             if item.research is not None
             else None
@@ -903,7 +929,11 @@ def _discovery_candidate_response(
 
 
 def _rejected_discovery_candidate_response(
-    item: MarketCandidate, *, reason: str
+    item: MarketCandidate,
+    *,
+    reason: str,
+    score: Decimal | None,
+    rank_factors: dict[str, str],
 ) -> RejectedDiscoveryCandidateResponse:
     return RejectedDiscoveryCandidateResponse(
         asset_id=item.asset_id,
@@ -915,6 +945,46 @@ def _rejected_discovery_candidate_response(
         lot_cost=quantize_minor(item.unit_price * item.lot_size),
         price_as_of=item.price_as_of,
         source_url=item.source_url,
+        score=score,
+        rank_factors=rank_factors,
+    )
+
+
+def _market_search_response(acquired: AcquiredMarketResearch) -> MarketSearchResponse:
+    record = acquired.record
+    return MarketSearchResponse(
+        snapshot_id=record.id,
+        mode=acquired.mode,
+        scan_policy_version=record.scan_policy_version,
+        provider=record.provider,
+        observed_at=record.observed_at,
+        expires_at=record.expires_at,
+        universe_size=record.universe_size,
+        candidate_count=record.candidate_count,
+        enriched_count=record.enriched_count,
+        kind_counts={key: int(value) for key, value in record.kind_counts.items()},
+    )
+
+
+def get_latest_market_research(session: Session) -> MarketResearchStatusResponse:
+    record = latest_market_research(session)
+    if record is None:
+        raise ApplicationError(
+            404, "MARKET_RESEARCH_NOT_FOUND", "no market research snapshot is available"
+        )
+    return MarketResearchStatusResponse(
+        id=record.id,
+        status=record.status,  # type: ignore[arg-type]
+        scan_policy_version=record.scan_policy_version,
+        provider=record.provider,
+        error_code=record.error_code,
+        observed_at=record.observed_at,
+        expires_at=record.expires_at,
+        universe_size=record.universe_size,
+        candidate_count=record.candidate_count,
+        enriched_count=record.enriched_count,
+        kind_counts={key: int(value) for key, value in record.kind_counts.items()},
+        created_at=record.created_at,
     )
 
 
@@ -993,15 +1063,21 @@ def create_discovery_recommendation(
     session: Session,
     payload: DiscoveryRecommendationCreate,
     provider: MarketDataProvider,
+    *,
+    market_research_cache_seconds: int = 14_400,
 ) -> RecommendationResponse:
-    requested_at = datetime.now(UTC)
+    calculated_at = datetime.now(UTC)
     try:
-        discovered = provider.discover(calculated_at=requested_at)
+        acquired = acquire_market_research(
+            session,
+            provider,
+            observed_at=calculated_at,
+            cache_seconds=market_research_cache_seconds,
+        )
     except MarketDataError as error:
         status = 503 if error.code == "MOEX_UNAVAILABLE" else 502
         raise ApplicationError(status, error.code, error.detail) from error
-
-    calculated_at = datetime.now(UTC)
+    discovered = acquired.candidates
     discovered_by_id: dict[str, MarketCandidate] = {}
     for candidate in discovered:
         if candidate.asset_id in discovered_by_id:
@@ -1103,6 +1179,8 @@ def create_discovery_recommendation(
                         item.candidate,
                         target_weight=item.target_weight,
                         rationale=item.rationale,
+                        score=item.score,
+                        rank_factors=dict(item.rank_factors),
                     )
                     for item in selection.items
                 ],
@@ -1110,10 +1188,13 @@ def create_discovery_recommendation(
                     _rejected_discovery_candidate_response(
                         item.candidate,
                         reason=item.reason,
+                        score=item.score,
+                        rank_factors=dict(item.rank_factors or {}),
                     )
                     for item in selection.rejected
                 ],
                 "profile_version": profile.version,
+                "search": _market_search_response(acquired),
             }
         )
         input_snapshot: dict[str, object] = {
@@ -1125,47 +1206,15 @@ def create_discovery_recommendation(
             "risk_level": profile.risk_level,
             "fee_rate": str(profile.fee_rate),
             "minimum_fee": str(profile.minimum_fee),
+            "market_research": response.search.model_dump(mode="json") if response.search else None,
             "assets": [
                 {
+                    **serialize_candidate(item),
                     "asset_id": item.asset_id,
                     "kind": item.kind.value,
                     "target_weight": str(targets.get(item.asset_id, Decimal("0"))),
                     "quantity": quantities.get(item.asset_id, 0),
-                    "unit_price": str(item.unit_price),
-                    "lot_size": item.lot_size,
-                    "price_as_of": item.price_as_of.isoformat(),
                     "price_snapshot_id": str(price_records[item.asset_id].id),
-                    "source_url": item.source_url,
-                    "research": (
-                        {
-                            "schema_version": item.research.schema_version,
-                            "policy_version": item.research.policy_version,
-                            "observed_at": item.research.observed_at.isoformat(),
-                            "max_age_seconds": int(item.research.max_age.total_seconds()),
-                            "reporting_period_end": item.research.reporting_period_end.isoformat(),
-                            "profitable_years": item.research.profitable_years,
-                            "dividend_years": item.research.dividend_years,
-                            "payout_ratio_percent": str(item.research.payout_ratio_percent),
-                            "balance_sheet_status": item.research.balance_sheet_status.value,
-                            "governance_program_member": (
-                                item.research.governance_program_member
-                            ),
-                            "corporate_action_status": (
-                                item.research.corporate_action_status.value
-                            ),
-                            "summary": item.research.summary,
-                            "citations": [
-                                {
-                                    "kind": citation.kind.value,
-                                    "title": citation.title,
-                                    "url": citation.url,
-                                }
-                                for citation in item.research.citations
-                            ],
-                        }
-                        if item.research is not None
-                        else None
-                    ),
                 }
                 for item in universe
             ],
@@ -1348,6 +1397,8 @@ def create_proposal_set(
     session: Session,
     payload: ProposalSetCreate,
     provider: MarketDataProvider,
+    *,
+    market_research_cache_seconds: int = 14_400,
 ) -> ProposalSetResponse:
     definitions = tuple(sorted(admitted_strategies(), key=lambda item: -item.priority))
     if not 1 <= len(definitions) <= 3:
@@ -1363,6 +1414,7 @@ def create_proposal_set(
             session,
             DiscoveryRecommendationCreate(contribution=payload.contribution),
             provider,
+            market_research_cache_seconds=market_research_cache_seconds,
         )
         responses.append((definition, recommendation))
 

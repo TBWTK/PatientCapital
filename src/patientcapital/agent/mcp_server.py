@@ -15,6 +15,7 @@ from patientcapital.contracts import (
     AnalyticsOverviewResponse,
     AssetListResponse,
     DiscoveryRecommendationCreate,
+    MarketResearchStatusResponse,
     MonitorAlertListResponse,
     MonitorRunListResponse,
     PortfolioResponse,
@@ -183,6 +184,18 @@ def build_mcp_server(
         return tools.list_monitor_runs()
 
     @server.tool(
+        name="get_latest_market_research",
+        title="Get latest market research status",
+        description=(
+            "Read the latest immutable market scan status, source, timestamp, expiry and coverage. "
+            "This does not recalculate a proposal or change portfolio state."
+        ),
+        annotations=READ_ONLY,
+    )
+    def get_latest_market_research_tool() -> MarketResearchStatusResponse:
+        return tools.get_latest_market_research()
+
+    @server.tool(
         name="acknowledge_alert",
         title="Acknowledge portfolio alert",
         description=(
@@ -314,6 +327,7 @@ def main() -> None:
             base_url=settings.moex_iss_base_url,
             timeout_seconds=settings.moex_timeout_seconds,
             max_age_seconds=settings.moex_max_age_seconds,
+            stock_prefilter_limit=settings.market_research_stock_prefilter_limit,
         )
         build_mcp_server(database, provider).run(transport="stdio")
     finally:

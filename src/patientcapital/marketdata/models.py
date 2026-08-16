@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from patientcapital.domain.errors import InvalidAllocationInput
 from patientcapital.domain.money import validate_currency
@@ -45,6 +45,9 @@ class MarketCandidate:
     clean_price_percent: Decimal | None = None
     face_value: Decimal | None = None
     accrued_interest: Decimal | None = None
+    next_coupon_date: date | None = None
+    coupon_percent: Decimal | None = None
+    coupon_value: Decimal | None = None
     research: DividendResearchEvidence | None = None
 
     def __post_init__(self) -> None:
@@ -82,6 +85,8 @@ class MarketCandidate:
             ("clean price", self.clean_price_percent),
             ("face value", self.face_value),
             ("accrued interest", self.accrued_interest),
+            ("coupon percent", self.coupon_percent),
+            ("coupon value", self.coupon_value),
         )
         for name, value in optional_decimals:
             if value is not None:
@@ -111,7 +116,32 @@ class MarketCandidate:
         return self.unit_price * self.lot_size
 
 
+@dataclass(frozen=True, slots=True)
+class MarketScan:
+    policy_version: str
+    observed_at: datetime
+    candidates: tuple[MarketCandidate, ...]
+    universe_size: int
+    kind_counts: dict[str, int]
+    enriched_count: int
+
+    def __post_init__(self) -> None:
+        if not self.policy_version.strip():
+            raise InvalidAllocationInput("INVALID_MARKET_SCAN", "scan policy version is required")
+        if self.observed_at.tzinfo is None or self.observed_at.utcoffset() is None:
+            raise InvalidAllocationInput("INVALID_MARKET_SCAN", "scan time must be timezone-aware")
+        if self.universe_size < len(self.candidates) or self.enriched_count < 0:
+            raise InvalidAllocationInput("INVALID_MARKET_SCAN", "scan coverage counts are invalid")
+        if any(value < 0 for value in self.kind_counts.values()):
+            raise InvalidAllocationInput("INVALID_MARKET_SCAN", "scan kind counts are invalid")
+
+
 class MarketDataProvider(Protocol):
     name: str
 
     def discover(self, *, calculated_at: datetime) -> tuple[MarketCandidate, ...]: ...
+
+
+@runtime_checkable
+class MarketScanProvider(MarketDataProvider, Protocol):
+    def scan(self, *, calculated_at: datetime) -> MarketScan: ...

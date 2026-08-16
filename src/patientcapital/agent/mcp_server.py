@@ -11,6 +11,7 @@ from mcp.types import ToolAnnotations
 from patientcapital.agent.adapter import AgentTools
 from patientcapital.config import Settings
 from patientcapital.contracts import (
+    AnalyticsOverviewResponse,
     AssetListResponse,
     DiscoveryRecommendationCreate,
     PortfolioResponse,
@@ -141,6 +142,19 @@ def build_mcp_server(
     )
     def get_portfolio_tool() -> PortfolioResponse:
         return tools.get_portfolio()
+
+    @server.tool(
+        name="get_analytics_overview",
+        title="Get explainable portfolio analytics",
+        description=(
+            "Read server-derived market value, cost basis, realized/unrealized result, price "
+            "freshness and recent activity. Unsupported contribution and income facts remain "
+            "explicitly not_configured; return all values verbatim."
+        ),
+        annotations=READ_ONLY,
+    )
+    def get_analytics_overview_tool() -> AnalyticsOverviewResponse:
+        return tools.get_analytics_overview()
 
     @server.tool(
         name="propose_contribution",

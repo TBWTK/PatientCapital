@@ -194,6 +194,50 @@ class PortfolioResponse(ContractModel):
     assets: list[PortfolioAssetResponse]
 
 
+class AnalyticsMoneyMetricResponse(ContractModel):
+    status: Literal["available", "unknown", "not_configured"]
+    value: Decimal | None = None
+    reason: str | None = None
+
+    @model_validator(mode="after")
+    def validate_metric_state(self) -> "AnalyticsMoneyMetricResponse":
+        if self.status == "available" and self.value is None:
+            raise ValueError("available analytics metric requires a value")
+        if self.status != "available" and (self.value is not None or self.reason is None):
+            raise ValueError("unavailable analytics metric requires only a reason")
+        return self
+
+
+class PriceFreshnessAssetResponse(ContractModel):
+    asset_id: str
+    status: Literal["fresh", "stale"]
+    as_of: datetime
+    max_age_seconds: int
+    source: str
+
+
+class PriceFreshnessResponse(ContractModel):
+    status: Literal["fresh", "stale", "unknown"]
+    oldest_as_of: datetime | None
+    reason: str | None
+    assets: list[PriceFreshnessAssetResponse]
+
+
+class AnalyticsOverviewResponse(ContractModel):
+    currency: str
+    calculated_at: datetime
+    algorithm_version: str
+    market_value: AnalyticsMoneyMetricResponse
+    cost_basis: AnalyticsMoneyMetricResponse
+    net_contributions: AnalyticsMoneyMetricResponse
+    realized_result: AnalyticsMoneyMetricResponse
+    unrealized_result: AnalyticsMoneyMetricResponse
+    income: AnalyticsMoneyMetricResponse
+    price_freshness: PriceFreshnessResponse
+    allocation: list[PortfolioAssetResponse]
+    recent_activity: list[TransactionResponse]
+
+
 class RecommendationCreate(ContractModel):
     contribution: Decimal = Field(ge=0, decimal_places=2)
 

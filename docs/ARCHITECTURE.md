@@ -87,6 +87,7 @@ evidence; transaction intake создаёт подтверждаемый draft; 
 | `GET` | `/v1/transaction-drafts/{id}` | сохранённые fields, unknowns/conflicts, confidence и decision |
 | `POST` | `/v1/transaction-drafts/{id}/decisions` | explicit confirm/reject; только confirm атомарно создаёт один transaction |
 | `GET` | `/v1/portfolio` | derived quantities, cost basis, value, P&L, allocation/drift |
+| `GET` | `/v1/analytics/overview` | server-derived metrics/status, price freshness и recent activity |
 | `POST/GET` | `/v1/recommendations[/{id}]` | calculate/store or retrieve immutable domain run |
 | `POST` | `/v1/discovery/recommendations` | fetch/validate MOEX candidates, apply policy and persist deterministic proposal |
 | `POST/GET` | `/v1/proposal-sets[/{id}]` | create/retrieve immutable `1..3` admitted strategy refs; ledger не меняется |
@@ -105,7 +106,7 @@ implementation, но capability boundaries фиксированы:
 | Proposal set *(implemented)* | `POST/GET /v1/proposal-sets[/{id}]` | сохраняет amount/profile version и `1..3` run refs; ledger не меняется |
 | Transaction draft *(implemented)* | `POST text/image/manual`, `GET` by id | сохраняет extraction, resolver evidence, confidence/unknowns; transaction не создаёт |
 | Draft decision *(implemented)* | `POST /{id}/decisions` с expected version | confirm принимает полный exact payload и единственный вызывает idempotent ledger command |
-| Analytics overview | read current derived view | только server-derived cashflow/result/income/drift/freshness; unsupported facts explicit |
+| Analytics overview *(implemented)* | `GET /v1/analytics/overview` | server-derived value/cost/realized/unrealized/drift/freshness/activity; unsupported cashflow/income explicit |
 | Alerts | list/acknowledge | immutable monitor evidence и user acknowledgement; trade side effects отсутствуют |
 
 Transport для image — bounded multipart upload. JPEG/PNG проверяются по MIME, magic bytes, размеру

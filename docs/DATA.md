@@ -20,7 +20,7 @@ updated: 2026-08-16
 | `transaction_draft_decisions` | immutable explicit confirm/reject; optional exact transaction link | draft-decision service | UUID + unique draft id |
 | `recommendation_runs` | immutable input/output snapshots, amount, totals, reason и algorithm evidence | recommendation service | UUID |
 | `proposal_sets` | amount/profile version, ordered strategy metadata и refs на `1..3` runs | proposal application service | UUID |
-| portfolio response | quantity, cost/value/P&L, allocation и drift | derived application query | не хранится отдельной таблицей |
+| portfolio / analytics response | quantity, cost/value, realized/unrealized result, allocation/drift, freshness/activity и metric status | derived application query `analytics-ledger-v1` | не хранится отдельной таблицей |
 | GigaChat admission report | model/prompt/corpus hashes, metrics, latency/usage и case evidence | file `reports/gigachat-admission-v1.json` | report/corpus version; не DB entity |
 
 ### PC2 authorities
@@ -49,6 +49,12 @@ migration/API decision нельзя.
 Он неотрицателен, хранится отдельно от clean `unit_price` и участвует в BUY cost basis один раз.
 Additive migration заполняет старые rows значением `0.00`; отсутствие поля в legacy API payload
 также означает явный backward-compatible `0.00`, а не неизвестный bond fact.
+
+`analytics-ledger-v1` выводит market value, remaining average cost basis и unrealized result из той
+же portfolio projection. При SELL realized result равен clean proceeds + НКД − fee − снятая
+average cost basis; округление использует minor units после каждого события. Текущий ledger не имеет
+`DEPOSIT/WITHDRAWAL/COUPON/DIVIDEND`, поэтому net contributions и income возвращаются со статусом
+`not_configured` и `null`, а не с синтетическим нулём.
 
 В MVP delete API отсутствует. Для будущего публичного режима retention и право на удаление являются
 отдельным requirement, а не silent cascade. Backup включает named PostgreSQL volume через logical

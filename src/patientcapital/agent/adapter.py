@@ -17,6 +17,7 @@ from patientcapital.application.services import (
     create_transaction,
     create_transaction_draft_from_text,
     decide_transaction_draft,
+    get_analytics_overview,
     get_portfolio,
     get_profile,
     get_proposal_set,
@@ -25,6 +26,7 @@ from patientcapital.application.services import (
     list_assets,
 )
 from patientcapital.contracts import (
+    AnalyticsOverviewResponse,
     AssetListResponse,
     DiscoveryRecommendationCreate,
     ErrorDetail,
@@ -87,6 +89,9 @@ class AgentTools:
 
     def get_portfolio(self) -> PortfolioResponse:
         return self._call(get_portfolio)
+
+    def get_analytics_overview(self) -> AnalyticsOverviewResponse:
+        return self._call(get_analytics_overview)
 
     def propose_contribution(self, contribution: RecommendationCreate) -> RecommendationResponse:
         return self._call(lambda session: create_recommendation(session, contribution))

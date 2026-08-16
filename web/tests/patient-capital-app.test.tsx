@@ -56,6 +56,21 @@ const transactionDraft = (
   } : null,
 });
 
+const analyticsOverview = (marketValue = "0.00", costBasis = "0.00", unrealized = "0.00") => ({
+  currency: "RUB",
+  calculated_at: "2026-08-16T00:00:00Z",
+  algorithm_version: "analytics-ledger-v1",
+  market_value: { status: "available", value: marketValue, reason: null },
+  cost_basis: { status: "available", value: costBasis, reason: null },
+  net_contributions: { status: "not_configured", value: null, reason: "DEPOSIT/WITHDRAWAL events are not configured in the ledger" },
+  realized_result: { status: "available", value: "0.00", reason: null },
+  unrealized_result: { status: "available", value: unrealized, reason: null },
+  income: { status: "not_configured", value: null, reason: "COUPON/DIVIDEND events are not configured in the ledger" },
+  price_freshness: { status: "unknown", oldest_as_of: null, reason: "portfolio has no priced assets", assets: [] },
+  allocation: [] as Array<Record<string, unknown>>,
+  recent_activity: [] as Array<Record<string, unknown>>,
+});
+
 afterEach(() => vi.restoreAllMocks());
 
 describe("PatientCapitalApp", () => {
@@ -78,10 +93,26 @@ describe("PatientCapitalApp", () => {
   });
 
   it("renders backend portfolio analytics without recalculating them", async () => {
+    const overview = analyticsOverview("125000.00", "120000.00", "5000.00");
+    overview.recent_activity = [{
+      id: "00000000-0000-0000-0000-000000000030",
+      idempotency_key: "overview-buy-aaa",
+      asset_id: "AAA",
+      side: "BUY",
+      quantity: 3,
+      unit_price: "101.25",
+      accrued_interest_total: "2.75",
+      fee: "1.00",
+      currency: "RUB",
+      occurred_at: "2026-08-15T09:00:00Z",
+      note: null,
+      created_at: "2026-08-15T09:00:01Z",
+    }];
     vi.stubGlobal("fetch", vi.fn((input: string | URL | Request) => {
       const path = String(input);
       if (path.endsWith("/v1/profile")) return json({ version: 2, base_currency: "RUB", investment_horizon_years: 15, risk_level: "balanced", cash_buffer: "10000.00", broker_name: "Demo Broker", fee_rate: "0.0005", minimum_fee: "1.00", created_at: "2026-08-15T00:00:00Z" });
       if (path.endsWith("/v1/assets")) return json({ assets: [] });
+      if (path.endsWith("/v1/analytics/overview")) return json(overview);
       return json({ currency: "RUB", total_market_value: "125000.00", total_cost_basis: "120000.00", total_unrealized_pnl: "5000.00", assets: [] });
     }));
 
@@ -89,6 +120,9 @@ describe("PatientCapitalApp", () => {
     await waitFor(() => expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("125"));
     expect(screen.getByText((_, node) => node?.classList.contains("delta") === true && node.textContent?.includes("нереализованного результата") === true)).toBeTruthy();
     expect(screen.getByText("Demo Broker")).toBeTruthy();
+    expect(screen.getAllByText("Не настроено")).toHaveLength(2);
+    expect(screen.getByText("Покупка · AAA")).toBeTruthy();
+    expect(screen.getByText("Комиссия 1,00 ₽")).toBeTruthy();
   });
 
   it("renders one recommended strategy card and progressively discloses exact evidence", async () => {
@@ -97,6 +131,7 @@ describe("PatientCapitalApp", () => {
       if (path.endsWith("/v1/profile")) return json({ version: 3, base_currency: "RUB", investment_horizon_years: 5, risk_level: "balanced", cash_buffer: "0.00", broker_name: "Demo Broker", fee_rate: "0.001", minimum_fee: "1.00", created_at: "2026-08-15T00:00:00Z" });
       if (path.endsWith("/v1/assets")) return json({ assets: [] });
       if (path.endsWith("/v1/portfolio")) return json({ currency: "RUB", total_market_value: "0.00", total_cost_basis: "0.00", total_unrealized_pnl: "0.00", assets: [] });
+      if (path.endsWith("/v1/analytics/overview")) return json(analyticsOverview());
       if (path.endsWith("/v1/proposal-sets") && init?.method === "POST") return json({
         id: "00000000-0000-0000-0000-000000000010",
         contribution: "8000.00",
@@ -198,6 +233,7 @@ describe("PatientCapitalApp", () => {
         { asset_id: "SU26226RMFS9", version: 1, name: "ОФЗ 26226", currency: "RUB", lot_size: 1, target_weight: "0.00000000", is_active: true, created_at: "2026-08-15T22:04:48Z" },
       ] });
       if (path.endsWith("/v1/portfolio")) return json({ currency: "RUB", total_market_value: "0.00", total_cost_basis: "0.00", total_unrealized_pnl: "0.00", assets: [] });
+      if (path.endsWith("/v1/analytics/overview")) return json(analyticsOverview());
       if (path.endsWith("/v1/transaction-drafts/manual") && init?.method === "POST") return json(transactionDraft("manual"), 201);
       if (path.endsWith("/v1/transaction-drafts/00000000-0000-0000-0000-000000000020/decisions") && init?.method === "POST") return json(transactionDraft("manual", "confirmed"), 201);
       return json({ error: { code: "UNEXPECTED", message: path } }, 500);
@@ -263,6 +299,7 @@ describe("PatientCapitalApp", () => {
       if (path.endsWith("/v1/profile")) return json({ version: 4, base_currency: "RUB", investment_horizon_years: 5, risk_level: "growth", cash_buffer: "0.00", broker_name: "Т-Инвестиции", fee_rate: "0.0005", minimum_fee: "0.00", created_at: "2026-08-15T22:03:40Z" });
       if (path.endsWith("/v1/assets")) return json({ assets: [{ asset_id: "SU26226RMFS9", version: 1, name: "ОФЗ 26226", currency: "RUB", lot_size: 1, target_weight: "1.00000000", is_active: true, created_at: "2026-08-15T22:04:48Z" }] });
       if (path.endsWith("/v1/portfolio")) return json({ currency: "RUB", total_market_value: "0.00", total_cost_basis: "0.00", total_unrealized_pnl: "0.00", assets: [] });
+      if (path.endsWith("/v1/analytics/overview")) return json(analyticsOverview());
       if (path.endsWith("/v1/transaction-drafts/text") && init?.method === "POST") return json(incomplete, 201);
       return json({ error: { code: "UNEXPECTED", message: path } }, 500);
     });
@@ -288,6 +325,7 @@ describe("PatientCapitalApp", () => {
       if (path.endsWith("/v1/profile")) return json({ version: 4, base_currency: "RUB", investment_horizon_years: 5, risk_level: "growth", cash_buffer: "0.00", broker_name: "Т-Инвестиции", fee_rate: "0.0005", minimum_fee: "0.00", created_at: "2026-08-15T22:03:40Z" });
       if (path.endsWith("/v1/assets")) return json({ assets: [{ asset_id: "SU26226RMFS9", version: 1, name: "ОФЗ 26226", currency: "RUB", lot_size: 1, target_weight: "1.00000000", is_active: true, created_at: "2026-08-15T22:04:48Z" }] });
       if (path.endsWith("/v1/portfolio")) return json({ currency: "RUB", total_market_value: "0.00", total_cost_basis: "0.00", total_unrealized_pnl: "0.00", assets: [] });
+      if (path.endsWith("/v1/analytics/overview")) return json(analyticsOverview());
       if (path.endsWith("/v1/transaction-drafts/image") && init?.method === "POST") return json(transactionDraft("image"), 201);
       return json({ error: { code: "UNEXPECTED", message: path } }, 500);
     });

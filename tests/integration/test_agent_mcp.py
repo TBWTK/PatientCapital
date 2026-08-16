@@ -41,6 +41,7 @@ def test_mcp_discovery_is_allowlisted_typed_and_permission_annotated() -> None:
 
     assert set(by_name) == {
         "get_profile",
+        "get_analytics_overview",
         "discover_contribution",
         "list_assets",
         "get_portfolio",
@@ -56,6 +57,8 @@ def test_mcp_discovery_is_allowlisted_typed_and_permission_annotated() -> None:
     assert by_name["get_portfolio"].annotations is not None
     assert by_name["get_portfolio"].annotations.read_only_hint is True
     assert by_name["get_portfolio"].annotations.open_world_hint is False
+    assert by_name["get_analytics_overview"].annotations is not None
+    assert by_name["get_analytics_overview"].annotations.read_only_hint is True
     assert by_name["propose_contribution"].annotations is not None
     assert by_name["propose_contribution"].annotations.read_only_hint is False
     assert by_name["propose_contribution"].annotations.idempotent_hint is False
@@ -93,6 +96,7 @@ def test_real_stdio_entrypoint_negotiates_and_lists_tools() -> None:
     assert {tool.name for tool in discovered.tools} >= {
         "discover_contribution",
         "get_portfolio",
+        "get_analytics_overview",
         "propose_strategy_set",
         "propose_contribution",
         "create_transaction_draft",
@@ -221,14 +225,21 @@ def test_mcp_proposal_is_the_same_immutable_run_retrieved_by_http(
 
     async def propose(
         mcp_client: Client,
-    ) -> tuple[CallToolResult, CallToolResult, CallToolResult, CallToolResult]:
+    ) -> tuple[
+        CallToolResult,
+        CallToolResult,
+        CallToolResult,
+        CallToolResult,
+        CallToolResult,
+    ]:
         profile = await mcp_client.call_tool("get_profile", {})
         assets = await mcp_client.call_tool("list_assets", {})
         portfolio = await mcp_client.call_tool("get_portfolio", {})
+        analytics = await mcp_client.call_tool("get_analytics_overview", {})
         proposal = await mcp_client.call_tool("propose_contribution", {"contribution": "10000.00"})
-        return profile, assets, portfolio, proposal
+        return profile, assets, portfolio, analytics, proposal
 
-    profile_result, assets_result, portfolio_result, result = _run(propose)
+    profile_result, assets_result, portfolio_result, analytics_result, result = _run(propose)
     assert profile_result.is_error is False
     assert cast(dict[str, Any], profile_result.structured_content)["version"] == 1
     assert assets_result.is_error is False
@@ -236,6 +247,16 @@ def test_mcp_proposal_is_the_same_immutable_run_retrieved_by_http(
     assert portfolio_result.is_error is False
     portfolio_output = cast(dict[str, Any], portfolio_result.structured_content)
     assert portfolio_output["total_market_value"] == "3000.00"
+    assert analytics_result.is_error is False
+    analytics_output = cast(dict[str, Any], analytics_result.structured_content)
+    assert analytics_output["market_value"]["value"] == "3000.00"
+    assert analytics_output["net_contributions"]["status"] == "not_configured"
+    analytics_http = client.get("/v1/analytics/overview")
+    assert analytics_http.status_code == 200
+    analytics_http_output = analytics_http.json()
+    analytics_http_output.pop("calculated_at")
+    analytics_output.pop("calculated_at")
+    assert analytics_http_output == analytics_output
     assert result.is_error is False
     run = cast(dict[str, Any], result.structured_content)
     assert run["gross"] == "8900.00"

@@ -38,7 +38,8 @@ amount-only discovery рублёвых ОФЗ и фондов широкого �
 immutable recommendation runs, web и Codex tools.
 
 **Assistant-first MVP v2** реализуется по проверяемым checkpoint; product shell/proposal sets и
-transaction assistant уже готовы, analytics, research universe и monitoring остаются в работе:
+transaction assistant и explainable analytics уже готовы; research universe и monitoring остаются
+в работе:
 
 1. `amount → proposal set`: одна рекомендуемая и до двух альтернативных стратегических карточек;
    неподдерживаемые варианты не генерируются для количества.

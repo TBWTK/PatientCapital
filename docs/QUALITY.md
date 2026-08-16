@@ -51,7 +51,7 @@ updated: 2026-08-16
   proposal prefill, extractor retry и duplicate click не создают покупку.
 - [x] `Upload safety`: invalid MIME/magic bytes, oversized dimensions/file и OCR timeout
   отклоняются; filename не используется, generated private temp artifacts удаляются до ответа.
-- [ ] `Explainable overview`: cash-flow fixtures различают contribution, cost basis, realized/
+- [x] `Explainable overview`: cash-flow fixtures различают contribution, cost basis, realized/
   unrealized result и income; unsupported goal/income fact отображается explicit unknown.
 - [ ] `Dividend policy admission`: fixed issuer/corporate-action/liquidity/dividend fixtures дают
   reproducible eligibility/ranking; missing fundamentals и unsustainable/ambiguous dividend block.
@@ -158,7 +158,7 @@ git diff --check
 | PC-GIT-02 GitHub publication | external release | user-authorized GitHub remote | push + `git ls-remote --symref origin HEAD` + SHA comparison | `origin/main` exists, is GitHub HEAD, and equals clean local `main` | passing |
 | PC2-REQ-01 strategy proposal set | capability + API/component/a11y | current growth profile + fixed/live MOEX evidence | proposal-set/API/MCP/migration/web suites + responsive browser | `1..3` admitted cards, one recommended, exact v1 numeric parity | passing |
 | PC2-REQ-02 transaction assistant | parser corpus + contract/integration/E2E | Russian text, supplied T-Invest screenshot, ambiguous/invalid fixtures | unit/API/MCP/migration/web suites + real Docker OCR/browser | Draft only; full confirmation creates exactly one ledger event | passing |
-| PC2-REQ-03 explainable analytics | ledger/cashflow capability + component/browser | contribution, trade, coupon/dividend, stale/unknown fixtures | planned analytics suites | Every displayed metric has one server authority or explicit unknown | planned |
+| PC2-REQ-03 explainable analytics | ledger/cashflow capability + component/browser | BUY→SELL, unsupported cashflow/income, stale-price fixtures | analytics API/MCP/component/a11y/browser suites | Every displayed metric has one server authority or explicit unknown | passing |
 | PC2-REQ-04 dividend research policy | source/policy/capability + controlled live read | versioned issuer/dividend/liquidity/corporate-action corpus | planned research/policy suites | Only typed fresh eligible facts reach deterministic calculation | planned |
 | PC2-REQ-05 scheduled monitoring | fake-clock/property/resilience/Docker | trigger/no-trigger/duplicate/outage fixtures | planned monitor/worker suites | `3..4/day` observations, idempotent alerts, zero transaction/order effects | planned |
 | PC2-RISK-01 upload/privacy | security/boundary/retention | malformed MIME/magic, oversized bytes/pixels, timeout, real screenshot | image unit suite + Docker `/tmp` inspection | Bounded local parse, private immediate cleanup, no external send | passing |
@@ -180,6 +180,6 @@ idempotency consistency; clean-volume Docker operational E2E; controlled live pr
 - parallel-write stress — single-user scope и DB locks проверены функционально, не под нагрузкой;
 - destructive restore rehearsal — documented, но RTO/RPO остаются unknown;
 - 10k-ledger/100-asset performance и saturation — expansion gate, а не доказанный MVP property.
-- PC2-REQ-01/02 имеют implementation evidence; остальные PC2 строки остаются planned до собственных
+- PC2-REQ-01/02/03 имеют implementation evidence; остальные PC2 строки остаются planned до собственных
   checkpoint gates.
 <!-- immune-project-engineering:quality:end -->

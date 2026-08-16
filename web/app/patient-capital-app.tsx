@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   ApiError,
+  type AnalyticsOverview,
   type Asset,
   type Portfolio,
   type Profile,
@@ -98,18 +99,39 @@ function EmptyState({ onStart }: { onStart: () => void }) {
 
 function Overview({
   portfolio,
+  analytics,
   profile,
   onContribution,
   onSettings,
 }: {
   portfolio: Portfolio | null;
+  analytics: AnalyticsOverview | null;
   profile: Profile | null;
   onContribution: () => void;
   onSettings: () => void;
 }) {
   if (!profile || !portfolio) return <EmptyState onStart={onSettings} />;
 
-  const pnl = Number(portfolio.total_unrealized_pnl);
+  const pnlValue = analytics?.unrealized_result.status === "available"
+    ? analytics.unrealized_result.value
+    : portfolio.total_unrealized_pnl;
+  const pnl = Number(pnlValue);
+  const allocation = analytics?.allocation ?? portfolio.assets;
+  const unavailableReason: Record<string, string> = {
+    "DEPOSIT/WITHDRAWAL events are not configured in the ledger": "Журнал пока не различает пополнения и выводы денег",
+    "COUPON/DIVIDEND events are not configured in the ledger": "Купоны и дивиденды пока не записываются отдельными событиями",
+  };
+  const metric = (
+    title: string,
+    item: AnalyticsOverview["market_value"] | undefined,
+    availableHint: string,
+  ) => (
+    <article>
+      <span>{title}</span>
+      <strong>{item?.status === "available" && item.value != null ? money(item.value, portfolio.currency) : item?.status === "not_configured" ? "Не настроено" : "Неизвестно"}</strong>
+      <small>{item?.status === "available" ? availableHint : unavailableReason[item?.reason ?? ""] ?? item?.reason ?? "Источник данных отсутствует"}</small>
+    </article>
+  );
   return (
     <div className="overview-stack">
       <section className="hero-panel">
@@ -131,20 +153,15 @@ function Overview({
       </section>
 
       <section className="metric-grid" aria-label="Сводные показатели">
+        {metric("Себестоимость", analytics?.cost_basis, "по подтверждённому журналу")}
+        {metric("Реализованный результат", analytics?.realized_result, "по закрытой части позиций")}
+        {metric("Нереализованный результат", analytics?.unrealized_result, "по последним сохранённым ценам")}
+        {metric("Чистые пополнения", analytics?.net_contributions, "отдельные денежные потоки")}
+        {metric("Купоны и дивиденды", analytics?.income, "подтверждённый инвестиционный доход")}
         <article>
-          <span>Вложено</span>
-          <strong>{money(portfolio.total_cost_basis, portfolio.currency)}</strong>
-          <small>по журналу операций</small>
-        </article>
-        <article>
-          <span>Горизонт</span>
-          <strong>{profile.investment_horizon_years} лет</strong>
-          <small>{profile.risk_level} · версия {profile.version}</small>
-        </article>
-        <article>
-          <span>Резерв</span>
-          <strong>{money(profile.cash_buffer, profile.base_currency)}</strong>
-          <small>не участвует в покупке</small>
+          <span>Свежесть цен</span>
+          <strong>{analytics?.price_freshness.status === "fresh" ? "Актуальны" : analytics?.price_freshness.status === "stale" ? "Есть устаревшие" : "Неизвестно"}</strong>
+          <small>{analytics?.price_freshness.oldest_as_of ? `старейшая: ${shortDateTime(analytics.price_freshness.oldest_as_of)}` : analytics?.price_freshness.reason ?? "нет ценовых данных"}</small>
         </article>
       </section>
 
@@ -154,9 +171,9 @@ function Overview({
             <p className="eyebrow">Структура</p>
             <h2>Портфель и отклонения</h2>
           </div>
-          <span className="as-of">По последним сохранённым ценам</span>
+          <span className="as-of">{analytics ? `Расчёт ${shortDateTime(analytics.calculated_at)} · ${analytics.algorithm_version}` : "По последним сохранённым ценам"}</span>
         </header>
-        {portfolio.assets.length === 0 ? (
+        {allocation.length === 0 ? (
           <div className="soft-empty">
             Сделок пока нет. Запишите первую покупку через «Ассистент».
           </div>
@@ -165,7 +182,7 @@ function Overview({
             <div className="asset-row asset-head" role="row">
               <span>Актив</span><span>Стоимость</span><span>Доля</span><span>Отклонение</span>
             </div>
-            {portfolio.assets.map((asset) => (
+            {allocation.map((asset) => (
               <div className="asset-row" role="row" key={asset.asset_id}>
                 <span className="asset-name">
                   <i>{asset.asset_id.slice(0, 2).toUpperCase()}</i>
@@ -182,6 +199,24 @@ function Overview({
                   <small>цель {percent(asset.target_weight)}</small>
                 </span>
               </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="activity-card">
+        <header className="section-heading">
+          <div><p className="eyebrow">Журнал</p><h2>Последние операции</h2></div>
+          <span>{analytics?.recent_activity.length ?? 0} из последних 10</span>
+        </header>
+        {!analytics || analytics.recent_activity.length === 0 ? <div className="soft-empty">Подтверждённых операций пока нет.</div> : (
+          <div className="activity-list">
+            {analytics.recent_activity.map((event) => (
+              <article key={event.id}>
+                <i className={event.side === "BUY" ? "buy" : "sell"}>{event.side === "BUY" ? "BUY" : "SELL"}</i>
+                <span><b>{event.side === "BUY" ? "Покупка" : "Продажа"} · {event.asset_id}</b><small>{shortDateTime(event.occurred_at)} · {event.quantity} шт. по {money(event.unit_price, event.currency)}</small></span>
+                <span><b>Комиссия {money(event.fee, event.currency)}</b><small>НКД {money(event.accrued_interest_total, event.currency)}</small></span>
+              </article>
             ))}
           </div>
         )}
@@ -693,16 +728,18 @@ export function PatientCapitalApp() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsOverview | null>(null);
   const [proposalSet, setProposalSet] = useState<ProposalSet | null>(null);
   const [loading, setLoading] = useState(true);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const refresh = async () => {
     setConnectionError(null);
-    const [profileResult, assetsResult, portfolioResult] = await Promise.allSettled([
+    const [profileResult, assetsResult, portfolioResult, analyticsResult] = await Promise.allSettled([
       request<Profile>("/v1/profile"),
       request<{ assets: Asset[] }>("/v1/assets"),
       request<Portfolio>("/v1/portfolio"),
+      request<AnalyticsOverview>("/v1/analytics/overview"),
     ]);
     if (profileResult.status === "fulfilled") setProfile(profileResult.value);
     else if (!(profileResult.reason instanceof ApiError && profileResult.reason.status === 404)) setConnectionError(errorText(profileResult.reason));
@@ -710,6 +747,8 @@ export function PatientCapitalApp() {
     else setConnectionError(errorText(assetsResult.reason));
     if (portfolioResult.status === "fulfilled") setPortfolio(portfolioResult.value);
     else if (!(portfolioResult.reason instanceof ApiError && [404, 422].includes(portfolioResult.reason.status))) setConnectionError(errorText(portfolioResult.reason));
+    if (analyticsResult.status === "fulfilled") setAnalytics(analyticsResult.value);
+    else if (!(analyticsResult.reason instanceof ApiError && [404, 422].includes(analyticsResult.reason.status))) setConnectionError(errorText(analyticsResult.reason));
     setLoading(false);
   };
 
@@ -734,7 +773,7 @@ export function PatientCapitalApp() {
           {connectionError && <div className="connection-banner"><b>Нет связи с API.</b> {connectionError}<button onClick={() => void refresh()}>Повторить</button></div>}
           {loading ? <div className="loading-state" role="status"><span />Загружаем ваш капитал…</div> : (
             <>
-              {view === "overview" && <Overview portfolio={portfolio} profile={profile} onContribution={() => setView("contribution")} onSettings={() => setView("settings")} />}
+              {view === "overview" && <Overview portfolio={portfolio} analytics={analytics} profile={profile} onContribution={() => setView("contribution")} onSettings={() => setView("settings")} />}
               {view === "contribution" && <Contribution currency={profile?.base_currency ?? "RUB"} result={proposalSet} onResult={setProposalSet} onSaved={refresh} onAssistant={() => setView("assistant")} />}
               {view === "assistant" && <Assistant assets={assets} onSaved={refresh} />}
               {view === "settings" && <Settings profile={profile} assets={assets} onRefresh={refresh} />}

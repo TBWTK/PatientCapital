@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 
 from patientcapital.application.errors import ApplicationError
 from patientcapital.contracts import (
+    AnalyticsMoneyMetricResponse,
+    AnalyticsOverviewResponse,
     AssetListResponse,
     AssetPut,
     AssetResponse,
@@ -22,6 +24,8 @@ from patientcapital.contracts import (
     PortfolioAssetResponse,
     PortfolioResponse,
     PriceCreate,
+    PriceFreshnessAssetResponse,
+    PriceFreshnessResponse,
     PriceResponse,
     ProfilePut,
     ProfileResponse,
@@ -643,8 +647,16 @@ def _latest_prices(session: Session, asset_ids: set[str]) -> dict[str, PriceReco
 def _ledger_state(
     events: list[TransactionRecord],
 ) -> tuple[dict[str, int], dict[str, Decimal]]:
+    quantities, cost_basis, _realized = _ledger_projection(events)
+    return quantities, cost_basis
+
+
+def _ledger_projection(
+    events: list[TransactionRecord],
+) -> tuple[dict[str, int], dict[str, Decimal], Decimal]:
     quantities: dict[str, int] = {}
     cost_basis: dict[str, Decimal] = {}
+    realized = Decimal("0.00")
     for event in events:
         quantity = quantities.get(event.asset_id, 0)
         cost = cost_basis.get(event.asset_id, Decimal("0.00"))
@@ -659,11 +671,18 @@ def _ledger_state(
                     f"negative historical position for {event.asset_id}",
                 )
             average_cost = cost / quantity
-            cost -= average_cost * event.quantity
+            removed_cost = average_cost * event.quantity
+            proceeds = (
+                event.unit_price * event.quantity
+                + event.accrued_interest_total
+                - event.fee
+            )
+            realized = quantize_minor(realized + proceeds - removed_cost)
+            cost -= removed_cost
             quantity -= event.quantity
         quantities[event.asset_id] = quantity
         cost_basis[event.asset_id] = quantize_minor(cost)
-    return quantities, cost_basis
+    return quantities, cost_basis, realized
 
 
 def get_portfolio(session: Session) -> PortfolioResponse:
@@ -717,6 +736,79 @@ def get_portfolio(session: Session) -> PortfolioResponse:
         total_cost_basis=quantize_minor(total_cost),
         total_unrealized_pnl=quantize_minor(total_market - total_cost),
         assets=response_assets,
+    )
+
+
+def _available_metric(value: Decimal) -> AnalyticsMoneyMetricResponse:
+    return AnalyticsMoneyMetricResponse(
+        status="available",
+        value=quantize_minor(value),
+        reason=None,
+    )
+
+
+def _not_configured_metric(reason: str) -> AnalyticsMoneyMetricResponse:
+    return AnalyticsMoneyMetricResponse(status="not_configured", value=None, reason=reason)
+
+
+def get_analytics_overview(session: Session) -> AnalyticsOverviewResponse:
+    portfolio = get_portfolio(session)
+    events = _transactions(session)
+    _quantities_by_asset, _costs_by_asset, realized = _ledger_projection(events)
+    prices = _latest_prices(session, {asset.asset_id for asset in portfolio.assets})
+    now = datetime.now(UTC)
+    freshness_assets: list[PriceFreshnessAssetResponse] = []
+    for asset in portfolio.assets:
+        price = prices.get(asset.asset_id)
+        if price is None:  # guarded by get_portfolio, kept explicit for invariant drift
+            raise ApplicationError(
+                500,
+                "ANALYTICS_PRICE_INVARIANT_BROKEN",
+                f"portfolio asset {asset.asset_id} has no price snapshot",
+            )
+        expires_at = price.as_of + timedelta(seconds=price.max_age_seconds)
+        freshness_assets.append(
+            PriceFreshnessAssetResponse(
+                asset_id=asset.asset_id,
+                status="fresh" if now <= expires_at else "stale",
+                as_of=price.as_of,
+                max_age_seconds=price.max_age_seconds,
+                source=price.source,
+            )
+        )
+    if not freshness_assets:
+        freshness = PriceFreshnessResponse(
+            status="unknown",
+            oldest_as_of=None,
+            reason="portfolio has no priced assets",
+            assets=[],
+        )
+    else:
+        has_stale = any(item.status == "stale" for item in freshness_assets)
+        freshness = PriceFreshnessResponse(
+            status="stale" if has_stale else "fresh",
+            oldest_as_of=min(item.as_of for item in freshness_assets),
+            reason="one or more portfolio prices are stale" if has_stale else None,
+            assets=freshness_assets,
+        )
+    recent = [_transaction_response(event) for event in reversed(events[-10:])]
+    return AnalyticsOverviewResponse(
+        currency=portfolio.currency,
+        calculated_at=now,
+        algorithm_version="analytics-ledger-v1",
+        market_value=_available_metric(portfolio.total_market_value),
+        cost_basis=_available_metric(portfolio.total_cost_basis),
+        net_contributions=_not_configured_metric(
+            "DEPOSIT/WITHDRAWAL events are not configured in the ledger"
+        ),
+        realized_result=_available_metric(realized),
+        unrealized_result=_available_metric(portfolio.total_unrealized_pnl),
+        income=_not_configured_metric(
+            "COUPON/DIVIDEND events are not configured in the ledger"
+        ),
+        price_freshness=freshness,
+        allocation=portfolio.assets,
+        recent_activity=recent,
     )
 
 

@@ -27,7 +27,7 @@ updated: 2026-08-16
   currency и timezone-aware occurred_at; неизвестность блокирует confirm.
 - [x] Proposal line никогда не превращается в transaction автоматически; advanced manual editor
   остаётся recovery fallback и использует тот же confirmation/validation contract.
-- [ ] Обзор объясняет капитал: market value, contributions/cost basis, realized/unrealized result,
+- [x] Обзор объясняет капитал: market value, contributions/cost basis, realized/unrealized result,
   income, allocation/drift, freshness и recent activity. Неподдерживаемая метрика показывается как
   `unknown/not configured`, а не рассчитывается правдоподобной заглушкой.
 - [ ] Новый asset class допускается только отдельной versioned research/selection policy и eval.
@@ -50,20 +50,26 @@ updated: 2026-08-16
   MCP используют один application contract.
 - Реальный supplied T-Invest JPEG допущен в Docker: local Tesseract точно извлёк ОФЗ 26226, 7,
   992.04, НКД 195.16, fee 3.47 и timezone-aware время; `/tmp` после ответа пуст.
+- `PC2-3 Analytics` завершён: `analytics-ledger-v1` возвращает typed metric status, market/cost,
+  realized/unrealized result, freshness, allocation и recent activity. Неподдерживаемые cashflow и
+  income остаются `not_configured`, не нулём.
 - Локальный portfolio содержит подтверждённую BUY `SU26226RMFS9`; его числовая evidence не должна
   измениться при migration v2.
-- Оставшийся product-gap: richer analytics, dividend research policy и recurring monitoring.
+- Оставшийся product-gap: dividend research policy и recurring monitoring.
 - PC2-1 evidence 16.08.2026: `145 passed`, branch coverage `94.23%`; Ruff/mypy/OpenAPI; web build,
   typecheck, lint, SSR, `4` component tests + axe; MCP/API/migration tests; healthy Compose; browser
   desktop `1440px` и mobile `390px` без horizontal overflow.
 - PC2-2 evidence 16.08.2026: `162 passed`; Ruff/mypy/OpenAPI; web build, typecheck, lint, SSR,
   `6` component tests + axe; `19` focused API/MCP/migration/config tests; healthy Compose; exact real
   OCR admission and browser incomplete-draft/disabled-confirm inspection.
+- PC2-3 evidence 16.08.2026: `164 passed`; exact BUY→SELL realized fixture, stale freshness,
+  API/MCP parity; web build/typecheck/lint/SSR/`6` component tests + axe; healthy Docker and browser
+  inspection of current portfolio analytics/recent BUY.
 
 ## Changed areas
 
-- Additive transaction draft/decision migration/model, deterministic Russian parser, bounded local
-  OCR, atomic confirmation service, HTTP/MCP/OpenAPI types, review UI, tests и operator contracts.
+- Server-owned `analytics-ledger-v1`, typed unavailable metrics/freshness/activity API+MCP,
+  generated web contract и expanded Overview without frontend financial formulas.
 
 ## Decisions made
 
@@ -76,8 +82,8 @@ updated: 2026-08-16
 
 ## Next exact step
 
-Начать `PC2-3 Analytics`: определить server-owned metric status contract (`available`, `unknown`,
-`not_configured`), добавить recent activity/freshness и расширить Overview без frontend-формул.
+Начать `PC2-4 Research universe`: зафиксировать dividend-stock evidence contract/policy corpus,
+использовать только официальные/первичные источники и допустить category отдельным eval gate.
 
 ## Blockers
 

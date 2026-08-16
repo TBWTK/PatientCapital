@@ -22,6 +22,7 @@ PUBLIC_PATHS = {
     "/v1/transaction-drafts/{draft_id}",
     "/v1/transaction-drafts/{draft_id}/decisions",
     "/v1/portfolio",
+    "/v1/analytics/overview",
     "/v1/recommendations",
     "/v1/recommendations/{run_id}",
     "/v1/discovery/recommendations",
@@ -31,9 +32,13 @@ PUBLIC_PATHS = {
 
 PUBLIC_SCHEMAS = {
     "AssetResponse",
+    "AnalyticsMoneyMetricResponse",
+    "AnalyticsOverviewResponse",
     "DiscoveryCandidateResponse",
     "PortfolioResponse",
     "PriceResponse",
+    "PriceFreshnessAssetResponse",
+    "PriceFreshnessResponse",
     "ProfileResponse",
     "RecommendationResponse",
     "RejectedDiscoveryCandidateResponse",

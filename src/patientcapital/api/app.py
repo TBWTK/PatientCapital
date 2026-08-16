@@ -24,6 +24,7 @@ from patientcapital.application.services import (
     create_transaction_draft_from_text,
     create_transaction_draft_manual,
     decide_transaction_draft,
+    get_analytics_overview,
     get_portfolio,
     get_profile,
     get_proposal_set,
@@ -35,6 +36,7 @@ from patientcapital.application.services import (
 )
 from patientcapital.config import Settings
 from patientcapital.contracts import (
+    AnalyticsOverviewResponse,
     AssetListResponse,
     AssetPut,
     AssetResponse,
@@ -241,6 +243,10 @@ def create_app(
     @app.get("/v1/portfolio", response_model=PortfolioResponse)
     def portfolio_get(session: SessionDependency) -> PortfolioResponse:
         return get_portfolio(session)
+
+    @app.get("/v1/analytics/overview", response_model=AnalyticsOverviewResponse)
+    def analytics_overview_get(session: SessionDependency) -> AnalyticsOverviewResponse:
+        return get_analytics_overview(session)
 
     @app.post("/v1/recommendations", response_model=RecommendationResponse, status_code=201)
     def recommendation_post(

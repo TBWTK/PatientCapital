@@ -169,3 +169,48 @@ class ProposalSetRecord(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class TransactionDraftRecord(Base):
+    __tablename__ = "transaction_drafts"
+    __table_args__ = (
+        CheckConstraint("version = 1"),
+        CheckConstraint("source_kind IN ('text', 'image', 'manual')"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    source_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_metadata: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    extractor_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    extracted_fields: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    unknown_fields: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    conflicts: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    field_confidence: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class TransactionDraftDecisionRecord(Base):
+    __tablename__ = "transaction_draft_decisions"
+    __table_args__ = (
+        UniqueConstraint("draft_id", name="uq_transaction_draft_decisions_draft_id"),
+        CheckConstraint("decision IN ('confirm', 'reject')"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    draft_id: Mapped[UUID] = mapped_column(
+        ForeignKey("transaction_drafts.id", ondelete="RESTRICT"), nullable=False
+    )
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    decision: Mapped[str] = mapped_column(String(16), nullable=False)
+    confirmed_payload: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
+    transaction_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("transactions.id", ondelete="RESTRICT"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

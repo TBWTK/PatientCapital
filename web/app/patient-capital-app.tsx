@@ -8,6 +8,7 @@ import {
   type Profile,
   type ProposalSet,
   type Recommendation,
+  type TransactionDraft,
   request,
 } from "./api";
 
@@ -21,10 +22,12 @@ const nav: { id: View; label: string; mark: string }[] = [
   { id: "settings", label: "Профиль", mark: "○" },
 ];
 
-const nowLocal = () => {
-  const now = new Date();
-  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-  return now.toISOString().slice(0, 16);
+const toLocalDateTimeInput = (value: string | null | undefined) => {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  parsed.setMinutes(parsed.getMinutes() - parsed.getTimezoneOffset());
+  return parsed.toISOString().slice(0, 16);
 };
 
 const errorText = (error: unknown) => {
@@ -366,55 +369,184 @@ function Contribution({
 }
 
 function Assistant({ assets, onSaved }: { assets: Asset[]; onSaved: () => Promise<void> }) {
-  const activeAssets = assets.filter((asset) => asset.is_active);
+  const knownAssets = assets;
+  const defaultAsset = knownAssets.find((asset) => asset.is_active) ?? knownAssets[0];
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({
-    asset_id: activeAssets[0]?.asset_id ?? "",
-    side: "BUY",
-    quantity: "1",
+  const [sourceText, setSourceText] = useState("");
+  const [draft, setDraft] = useState<TransactionDraft | null>(null);
+  const [review, setReview] = useState({
+    asset_id: "",
+    side: "",
+    quantity: "",
     unit_price: "",
-    accrued_interest_total: "0",
-    fee: "0",
-    currency: activeAssets[0]?.currency ?? "RUB",
-    occurred_at: nowLocal(),
+    accrued_interest_total: "",
+    fee: "",
+    currency: "",
+    occurred_at: "",
+    note: "",
+  });
+  const [manual, setManual] = useState({
+    asset_id: defaultAsset?.asset_id ?? "",
+    side: "BUY",
+    quantity: "",
+    unit_price: "",
+    accrued_interest_total: "",
+    fee: "",
+    currency: defaultAsset?.currency ?? "RUB",
+    occurred_at: "",
     note: "",
   });
 
-  const selectedAssetId = form.asset_id || activeAssets[0]?.asset_id || "";
-  const selectedCurrency = form.asset_id
-    ? form.currency
-    : activeAssets[0]?.currency ?? form.currency;
-
-  const updateAsset = (assetId: string) => {
-    const asset = activeAssets.find((item) => item.asset_id === assetId);
-    setForm((current) => ({ ...current, asset_id: assetId, currency: asset?.currency ?? current.currency }));
+  const openDraft = (next: TransactionDraft) => {
+    setDraft(next);
+    setReview({
+      asset_id: next.fields.asset_id ?? "",
+      side: next.fields.side ?? "",
+      quantity: next.fields.quantity?.toString() ?? "",
+      unit_price: next.fields.unit_price ?? "",
+      accrued_interest_total: next.fields.accrued_interest_total ?? "",
+      fee: next.fields.fee ?? "",
+      currency: next.fields.currency ?? "",
+      occurred_at: toLocalDateTimeInput(next.fields.occurred_at),
+      note: next.source_kind === "image" ? "Подтверждено по загруженному брокерскому чеку" : "",
+    });
+    setNotice(null);
   };
 
-  const submit = async (event: FormEvent) => {
+  const createTextDraft = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
     setNotice(null);
     try {
-      await request("/v1/transactions", {
+      openDraft(await request<TransactionDraft>("/v1/transaction-drafts/text", {
         method: "POST",
-        body: JSON.stringify({
-          ...form,
-          asset_id: selectedAssetId,
-          currency: selectedCurrency,
-          quantity: Number(form.quantity),
-          occurred_at: new Date(form.occurred_at).toISOString(),
-          idempotency_key: crypto.randomUUID(),
-          note: form.note || null,
-        }),
-      });
-      await onSaved();
-      setNotice({ kind: "success", text: "Операция записана в неизменяемый журнал" });
+        body: JSON.stringify({ text: sourceText }),
+      }));
     } catch (error) {
       setNotice({ kind: "error", text: errorText(error) });
     } finally {
       setBusy(false);
     }
+  };
+
+  const createImageDraft = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      openDraft(await request<TransactionDraft>("/v1/transaction-drafts/image", {
+        method: "POST",
+        body,
+      }));
+    } catch (error) {
+      setNotice({ kind: "error", text: errorText(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createManualDraft = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setNotice(null);
+    try {
+      openDraft(await request<TransactionDraft>("/v1/transaction-drafts/manual", {
+        method: "POST",
+        body: JSON.stringify({
+          ...manual,
+          quantity: Number(manual.quantity),
+          occurred_at: new Date(manual.occurred_at).toISOString(),
+          note: manual.note || null,
+        }),
+      }));
+    } catch (error) {
+      setNotice({ kind: "error", text: errorText(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmDraft = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!draft) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const confirmed = await request<TransactionDraft>(`/v1/transaction-drafts/${draft.id}/decisions`, {
+        method: "POST",
+        body: JSON.stringify({
+          expected_version: draft.version,
+          decision: "confirm",
+          transaction: {
+            idempotency_key: `transaction-draft-${draft.id}`,
+            asset_id: review.asset_id,
+            side: review.side,
+            quantity: Number(review.quantity),
+            unit_price: review.unit_price,
+            accrued_interest_total: review.accrued_interest_total,
+            fee: review.fee,
+            currency: review.currency,
+            occurred_at: new Date(review.occurred_at).toISOString(),
+            note: review.note || null,
+          },
+        }),
+      });
+      setDraft(confirmed);
+      await onSaved();
+      setNotice({ kind: "success", text: "Подтверждённая операция записана в неизменяемый журнал" });
+    } catch (error) {
+      setNotice({ kind: "error", text: errorText(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const rejectDraft = async () => {
+    if (!draft) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      const rejected = await request<TransactionDraft>(`/v1/transaction-drafts/${draft.id}/decisions`, {
+        method: "POST",
+        body: JSON.stringify({ expected_version: draft.version, decision: "reject", transaction: null }),
+      });
+      setDraft(rejected);
+      setNotice({ kind: "success", text: "Черновик отклонён. Журнал операций не изменён" });
+    } catch (error) {
+      setNotice({ kind: "error", text: errorText(error) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const chooseManualAsset = (assetId: string) => {
+    const asset = knownAssets.find((item) => item.asset_id === assetId);
+    setManual((current) => ({ ...current, asset_id: assetId, currency: asset?.currency ?? "" }));
+  };
+
+  const chooseReviewAsset = (assetId: string) => {
+    const asset = knownAssets.find((item) => item.asset_id === assetId);
+    setReview((current) => ({ ...current, asset_id: assetId, currency: asset?.currency ?? current.currency }));
+  };
+
+  const reviewComplete = Boolean(
+    review.asset_id && review.side && review.quantity && review.unit_price &&
+    review.accrued_interest_total !== "" && review.fee !== "" &&
+    review.currency && review.occurred_at,
+  );
+
+  const fieldNames: Record<string, string> = {
+    side: "покупка или продажа",
+    asset_id: "инструмент",
+    quantity: "количество",
+    unit_price: "чистая цена за единицу",
+    accrued_interest_total: "НКД всей сделки",
+    fee: "комиссия",
+    currency: "валюта",
+    occurred_at: "дата, время и часовой пояс",
   };
 
   return (
@@ -427,26 +559,68 @@ function Assistant({ assets, onSaved }: { assets: Asset[]; onSaved: () => Promis
       <section className="assistant-composer" aria-label="Диалог записи операции">
         <div className="chat-panel">
           <div className="chat-avatar" aria-hidden="true">PC</div>
-          <div className="chat-bubble assistant"><b>PatientCapital</b><p>Пришлите текст или скриншот операции. На следующем этапе здесь появится проверяемый черновик со всеми извлечёнными полями.</p></div>
+          <div className="chat-bubble assistant"><b>PatientCapital</b><p>Пришлите текст или скриншот операции. Я извлеку факты в черновик и отдельно попрошу всё подтвердить.</p></div>
         </div>
-        <div className="composer-placeholder"><span>Например: «Купил 7 ОФЗ 26226 по 992,04 ₽…»</span><button type="button" disabled>Добавить скриншот</button></div>
+        <form className="assistant-input" onSubmit={createTextDraft}>
+          <label htmlFor="operation-text">Что произошло</label>
+          <textarea id="operation-text" required minLength={2} value={sourceText} onChange={(event) => setSourceText(event.target.value)} placeholder="Например: Купил 7 ОФЗ 26226 по 992,04 ₽, НКД 195,16 ₽, комиссия 3,47 ₽, 13 августа 2026 в 16:34" />
+          <div className="composer-actions">
+            <button className="button primary" disabled={busy}>{busy ? "Разбираю…" : "Подготовить черновик"}</button>
+            <label className="upload-button">
+              <span>{busy ? "Обработка…" : "Загрузить скриншот"}</span>
+              <input aria-label="Скриншот операции" type="file" accept="image/jpeg,image/png" disabled={busy} onChange={(event) => void createImageDraft(event.target.files?.[0])} />
+            </label>
+          </div>
+          <small>JPEG или PNG до 8 МБ. OCR выполняется локально; исходное изображение удаляется сразу после распознавания.</small>
+        </form>
       </section>
+
+      {draft && (
+        <section className="draft-review" aria-labelledby="draft-title" aria-live="polite">
+          <header className="section-heading">
+            <div><p className="eyebrow">Проверка перед записью</p><h2 id="draft-title">Черновик операции</h2></div>
+            <span className={`status-pill ${draft.status}`}>{draft.status === "unconfirmed" ? "Не подтверждён" : draft.status === "confirmed" ? "Записан" : "Отклонён"}</span>
+          </header>
+          <p className="draft-source">Источник: {draft.source_kind === "image" ? "скриншот" : draft.source_kind === "manual" ? "расширенный ввод" : "текст"} · extractor {draft.extractor_version} · draft {draft.id.slice(0, 8)}</p>
+          {draft.unknown_fields.length > 0 && <div className="draft-warning"><b>Не удалось определить:</b> {draft.unknown_fields.map((field) => fieldNames[field] ?? field).join(", ")}. Заполните эти поля вручную.</div>}
+          {draft.conflicts.length > 0 && <div className="draft-warning conflict"><b>Найдены противоречия:</b><ul>{draft.conflicts.map((conflict) => <li key={conflict}>{conflict}</li>)}</ul></div>}
+          {draft.status === "unconfirmed" ? (
+            <form className="form-card two-column review-form" onSubmit={confirmDraft}>
+              <label>Актив<select required value={review.asset_id} onChange={(event) => chooseReviewAsset(event.target.value)}><option value="">Выберите распознанный актив</option>{knownAssets.map((asset) => <option key={asset.asset_id} value={asset.asset_id}>{asset.asset_id} · {asset.name}</option>)}</select></label>
+              <label>Сторона<select required value={review.side} onChange={(event) => setReview({ ...review, side: event.target.value })}><option value="">Уточните</option><option value="BUY">Покупка</option><option value="SELL">Продажа</option></select></label>
+              <label>Количество<input required type="number" min="1" step="1" value={review.quantity} onChange={(event) => setReview({ ...review, quantity: event.target.value })} /></label>
+              <label>Чистая цена за единицу<input required type="number" min="0.00000001" step="any" value={review.unit_price} onChange={(event) => setReview({ ...review, unit_price: event.target.value })} /></label>
+              <label>НКД всего<input required type="number" min="0" step="0.01" value={review.accrued_interest_total} onChange={(event) => setReview({ ...review, accrued_interest_total: event.target.value })} /></label>
+              <label>Комиссия<input required type="number" min="0" step="0.01" value={review.fee} onChange={(event) => setReview({ ...review, fee: event.target.value })} /></label>
+              <label>Валюта<input required pattern="[A-Z]{3}" value={review.currency} onChange={(event) => setReview({ ...review, currency: event.target.value.toUpperCase() })} /></label>
+              <label>Дата и время<input required type="datetime-local" value={review.occurred_at} onChange={(event) => setReview({ ...review, occurred_at: event.target.value })} /></label>
+              <label className="wide-field">Заметка<input value={review.note} onChange={(event) => setReview({ ...review, note: event.target.value })} placeholder="Необязательно" /></label>
+              <div className="draft-confirmation-note wide-field">Проверьте данные по брокерскому отчёту. Подтверждение создаст ровно одну фактическую запись; заявка брокеру не отправляется.</div>
+              <div className="form-actions wide-field"><button className="button primary" disabled={busy || !reviewComplete}>{busy ? "Записываю…" : "Подтвердить и записать"}</button><button className="button secondary" type="button" disabled={busy} onClick={() => void rejectDraft()}>Отклонить черновик</button></div>
+            </form>
+          ) : (
+            <div className="draft-decision"><b>{draft.status === "confirmed" ? "Операция подтверждена" : "Черновик отклонён"}</b><p>{draft.status === "confirmed" ? `Запись ${draft.decision?.transaction?.id.slice(0, 8)} добавлена в журнал.` : "Позиции и капитал не изменились."}</p></div>
+          )}
+          <details className="draft-evidence"><summary>Технические данные распознавания</summary><dl><div><dt>SHA-256</dt><dd>{draft.source_sha256}</dd></div><div><dt>Создан</dt><dd>{shortDateTime(draft.created_at)}</dd></div><div><dt>Истекает</dt><dd>{shortDateTime(draft.expires_at)}</dd></div></dl></details>
+        </section>
+      )}
+
       <details className="advanced-ledger">
         <summary>Расширенный ввод операции</summary>
-        <form className="form-card two-column" onSubmit={submit}>
-          <label>Актив<select required value={selectedAssetId} onChange={(e) => updateAsset(e.target.value)}><option value="">Выберите актив</option>{activeAssets.map((asset) => <option key={asset.asset_id} value={asset.asset_id}>{asset.asset_id} · {asset.name}</option>)}</select></label>
-          <label>Сторона<select value={form.side} onChange={(e) => setForm({ ...form, side: e.target.value })}><option value="BUY">Покупка</option><option value="SELL">Продажа</option></select></label>
-          <label>Количество<input required type="number" min="1" step="1" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} /></label>
-          <label>Цена за единицу<input required type="number" min="0.00000001" step="any" value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} /></label>
-          <label>НКД всего<input required type="number" min="0" step="0.01" value={form.accrued_interest_total} onChange={(e) => setForm({ ...form, accrued_interest_total: e.target.value })} /></label>
-          <label>Комиссия<input required type="number" min="0" step="0.01" value={form.fee} onChange={(e) => setForm({ ...form, fee: e.target.value })} /></label>
-          <label>Валюта<input required pattern="[A-Z]{3}" value={selectedCurrency} onChange={(e) => setForm({ ...form, currency: e.target.value.toUpperCase() })} /></label>
-          <label>Дата и время<input required type="datetime-local" value={form.occurred_at} onChange={(e) => setForm({ ...form, occurred_at: e.target.value })} /></label>
-          <label>Заметка<input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Необязательно" /></label>
-          <div className="form-actions"><button className="button primary" disabled={busy || activeAssets.length === 0}>{busy ? "Сохраняем…" : "Записать операцию"}</button></div>
+        <form className="form-card two-column" onSubmit={createManualDraft}>
+          <label>Актив<select required value={manual.asset_id} onChange={(event) => chooseManualAsset(event.target.value)}><option value="">Выберите актив</option>{knownAssets.map((asset) => <option key={asset.asset_id} value={asset.asset_id}>{asset.asset_id} · {asset.name}</option>)}</select></label>
+          <label>Сторона<select value={manual.side} onChange={(event) => setManual({ ...manual, side: event.target.value })}><option value="BUY">Покупка</option><option value="SELL">Продажа</option></select></label>
+          <label>Количество<input required type="number" min="1" step="1" value={manual.quantity} onChange={(event) => setManual({ ...manual, quantity: event.target.value })} /></label>
+          <label>Цена за единицу<input required type="number" min="0.00000001" step="any" value={manual.unit_price} onChange={(event) => setManual({ ...manual, unit_price: event.target.value })} /></label>
+          <label>НКД всего<input required type="number" min="0" step="0.01" value={manual.accrued_interest_total} onChange={(event) => setManual({ ...manual, accrued_interest_total: event.target.value })} /></label>
+          <label>Комиссия<input required type="number" min="0" step="0.01" value={manual.fee} onChange={(event) => setManual({ ...manual, fee: event.target.value })} /></label>
+          <label>Валюта<input required pattern="[A-Z]{3}" value={manual.currency} onChange={(event) => setManual({ ...manual, currency: event.target.value.toUpperCase() })} /></label>
+          <label>Дата и время<input required type="datetime-local" value={manual.occurred_at} onChange={(event) => setManual({ ...manual, occurred_at: event.target.value })} /></label>
+          <label>Заметка<input value={manual.note} onChange={(event) => setManual({ ...manual, note: event.target.value })} placeholder="Необязательно" /></label>
+          <div className="form-actions"><button className="button primary" disabled={busy || knownAssets.length === 0}>{busy ? "Готовлю…" : "Подготовить черновик"}</button></div>
         </form>
       </details>
-      {activeAssets.length === 0 && <div className="notice error">Сначала создайте автоматическое предложение в разделе «Пополнение» — выбранные инструменты появятся здесь.</div>}
+      {knownAssets.length === 0 && <div className="notice error">Пока нет проверенных инструментов. Создайте автоматическое предложение в разделе «Пополнение» — допущенные активы появятся здесь.</div>}
       {notice && <div className={`notice ${notice.kind}`}>{notice.text}</div>}
     </div>
   );

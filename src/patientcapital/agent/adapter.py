@@ -15,10 +15,13 @@ from patientcapital.application.services import (
     create_proposal_set,
     create_recommendation,
     create_transaction,
+    create_transaction_draft_from_text,
+    decide_transaction_draft,
     get_portfolio,
     get_profile,
     get_proposal_set,
     get_recommendation,
+    get_transaction_draft,
     list_assets,
 )
 from patientcapital.contracts import (
@@ -33,6 +36,9 @@ from patientcapital.contracts import (
     RecommendationCreate,
     RecommendationResponse,
     TransactionCreate,
+    TransactionDraftDecisionCreate,
+    TransactionDraftResponse,
+    TransactionDraftTextCreate,
     TransactionResponse,
 )
 from patientcapital.domain.errors import InvalidAllocationInput
@@ -110,6 +116,25 @@ class AgentTools:
 
     def get_recommendation(self, run_id: UUID) -> RecommendationResponse:
         return self._call(lambda session: get_recommendation(session, run_id))
+
+    def create_transaction_draft(
+        self, payload: TransactionDraftTextCreate
+    ) -> TransactionDraftResponse:
+        return self._call(lambda session: create_transaction_draft_from_text(session, payload))
+
+    def get_transaction_draft(self, draft_id: UUID) -> TransactionDraftResponse:
+        return self._call(lambda session: get_transaction_draft(session, draft_id))
+
+    def decide_transaction_draft(
+        self,
+        draft_id: UUID,
+        payload: TransactionDraftDecisionCreate,
+    ) -> TransactionDraftResponse:
+        def decide(session: Session) -> TransactionDraftResponse:
+            response, _created = decide_transaction_draft(session, draft_id, payload)
+            return response
+
+        return self._call(decide)
 
     def record_transaction(self, transaction: TransactionCreate) -> TransactionResponse:
         def record(session: Session) -> TransactionResponse:

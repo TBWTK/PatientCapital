@@ -45,8 +45,11 @@ def test_mcp_discovery_is_allowlisted_typed_and_permission_annotated() -> None:
         "list_assets",
         "get_portfolio",
         "get_proposal_set",
+        "get_transaction_draft",
         "propose_contribution",
         "propose_strategy_set",
+        "create_transaction_draft",
+        "decide_transaction_draft",
         "get_recommendation",
         "record_transaction",
     }
@@ -67,6 +70,12 @@ def test_mcp_discovery_is_allowlisted_typed_and_permission_annotated() -> None:
     assert by_name["propose_strategy_set"].annotations is not None
     assert by_name["propose_strategy_set"].annotations.open_world_hint is True
     assert by_name["propose_strategy_set"].output_schema is not None
+    assert by_name["create_transaction_draft"].annotations is not None
+    assert by_name["create_transaction_draft"].annotations.destructive_hint is False
+    assert by_name["get_transaction_draft"].annotations is not None
+    assert by_name["get_transaction_draft"].annotations.read_only_hint is True
+    assert by_name["decide_transaction_draft"].annotations is not None
+    assert by_name["decide_transaction_draft"].annotations.idempotent_hint is True
 
 
 def test_real_stdio_entrypoint_negotiates_and_lists_tools() -> None:
@@ -86,6 +95,8 @@ def test_real_stdio_entrypoint_negotiates_and_lists_tools() -> None:
         "get_portfolio",
         "propose_strategy_set",
         "propose_contribution",
+        "create_transaction_draft",
+        "decide_transaction_draft",
         "record_transaction",
     }
 
@@ -270,6 +281,63 @@ def test_mcp_record_transaction_preserves_exact_replay(client: TestClient) -> No
     assert replay.is_error is False
     assert first.structured_content == replay.structured_content
     assert first.structured_content["accrued_interest_total"] == "2.75"
+    portfolio = client.get("/v1/portfolio").json()
+    aaa = next(item for item in portfolio["assets"] if item["asset_id"] == "AAA")
+    assert aaa["quantity"] == 3
+
+
+def test_mcp_transaction_draft_requires_explicit_exact_confirmation(
+    client: TestClient,
+) -> None:
+    seed_two_assets(client)
+    source_text = (
+        "Купил 3 AAA по 101,25 ₽, НКД 2,75 ₽, комиссия 1,00 ₽, "
+        "15 августа 2026 12:00"
+    )
+
+    async def draft_then_confirm(
+        mcp_client: Client,
+    ) -> tuple[CallToolResult, CallToolResult, CallToolResult]:
+        created = await mcp_client.call_tool("create_transaction_draft", {"text": source_text})
+        draft = cast(dict[str, Any], created.structured_content)
+        retrieved = await mcp_client.call_tool(
+            "get_transaction_draft", {"draft_id": draft["id"]}
+        )
+        confirmed = await mcp_client.call_tool(
+            "decide_transaction_draft",
+            {
+                "draft_id": draft["id"],
+                "decision": {
+                    "expected_version": draft["version"],
+                    "decision": "confirm",
+                    "transaction": {
+                        "idempotency_key": "mcp-draft-confirm-aaa-1",
+                        "asset_id": "AAA",
+                        "side": "BUY",
+                        "quantity": 3,
+                        "unit_price": "101.25",
+                        "accrued_interest_total": "2.75",
+                        "fee": "1.00",
+                        "currency": "RUB",
+                        "occurred_at": "2026-08-15T12:00:00+03:00",
+                        "note": "Подтверждено пользователем через MCP",
+                    },
+                },
+            },
+        )
+        return created, retrieved, confirmed
+
+    created, retrieved, confirmed = _run(draft_then_confirm)
+    assert created.is_error is False
+    draft = cast(dict[str, Any], created.structured_content)
+    assert draft["status"] == "unconfirmed"
+    assert draft["decision"] is None
+    assert retrieved.structured_content == draft
+    assert confirmed.is_error is False
+    result = cast(dict[str, Any], confirmed.structured_content)
+    assert result["status"] == "confirmed"
+    assert result["decision"]["transaction"]["idempotency_key"] == "mcp-draft-confirm-aaa-1"
+
     portfolio = client.get("/v1/portfolio").json()
     aaa = next(item for item in portfolio["assets"] if item["asset_id"] == "AAA")
     assert aaa["quantity"] == 3

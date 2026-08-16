@@ -24,6 +24,8 @@ def test_head_migration_creates_required_authorities() -> None:
         "transactions",
         "recommendation_runs",
         "proposal_sets",
+        "transaction_drafts",
+        "transaction_draft_decisions",
     }.issubset(set(inspector.get_table_names()))
     assert inspector.get_unique_constraints("transactions")
     transaction_columns = {item["name"]: item for item in inspector.get_columns("transactions")}
@@ -34,6 +36,7 @@ def test_head_migration_creates_required_authorities() -> None:
         for item in inspector.get_check_constraints("transactions")
     )
     assert inspector.get_foreign_keys("proposal_sets")
+    assert inspector.get_foreign_keys("transaction_draft_decisions")
     engine.dispose()
 
 
@@ -89,4 +92,29 @@ def test_database_rejects_mutation_of_proposal_sets() -> None:
         connection.execute(
             text("UPDATE proposal_sets SET recommended_strategy_id = 'mutated'")
         )
+    engine.dispose()
+
+
+def test_database_rejects_mutation_of_transaction_drafts() -> None:
+    engine = create_engine(TEST_DATABASE_URL)
+    with (
+        pytest.raises(DBAPIError, match="immutable table transaction_drafts"),
+        engine.begin() as connection,
+    ):
+        connection.execute(
+            text(
+                """
+                INSERT INTO transaction_drafts (
+                  id, version, source_kind, source_sha256, source_metadata,
+                  extractor_version, extracted_fields, unknown_fields, conflicts,
+                  field_confidence, expires_at
+                ) VALUES (
+                  '00000000-0000-0000-0000-000000000020', 1, 'text',
+                  repeat('a', 64), '{}'::jsonb, 'test-v1', '{}'::jsonb,
+                  '[]'::jsonb, '[]'::jsonb, '{}'::jsonb, now() + interval '1 day'
+                )
+                """
+            )
+        )
+        connection.execute(text("UPDATE transaction_drafts SET source_kind = 'manual'"))
     engine.dispose()

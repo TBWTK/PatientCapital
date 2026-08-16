@@ -124,6 +124,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/transaction-drafts/text": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transaction Draft Text Post */
+        post: operations["transaction_draft_text_post_v1_transaction_drafts_text_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/transaction-drafts/manual": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transaction Draft Manual Post */
+        post: operations["transaction_draft_manual_post_v1_transaction_drafts_manual_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/transaction-drafts/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transaction Draft Image Post */
+        post: operations["transaction_draft_image_post_v1_transaction_drafts_image_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/transaction-drafts/{draft_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Transaction Draft Get */
+        get: operations["transaction_draft_get_v1_transaction_drafts__draft_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/transaction-drafts/{draft_id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transaction Draft Decision Post */
+        post: operations["transaction_draft_decision_post_v1_transaction_drafts__draft_id__decisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/portfolio": {
         parameters: {
             query?: never;
@@ -274,6 +359,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** Body_transaction_draft_image_post_v1_transaction_drafts_image_post */
+        Body_transaction_draft_image_post_v1_transaction_drafts_image_post: {
+            /** File */
+            file: string;
         };
         /** DiscoveryCandidateResponse */
         DiscoveryCandidateResponse: {
@@ -655,6 +745,132 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /** TransactionDraftDecisionCreate */
+        TransactionDraftDecisionCreate: {
+            /** Expected Version */
+            expected_version: number;
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "confirm" | "reject";
+            transaction?: components["schemas"]["TransactionCreate"] | null;
+        };
+        /** TransactionDraftDecisionResponse */
+        TransactionDraftDecisionResponse: {
+            /**
+             * Decision
+             * @enum {string}
+             */
+            decision: "confirm" | "reject";
+            transaction: components["schemas"]["TransactionResponse"] | null;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+        };
+        /** TransactionDraftFields */
+        TransactionDraftFields: {
+            /** Side */
+            side?: ("BUY" | "SELL") | null;
+            /** Asset Id */
+            asset_id?: string | null;
+            /** Asset Name */
+            asset_name?: string | null;
+            /** Quantity */
+            quantity?: number | null;
+            /** Unit Price */
+            unit_price?: string | null;
+            /** Accrued Interest Total */
+            accrued_interest_total?: string | null;
+            /** Fee */
+            fee?: string | null;
+            /** Currency */
+            currency?: string | null;
+            /** Occurred At */
+            occurred_at?: string | null;
+        };
+        /** TransactionDraftManualCreate */
+        TransactionDraftManualCreate: {
+            /** Asset Id */
+            asset_id: string;
+            /**
+             * Side
+             * @enum {string}
+             */
+            side: "BUY" | "SELL";
+            /** Quantity */
+            quantity: number;
+            /** Unit Price */
+            unit_price: number | string;
+            /** Accrued Interest Total */
+            accrued_interest_total: number | string;
+            /** Fee */
+            fee: number | string;
+            /** Currency */
+            currency: string;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Note */
+            note?: string | null;
+        };
+        /** TransactionDraftResponse */
+        TransactionDraftResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Version */
+            version: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "unconfirmed" | "confirmed" | "rejected";
+            /**
+             * Source Kind
+             * @enum {string}
+             */
+            source_kind: "text" | "image" | "manual";
+            /** Source Sha256 */
+            source_sha256: string;
+            /** Source Metadata */
+            source_metadata: {
+                [key: string]: string | number;
+            };
+            /** Extractor Version */
+            extractor_version: string;
+            fields: components["schemas"]["TransactionDraftFields"];
+            /** Unknown Fields */
+            unknown_fields: string[];
+            /** Conflicts */
+            conflicts: string[];
+            /** Field Confidence */
+            field_confidence: {
+                [key: string]: string;
+            };
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            decision: components["schemas"]["TransactionDraftDecisionResponse"] | null;
+        };
+        /** TransactionDraftTextCreate */
+        TransactionDraftTextCreate: {
+            /** Text */
+            text: string;
+        };
         /** TransactionResponse */
         TransactionResponse: {
             /**
@@ -1004,6 +1220,216 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    transaction_draft_text_post_v1_transaction_drafts_text_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionDraftTextCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionDraftResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    transaction_draft_manual_post_v1_transaction_drafts_manual_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionDraftManualCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionDraftResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    transaction_draft_image_post_v1_transaction_drafts_image_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_transaction_draft_image_post_v1_transaction_drafts_image_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionDraftResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    transaction_draft_get_v1_transaction_drafts__draft_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionDraftResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    transaction_draft_decision_post_v1_transaction_drafts__draft_id__decisions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransactionDraftDecisionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionDraftResponse"];
                 };
             };
             /** @description Conflict */

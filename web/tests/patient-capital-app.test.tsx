@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import axe from "axe-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { PatientCapitalApp } from "../app/patient-capital-app";
@@ -8,6 +8,53 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { "Content-Type": "application/json" },
   }));
+
+const transactionDraft = (
+  sourceKind: "text" | "image" | "manual" = "text",
+  status: "unconfirmed" | "confirmed" | "rejected" = "unconfirmed",
+) => ({
+  id: "00000000-0000-0000-0000-000000000020",
+  version: 1,
+  status,
+  source_kind: sourceKind,
+  source_sha256: "b".repeat(64),
+  source_metadata: sourceKind === "image" ? { media_type: "image/jpeg", width: 1178, height: 2560 } : {},
+  extractor_version: sourceKind === "image" ? "tesseract-rus-eng-v1" : sourceKind === "manual" ? "manual-exact-v1" : "transaction-text-ru-v1",
+  fields: {
+    side: "BUY",
+    asset_id: "SU26226RMFS9",
+    asset_name: "ОФЗ 26226",
+    quantity: 7,
+    unit_price: "992.04",
+    accrued_interest_total: "195.16",
+    fee: "3.47",
+    currency: "RUB",
+    occurred_at: "2026-08-13T13:34:00Z",
+  },
+  unknown_fields: [],
+  conflicts: [],
+  field_confidence: { side: "1.00", asset_id: "1.00" },
+  created_at: "2026-08-16T00:00:00Z",
+  expires_at: "2026-08-17T00:00:00Z",
+  decision: status === "confirmed" ? {
+    decision: "confirm",
+    decided_at: "2026-08-16T00:01:00Z",
+    transaction: {
+      id: "00000000-0000-0000-0000-000000000002",
+      idempotency_key: "transaction-draft-00000000-0000-0000-0000-000000000020",
+      asset_id: "SU26226RMFS9",
+      side: "BUY",
+      quantity: 7,
+      unit_price: "992.04",
+      accrued_interest_total: "195.16",
+      fee: "3.47",
+      currency: "RUB",
+      occurred_at: "2026-08-13T13:34:00Z",
+      note: null,
+      created_at: "2026-08-16T00:01:00Z",
+    },
+  } : null,
+});
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -142,7 +189,7 @@ describe("PatientCapitalApp", () => {
     expect(discoveryCall?.[1]?.body).toBe(JSON.stringify({ contribution: "8000" }));
   });
 
-  it("submits bond accrued interest separately from clean price and fee", async () => {
+  it("keeps advanced bond input as a draft until exact confirmation", async () => {
     const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
       const path = String(input);
       if (path.endsWith("/v1/profile")) return json({ version: 4, base_currency: "RUB", investment_horizon_years: 5, risk_level: "growth", cash_buffer: "1000.00", broker_name: "Т-Инвестиции", fee_rate: "0.0005", minimum_fee: "1.00", created_at: "2026-08-15T22:03:40Z" });
@@ -151,7 +198,8 @@ describe("PatientCapitalApp", () => {
         { asset_id: "SU26226RMFS9", version: 1, name: "ОФЗ 26226", currency: "RUB", lot_size: 1, target_weight: "0.00000000", is_active: true, created_at: "2026-08-15T22:04:48Z" },
       ] });
       if (path.endsWith("/v1/portfolio")) return json({ currency: "RUB", total_market_value: "0.00", total_cost_basis: "0.00", total_unrealized_pnl: "0.00", assets: [] });
-      if (path.endsWith("/v1/transactions") && init?.method === "POST") return json({ id: "00000000-0000-0000-0000-000000000002", idempotency_key: "generated", asset_id: "SU26226RMFS9", side: "BUY", quantity: 7, unit_price: "992.04000000", accrued_interest_total: "195.16", fee: "3.47", currency: "RUB", occurred_at: "2026-08-13T13:34:00Z", note: null, created_at: "2026-08-16T00:00:00Z" }, 201);
+      if (path.endsWith("/v1/transaction-drafts/manual") && init?.method === "POST") return json(transactionDraft("manual"), 201);
+      if (path.endsWith("/v1/transaction-drafts/00000000-0000-0000-0000-000000000020/decisions") && init?.method === "POST") return json(transactionDraft("manual", "confirmed"), 201);
       return json({ error: { code: "UNEXPECTED", message: path } }, 500);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -160,16 +208,18 @@ describe("PatientCapitalApp", () => {
     await screen.findByText("Т-Инвестиции");
     fireEvent.click(screen.getAllByRole("button", { name: /Ассистент/ })[0]);
     fireEvent.click(screen.getByText("Расширенный ввод операции"));
-    expect(screen.queryByRole("option", { name: /Asset A/ })).toBeNull();
+    expect(screen.getByRole("option", { name: /Asset A/ })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Количество"), { target: { value: "7" } });
     fireEvent.change(screen.getByLabelText("Цена за единицу"), { target: { value: "992.04" } });
     fireEvent.change(screen.getByLabelText("НКД всего"), { target: { value: "195.16" } });
     fireEvent.change(screen.getByLabelText("Комиссия"), { target: { value: "3.47" } });
     fireEvent.change(screen.getByLabelText("Дата и время"), { target: { value: "2026-08-13T16:34" } });
-    fireEvent.click(screen.getByRole("button", { name: "Записать операцию" }));
+    const advanced = screen.getByText("Расширенный ввод операции").closest("details");
+    expect(advanced).toBeTruthy();
+    fireEvent.click(within(advanced!).getByRole("button", { name: "Подготовить черновик" }));
 
     await waitFor(() => {
-      const call = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/v1/transactions") && init?.method === "POST");
+      const call = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/v1/transaction-drafts/manual") && init?.method === "POST");
       expect(call).toBeTruthy();
       const payload = JSON.parse(String(call?.[1]?.body));
       expect(payload).toMatchObject({
@@ -181,5 +231,78 @@ describe("PatientCapitalApp", () => {
         occurred_at: new Date("2026-08-13T16:34").toISOString(),
       });
     });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/v1/transactions"))).toBe(false);
+
+    expect(await screen.findByRole("heading", { name: "Черновик операции" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить и записать" }));
+    await screen.findByText("Операция подтверждена");
+    const decisionCall = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith("/decisions") && init?.method === "POST");
+    expect(decisionCall).toBeTruthy();
+    expect(JSON.parse(String(decisionCall?.[1]?.body))).toMatchObject({
+      expected_version: 1,
+      decision: "confirm",
+      transaction: {
+        asset_id: "SU26226RMFS9",
+        quantity: 7,
+        unit_price: "992.04",
+        accrued_interest_total: "195.16",
+        fee: "3.47",
+      },
+    });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/v1/transactions"))).toBe(false);
+  });
+
+  it("turns free text into a reviewable draft and shows unknown fields", async () => {
+    const incomplete = {
+      ...transactionDraft("text"),
+      fields: { side: "BUY", asset_id: "SU26226RMFS9", asset_name: "ОФЗ 26226", quantity: null, unit_price: null, accrued_interest_total: null, fee: null, currency: "RUB", occurred_at: null },
+      unknown_fields: ["quantity", "unit_price", "accrued_interest_total", "fee", "occurred_at"],
+    };
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/v1/profile")) return json({ version: 4, base_currency: "RUB", investment_horizon_years: 5, risk_level: "growth", cash_buffer: "0.00", broker_name: "Т-Инвестиции", fee_rate: "0.0005", minimum_fee: "0.00", created_at: "2026-08-15T22:03:40Z" });
+      if (path.endsWith("/v1/assets")) return json({ assets: [{ asset_id: "SU26226RMFS9", version: 1, name: "ОФЗ 26226", currency: "RUB", lot_size: 1, target_weight: "1.00000000", is_active: true, created_at: "2026-08-15T22:04:48Z" }] });
+      if (path.endsWith("/v1/portfolio")) return json({ currency: "RUB", total_market_value: "0.00", total_cost_basis: "0.00", total_unrealized_pnl: "0.00", assets: [] });
+      if (path.endsWith("/v1/transaction-drafts/text") && init?.method === "POST") return json(incomplete, 201);
+      return json({ error: { code: "UNEXPECTED", message: path } }, 500);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<PatientCapitalApp />);
+    await screen.findByText("Т-Инвестиции");
+    fireEvent.click(screen.getAllByRole("button", { name: /Ассистент/ })[0]);
+    fireEvent.change(screen.getByLabelText("Что произошло"), { target: { value: "Купил ОФЗ 26226" } });
+    const composer = screen.getByLabelText("Что произошло").closest("form");
+    expect(composer).toBeTruthy();
+    fireEvent.click(within(composer!).getByRole("button", { name: "Подготовить черновик" }));
+
+    expect(await screen.findByText(/Не удалось определить:/)).toBeTruthy();
+    expect(screen.getByText(/количество, чистая цена за единицу/)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "Подтвердить и записать" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/v1/transactions"))).toBe(false);
+  });
+
+  it("uploads a receipt as multipart without forcing a JSON content type", async () => {
+    const fetchMock = vi.fn((input: string | URL | Request, init?: RequestInit) => {
+      const path = String(input);
+      if (path.endsWith("/v1/profile")) return json({ version: 4, base_currency: "RUB", investment_horizon_years: 5, risk_level: "growth", cash_buffer: "0.00", broker_name: "Т-Инвестиции", fee_rate: "0.0005", minimum_fee: "0.00", created_at: "2026-08-15T22:03:40Z" });
+      if (path.endsWith("/v1/assets")) return json({ assets: [{ asset_id: "SU26226RMFS9", version: 1, name: "ОФЗ 26226", currency: "RUB", lot_size: 1, target_weight: "1.00000000", is_active: true, created_at: "2026-08-15T22:04:48Z" }] });
+      if (path.endsWith("/v1/portfolio")) return json({ currency: "RUB", total_market_value: "0.00", total_cost_basis: "0.00", total_unrealized_pnl: "0.00", assets: [] });
+      if (path.endsWith("/v1/transaction-drafts/image") && init?.method === "POST") return json(transactionDraft("image"), 201);
+      return json({ error: { code: "UNEXPECTED", message: path } }, 500);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<PatientCapitalApp />);
+    await screen.findByText("Т-Инвестиции");
+    fireEvent.click(screen.getAllByRole("button", { name: /Ассистент/ })[0]);
+    const file = new File(["receipt"], "receipt.jpg", { type: "image/jpeg" });
+    fireEvent.change(screen.getByLabelText("Скриншот операции"), { target: { files: [file] } });
+
+    expect(await screen.findByRole("heading", { name: "Черновик операции" })).toBeTruthy();
+    const uploadCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/v1/transaction-drafts/image"));
+    expect(uploadCall?.[1]?.body).toBeInstanceOf(FormData);
+    expect(new Headers(uploadCall?.[1]?.headers).has("Content-Type")).toBe(false);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith("/v1/transactions"))).toBe(false);
   });
 });

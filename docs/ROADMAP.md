@@ -21,8 +21,8 @@ updated: 2026-08-16
 | Fixed-income ledger | Clean price, НКД и fee сохраняются раздельно и дают точный cost basis | Additive migration + screenshot capability + API/MCP/web/Docker regression | done |
 | PC2 intent contract | Assistant-first сценарий восстановим без истории чата | README/ADR 0004/architecture/data/security/quality coherence + docs audit | done |
 | PC2-1 Product shell | Сумма даёт `1..3` стратегические карточки с compact-first explanation; новая IA не требует manual ledger | Capability/component/a11y/browser tests; v1 numeric parity | done |
-| PC2-2 Transaction assistant | Text/image создают draft, exact confirmation — ledger event; advanced fallback сохранён | Parser/admission corpus + ambiguity/security/API/MCP/web E2E + migration | active |
-| PC2-3 Analytics | Главная объясняет стоимость, денежные потоки, результат, доход, drift и freshness | Ledger/cashflow fixtures + API/component/chart/a11y/browser evidence | planned |
+| PC2-2 Transaction assistant | Text/image создают draft, exact confirmation — ledger event; advanced fallback сохранён | Parser/admission corpus + ambiguity/security/API/MCP/web E2E + migration | done |
+| PC2-3 Analytics | Главная объясняет стоимость, денежные потоки, результат, доход, drift и freshness | Ledger/cashflow fixtures + API/component/chart/a11y/browser evidence | active |
 | PC2-4 Research universe | Dividend-stock category доступна только через source-backed versioned policy | Source contracts + policy/capability/negative/live-read-only gates | planned |
 | PC2-5 Monitoring | Сбор `3..4/day` создаёт только threshold/event alerts и никогда не торгует | Clock/idempotency/provider-failure/no-order/resilience/Docker worker tests | planned |
 | PC2-MVP handoff | Все PC2 acceptance доказаны, existing ledger сохранён, docs/code/Git согласованы | Migration rehearsal + full regression + Docker E2E + browser QA + IMMUNE audit | planned |

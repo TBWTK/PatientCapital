@@ -7,6 +7,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Select, and_, func, select, text
 from sqlalchemy.orm import Session
@@ -32,6 +33,12 @@ from patientcapital.contracts import (
     RejectedDiscoveryCandidateResponse,
     StrategyProposalResponse,
     TransactionCreate,
+    TransactionDraftDecisionCreate,
+    TransactionDraftDecisionResponse,
+    TransactionDraftFields,
+    TransactionDraftManualCreate,
+    TransactionDraftResponse,
+    TransactionDraftTextCreate,
     TransactionResponse,
 )
 from patientcapital.domain.discovery import MarketSelection, select_market_candidates
@@ -46,6 +53,12 @@ from patientcapital.domain.models import (
 from patientcapital.domain.money import Money, quantize_minor
 from patientcapital.domain.planner import build_contribution_plan
 from patientcapital.domain.strategies import StrategyDefinition, admitted_strategies
+from patientcapital.domain.transaction_intake import (
+    PARSER_VERSION,
+    KnownAsset,
+    ParsedTransaction,
+    parse_transaction_text,
+)
 from patientcapital.marketdata.errors import MarketDataError
 from patientcapital.marketdata.models import MarketCandidate, MarketDataProvider
 from patientcapital.persistence.models import (
@@ -55,8 +68,11 @@ from patientcapital.persistence.models import (
     ProfileVersion,
     ProposalSetRecord,
     RecommendationRunRecord,
+    TransactionDraftDecisionRecord,
+    TransactionDraftRecord,
     TransactionRecord,
 )
+from patientcapital.transaction_intake.image import ImageTextExtractor
 
 _PROFILE_LOCK = 7_421_001
 _ASSET_LOCK = 7_421_002
@@ -283,56 +299,331 @@ def _quantities(events: list[TransactionRecord]) -> dict[str, int]:
 def create_transaction(
     session: Session, payload: TransactionCreate
 ) -> tuple[TransactionResponse, bool]:
-    request_hash = _transaction_hash(payload)
     with session.begin():
         _lock(session, _LEDGER_LOCK)
-        existing = session.scalar(
-            select(TransactionRecord).where(
-                TransactionRecord.idempotency_key == payload.idempotency_key
-            )
-        )
-        if existing is not None:
-            if existing.request_hash != request_hash:
-                raise ApplicationError(
-                    409,
-                    "IDEMPOTENCY_CONFLICT",
-                    "idempotency key was already used for a different transaction",
-                )
-            return _transaction_response(existing), False
+        return _create_transaction_in_transaction(session, payload)
 
+
+def _create_transaction_in_transaction(
+    session: Session, payload: TransactionCreate
+) -> tuple[TransactionResponse, bool]:
+    request_hash = _transaction_hash(payload)
+    existing = session.scalar(
+        select(TransactionRecord).where(
+            TransactionRecord.idempotency_key == payload.idempotency_key
+        )
+    )
+    if existing is not None:
+        if existing.request_hash != request_hash:
+            raise ApplicationError(
+                409,
+                "IDEMPOTENCY_CONFLICT",
+                "idempotency key was already used for a different transaction",
+            )
+        return _transaction_response(existing), False
+
+    asset = _latest_asset(session, payload.asset_id)
+    if asset is None:
+        raise ApplicationError(404, "ASSET_NOT_FOUND", f"asset {payload.asset_id} does not exist")
+    if asset.currency != payload.currency:
+        raise ApplicationError(422, "CURRENCY_MISMATCH", "transaction currency differs from asset")
+    quantities = _quantities(_transactions(session))
+    if payload.side == "SELL" and quantities.get(payload.asset_id, 0) < payload.quantity:
+        raise ApplicationError(
+            422,
+            "INSUFFICIENT_POSITION",
+            f"cannot sell {payload.quantity} units of {payload.asset_id}",
+        )
+    record = TransactionRecord(
+        id=uuid4(),
+        idempotency_key=payload.idempotency_key,
+        request_hash=request_hash,
+        asset_id=payload.asset_id,
+        side=payload.side,
+        quantity=payload.quantity,
+        unit_price=payload.unit_price,
+        accrued_interest_total=payload.accrued_interest_total,
+        fee=payload.fee,
+        currency=payload.currency,
+        occurred_at=payload.occurred_at,
+        note=payload.note,
+    )
+    session.add(record)
+    session.flush()
+    return _transaction_response(record), True
+
+
+def _draft_fields(parsed: ParsedTransaction) -> TransactionDraftFields:
+    return TransactionDraftFields(
+        side=parsed.side,  # type: ignore[arg-type]
+        asset_id=parsed.asset_id,
+        asset_name=parsed.asset_name,
+        quantity=parsed.quantity,
+        unit_price=parsed.unit_price,
+        accrued_interest_total=parsed.accrued_interest_total,
+        fee=parsed.fee,
+        currency=parsed.currency,
+        occurred_at=parsed.occurred_at,
+    )
+
+
+def _draft_decision(
+    session: Session, record: TransactionDraftDecisionRecord | None
+) -> TransactionDraftDecisionResponse | None:
+    if record is None:
+        return None
+    transaction = (
+        session.get(TransactionRecord, record.transaction_id)
+        if record.transaction_id is not None
+        else None
+    )
+    if record.decision == "confirm" and transaction is None:
+        raise ApplicationError(
+            500,
+            "DRAFT_DECISION_INVARIANT_BROKEN",
+            "confirmed draft has no transaction",
+        )
+    return TransactionDraftDecisionResponse(
+        decision=record.decision,  # type: ignore[arg-type]
+        transaction=_transaction_response(transaction) if transaction is not None else None,
+        decided_at=record.created_at,
+    )
+
+
+def _draft_response(session: Session, record: TransactionDraftRecord) -> TransactionDraftResponse:
+    decision_record = session.scalar(
+        select(TransactionDraftDecisionRecord).where(
+            TransactionDraftDecisionRecord.draft_id == record.id
+        )
+    )
+    decision = _draft_decision(session, decision_record)
+    status = (
+        "unconfirmed"
+        if decision is None
+        else ("confirmed" if decision.decision == "confirm" else "rejected")
+    )
+    return TransactionDraftResponse(
+        id=record.id,
+        version=record.version,
+        status=status,  # type: ignore[arg-type]
+        source_kind=record.source_kind,  # type: ignore[arg-type]
+        source_sha256=record.source_sha256,
+        source_metadata=record.source_metadata,  # type: ignore[arg-type]
+        extractor_version=record.extractor_version,
+        fields=TransactionDraftFields.model_validate(record.extracted_fields),
+        unknown_fields=record.unknown_fields,
+        conflicts=record.conflicts,
+        field_confidence={
+            key: Decimal(str(value)) for key, value in record.field_confidence.items()
+        },
+        created_at=record.created_at,
+        expires_at=record.expires_at,
+        decision=decision,
+    )
+
+
+def _known_assets(session: Session) -> tuple[KnownAsset, ...]:
+    return tuple(
+        KnownAsset(item.asset_id, item.name, item.currency) for item in _latest_assets(session)
+    )
+
+
+def _persist_parsed_draft(
+    session: Session,
+    *,
+    source_kind: str,
+    source_sha256: str,
+    source_metadata: dict[str, object],
+    extractor_version: str,
+    parsed: ParsedTransaction,
+) -> TransactionDraftResponse:
+    now = datetime.now(UTC)
+    fields = _draft_fields(parsed)
+    record = TransactionDraftRecord(
+        id=uuid4(),
+        version=1,
+        source_kind=source_kind,
+        source_sha256=source_sha256,
+        source_metadata=source_metadata,
+        extractor_version=extractor_version,
+        extracted_fields=fields.model_dump(mode="json"),
+        unknown_fields=list(parsed.unknown_fields),
+        conflicts=list(parsed.conflicts),
+        field_confidence={key: str(value) for key, value in parsed.field_confidence.items()},
+        expires_at=now + timedelta(hours=24),
+    )
+    session.add(record)
+    session.flush()
+    return _draft_response(session, record)
+
+
+def create_transaction_draft_from_text(
+    session: Session, payload: TransactionDraftTextCreate
+) -> TransactionDraftResponse:
+    with session.begin():
+        parsed = parse_transaction_text(
+            payload.text,
+            _known_assets(session),
+            timezone=ZoneInfo("Europe/Moscow"),
+        )
+        return _persist_parsed_draft(
+            session,
+            source_kind="text",
+            source_sha256=hashlib.sha256(payload.text.encode()).hexdigest(),
+            source_metadata={},
+            extractor_version=PARSER_VERSION,
+            parsed=parsed,
+        )
+
+
+def create_transaction_draft_from_image(
+    session: Session,
+    *,
+    content: bytes,
+    declared_content_type: str,
+    extractor: ImageTextExtractor,
+) -> TransactionDraftResponse:
+    extracted = extractor.extract(content, declared_content_type=declared_content_type)
+    with session.begin():
+        parsed = parse_transaction_text(
+            extracted.text,
+            _known_assets(session),
+            timezone=ZoneInfo("Europe/Moscow"),
+        )
+        return _persist_parsed_draft(
+            session,
+            source_kind="image",
+            source_sha256=hashlib.sha256(content).hexdigest(),
+            source_metadata={
+                "media_type": extracted.media_type,
+                "width": extracted.width,
+                "height": extracted.height,
+            },
+            extractor_version=extracted.extractor_version,
+            parsed=parsed,
+        )
+
+
+def create_transaction_draft_manual(
+    session: Session, payload: TransactionDraftManualCreate
+) -> TransactionDraftResponse:
+    with session.begin():
         asset = _latest_asset(session, payload.asset_id)
         if asset is None:
             raise ApplicationError(
                 404, "ASSET_NOT_FOUND", f"asset {payload.asset_id} does not exist"
             )
         if asset.currency != payload.currency:
-            raise ApplicationError(
-                422, "CURRENCY_MISMATCH", "transaction currency differs from asset"
-            )
-        quantities = _quantities(_transactions(session))
-        if payload.side == "SELL" and quantities.get(payload.asset_id, 0) < payload.quantity:
-            raise ApplicationError(
-                422,
-                "INSUFFICIENT_POSITION",
-                f"cannot sell {payload.quantity} units of {payload.asset_id}",
-            )
-        record = TransactionRecord(
-            id=uuid4(),
-            idempotency_key=payload.idempotency_key,
-            request_hash=request_hash,
-            asset_id=payload.asset_id,
+            raise ApplicationError(422, "CURRENCY_MISMATCH", "draft currency differs from asset")
+        confidence = {field: Decimal("1.00") for field in (
+            "side",
+            "asset_id",
+            "quantity",
+            "unit_price",
+            "accrued_interest_total",
+            "fee",
+            "currency",
+            "occurred_at",
+        )}
+        parsed = ParsedTransaction(
             side=payload.side,
+            asset_id=payload.asset_id,
+            asset_name=asset.name,
             quantity=payload.quantity,
             unit_price=payload.unit_price,
             accrued_interest_total=payload.accrued_interest_total,
             fee=payload.fee,
             currency=payload.currency,
             occurred_at=payload.occurred_at,
-            note=payload.note,
+            unknown_fields=(),
+            conflicts=(),
+            field_confidence=confidence,
         )
-        session.add(record)
+        encoded = json.dumps(
+            payload.model_dump(mode="json"),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+        return _persist_parsed_draft(
+            session,
+            source_kind="manual",
+            source_sha256=hashlib.sha256(encoded).hexdigest(),
+            source_metadata={},
+            extractor_version="manual-exact-v1",
+            parsed=parsed,
+        )
+
+
+def get_transaction_draft(session: Session, draft_id: UUID) -> TransactionDraftResponse:
+    record = session.get(TransactionDraftRecord, draft_id)
+    if record is None:
+        raise ApplicationError(
+            404, "TRANSACTION_DRAFT_NOT_FOUND", "transaction draft was not found"
+        )
+    return _draft_response(session, record)
+
+
+def decide_transaction_draft(
+    session: Session,
+    draft_id: UUID,
+    payload: TransactionDraftDecisionCreate,
+) -> tuple[TransactionDraftResponse, bool]:
+    request_hash = hashlib.sha256(
+        json.dumps(
+            payload.model_dump(mode="json"),
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
+    with session.begin():
+        _lock(session, _LEDGER_LOCK)
+        draft = session.get(TransactionDraftRecord, draft_id)
+        if draft is None:
+            raise ApplicationError(
+                404, "TRANSACTION_DRAFT_NOT_FOUND", "transaction draft was not found"
+            )
+        if payload.expected_version != draft.version:
+            raise ApplicationError(409, "VERSION_CONFLICT", "transaction draft version changed")
+        existing = session.scalar(
+            select(TransactionDraftDecisionRecord).where(
+                TransactionDraftDecisionRecord.draft_id == draft_id
+            )
+        )
+        if existing is not None:
+            if existing.request_hash != request_hash:
+                raise ApplicationError(409, "DRAFT_ALREADY_DECIDED", "draft already has a decision")
+            return _draft_response(session, draft), False
+
+        transaction_response: TransactionResponse | None = None
+        if payload.decision == "confirm":
+            if payload.transaction is None:  # guarded by contract validation
+                raise ApplicationError(422, "INCOMPLETE_CONFIRMATION", "transaction is required")
+            transaction_response, created = _create_transaction_in_transaction(
+                session, payload.transaction
+            )
+            if not created:
+                raise ApplicationError(
+                    409,
+                    "DRAFT_TRANSACTION_ALREADY_RECORDED",
+                    "confirmed transaction idempotency key already exists",
+                )
+        decision = TransactionDraftDecisionRecord(
+            id=uuid4(),
+            draft_id=draft_id,
+            request_hash=request_hash,
+            decision=payload.decision,
+            confirmed_payload=(
+                payload.transaction.model_dump(mode="json")
+                if payload.transaction is not None
+                else None
+            ),
+            transaction_id=transaction_response.id if transaction_response is not None else None,
+        )
+        session.add(decision)
         session.flush()
-        return _transaction_response(record), True
+        return _draft_response(session, draft), True
 
 
 def _latest_prices(session: Session, asset_ids: set[str]) -> dict[str, PriceRecord]:

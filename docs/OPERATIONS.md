@@ -17,8 +17,9 @@ read-only; `/tmp` — ephemeral tmpfs. GigaChat credentials не передаю�
 
 PC2 планирует отдельный `worker` process из того же Python image для scheduled read-only evidence
 refresh и alert evaluation. Он не получает broker/order capability и не пишет transactions. До
-реализации worker не добавляется в Compose. Upload bytes обрабатываются только в bounded API tmpfs;
-в backup попадают extracted drafts/evidence, но не raw images.
+реализации worker не добавляется в Compose. API image содержит local Tesseract rus/eng; upload bytes
+обрабатываются только в bounded `/tmp` tmpfs и удаляются до ответа, а в backup попадают extracted
+drafts/decisions, но не raw images.
 
 Нужны Docker Compose v2. Для `scripts/docker-smoke.sh` дополнительно нужны host `curl`, `jq` и
 свободные ports `53000`, `58000`, `55433` либо соответствующие `PATIENTCAPITAL_SMOKE_*` overrides.
@@ -126,7 +127,7 @@ downgrade удаляет tables/data и не является operational rollba
 ## Известные operational limits
 
 - Auth, RBAC, TLS termination, remote access, HA, automated backups, monitoring и alerting отсутствуют.
-- PC2 worker, upload extractor и alert persistence пока planned; документ не утверждает их наличие.
+- PC2 worker и alert persistence пока planned; local upload extractor и draft persistence реализованы.
 - Capacity выше 10 000 ledger events и proposal latency на 100 assets не измерены.
 - PostgreSQL backup artifact проверен на читаемый catalog; destructive restore rehearsal не запущен.
 - Base-image/dependency audit — point-in-time evidence 15.08.2026, а не бессрочная гарантия.

@@ -6,6 +6,7 @@ export type Portfolio = components["schemas"]["PortfolioResponse"];
 export type Recommendation = components["schemas"]["RecommendationResponse"];
 export type ProposalSet = components["schemas"]["ProposalSetResponse"];
 export type Transaction = components["schemas"]["TransactionResponse"];
+export type TransactionDraft = components["schemas"]["TransactionDraftResponse"];
 
 const API_BASE = (
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000"
@@ -22,12 +23,13 @@ export class ApiError extends Error {
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (init?.body != null && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
+    headers,
   });
   const payload = (await response.json()) as {
     error?: { code?: string; message?: string };

@@ -22,10 +22,10 @@ updated: 2026-08-16
   progressive-disclosure блоке.
 - [ ] LLM/search может добавлять цитируемый research context, но инструмент, цена, lot, target,
   quantity, fee и totals материализуются только после typed validation и deterministic calculation.
-- [ ] Свободный текст и поддержанное изображение создают unconfirmed transaction draft. Перед
+- [x] Свободный текст и поддержанное изображение создают unconfirmed transaction draft. Перед
   записью пользователь подтверждает side, resolved asset, quantity, clean unit price, НКД, fee,
   currency и timezone-aware occurred_at; неизвестность блокирует confirm.
-- [ ] Proposal line никогда не превращается в transaction автоматически; advanced manual editor
+- [x] Proposal line никогда не превращается в transaction автоматически; advanced manual editor
   остаётся recovery fallback и использует тот же confirmation/validation contract.
 - [ ] Обзор объясняет капитал: market value, contributions/cost basis, realized/unrealized result,
   income, allocation/drift, freshness и recent activity. Неподдерживаемая метрика показывается как
@@ -45,20 +45,25 @@ updated: 2026-08-16
 - `PC2-1 Product shell` завершён: `POST/GET /v1/proposal-sets`, immutable `proposal_sets`, registry
   только из admitted strategies, API/MCP parity и compact-first web-карточка поверх неизменённого
   v1 deterministic run.
-- Основная навигация уже использует Обзор, Пополнить, Ассистент, Профиль; ручной ledger editor
-  сохранён внутри «Расширенного ввода операции», но transaction drafts/uploads ещё не реализованы.
+- `PC2-2 Transaction assistant` завершён: text/manual/image создают immutable unconfirmed draft;
+  exact confirm атомарно создаёт один ledger event; reject не меняет positions. HTTP/OpenAPI/web и
+  MCP используют один application contract.
+- Реальный supplied T-Invest JPEG допущен в Docker: local Tesseract точно извлёк ОФЗ 26226, 7,
+  992.04, НКД 195.16, fee 3.47 и timezone-aware время; `/tmp` после ответа пуст.
 - Локальный portfolio содержит подтверждённую BUY `SU26226RMFS9`; его числовая evidence не должна
   измениться при migration v2.
-- Оставшийся product-gap: нет transaction drafts/uploads, richer analytics, dividend research policy
-  и recurring monitoring.
+- Оставшийся product-gap: richer analytics, dividend research policy и recurring monitoring.
 - PC2-1 evidence 16.08.2026: `145 passed`, branch coverage `94.23%`; Ruff/mypy/OpenAPI; web build,
   typecheck, lint, SSR, `4` component tests + axe; MCP/API/migration tests; healthy Compose; browser
   desktop `1440px` и mobile `390px` без horizontal overflow.
+- PC2-2 evidence 16.08.2026: `162 passed`; Ruff/mypy/OpenAPI; web build, typecheck, lint, SSR,
+  `6` component tests + axe; `19` focused API/MCP/migration/config tests; healthy Compose; exact real
+  OCR admission and browser incomplete-draft/disabled-confirm inspection.
 
 ## Changed areas
 
-- Additive `proposal_sets` migration/model, strategy registry/application/API/MCP contracts,
-  generated web types, compact strategy/progressive-evidence UI, новая IA, tests и документы.
+- Additive transaction draft/decision migration/model, deterministic Russian parser, bounded local
+  OCR, atomic confirmation service, HTTP/MCP/OpenAPI types, review UI, tests и operator contracts.
 
 ## Decisions made
 
@@ -71,14 +76,11 @@ updated: 2026-08-16
 
 ## Next exact step
 
-Начать `PC2-2 Transaction assistant` с versioned parser corpus: принять Russian text и supplied
-T-Invest screenshot как два intake transport, доказать draft-only/ambiguity/upload-safety contract,
-затем добавить additive draft/decision schema и UI confirmation flow.
+Начать `PC2-3 Analytics`: определить server-owned metric status contract (`available`, `unknown`,
+`not_configured`), добавить recent activity/freshness и расширить Overview без frontend-формул.
 
 ## Blockers
 
-- Конкретный screenshot extractor ещё не допущен. `PC2-2` сначала проводит admission на versioned
-  screenshot corpus; непрошедший extractor не подключается, а text draft остаётся рабочим.
 - Дополнительные стратегии и dividend-stock universe не появляются до собственных policy/evidence
   gates. Это не блокирует уже готовую core-карточку.
 - Публичный/коммерческий режим остаётся заблокирован до legal, identity, privacy и licensing review.

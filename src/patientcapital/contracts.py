@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 
 class ContractModel(BaseModel):
@@ -87,7 +87,7 @@ class TransactionCreate(ContractModel):
     accrued_interest_total: Decimal = Field(default=Decimal("0.00"), ge=0, decimal_places=2)
     fee: Decimal = Field(ge=0, decimal_places=2)
     currency: str = Field(pattern=r"^[A-Z]{3}$")
-    occurred_at: datetime
+    occurred_at: AwareDatetime
     note: str | None = Field(default=None, max_length=2000)
 
 
@@ -104,6 +104,71 @@ class TransactionResponse(ContractModel):
     occurred_at: datetime
     note: str | None
     created_at: datetime
+
+
+class TransactionDraftTextCreate(ContractModel):
+    text: str = Field(min_length=2, max_length=100_000)
+
+
+class TransactionDraftFields(ContractModel):
+    side: Literal["BUY", "SELL"] | None = None
+    asset_id: str | None = None
+    asset_name: str | None = None
+    quantity: int | None = None
+    unit_price: Decimal | None = None
+    accrued_interest_total: Decimal | None = None
+    fee: Decimal | None = None
+    currency: str | None = None
+    occurred_at: datetime | None = None
+
+
+class TransactionDraftManualCreate(ContractModel):
+    asset_id: str = Field(min_length=1, max_length=64)
+    side: Literal["BUY", "SELL"]
+    quantity: int = Field(gt=0)
+    unit_price: Decimal = Field(gt=0, decimal_places=8)
+    accrued_interest_total: Decimal = Field(ge=0, decimal_places=2)
+    fee: Decimal = Field(ge=0, decimal_places=2)
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
+    occurred_at: AwareDatetime
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class TransactionDraftDecisionCreate(ContractModel):
+    expected_version: int = Field(ge=1)
+    decision: Literal["confirm", "reject"]
+    transaction: TransactionCreate | None = None
+
+    @model_validator(mode="after")
+    def validate_decision_payload(self) -> "TransactionDraftDecisionCreate":
+        if self.decision == "confirm" and self.transaction is None:
+            raise ValueError("confirmed draft requires an exact transaction payload")
+        if self.decision == "reject" and self.transaction is not None:
+            raise ValueError("rejected draft cannot include a transaction payload")
+        return self
+
+
+class TransactionDraftDecisionResponse(ContractModel):
+    decision: Literal["confirm", "reject"]
+    transaction: TransactionResponse | None
+    decided_at: datetime
+
+
+class TransactionDraftResponse(ContractModel):
+    id: UUID
+    version: int
+    status: Literal["unconfirmed", "confirmed", "rejected"]
+    source_kind: Literal["text", "image", "manual"]
+    source_sha256: str
+    source_metadata: dict[str, str | int]
+    extractor_version: str
+    fields: TransactionDraftFields
+    unknown_fields: list[str]
+    conflicts: list[str]
+    field_confidence: dict[str, Decimal]
+    created_at: datetime
+    expires_at: datetime
+    decision: TransactionDraftDecisionResponse | None
 
 
 class PortfolioAssetResponse(ContractModel):

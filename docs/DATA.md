@@ -16,18 +16,20 @@ updated: 2026-08-16
 | `asset_versions` | name, currency, lot, target weight, active state | manual legacy или automatic selection service | (`asset_id`, integer `version`) |
 | `price_snapshots` | manual legacy или MOEX-derived price, currency, as-of, max age и source | price/marketdata boundary | UUID |
 | `transactions` | append-only `BUY`/`SELL`: clean unit price, total НКД и fee | ledger service | UUID + unique idempotency key |
+| `transaction_drafts` | immutable extracted fields, source hash/metadata, unknowns/conflicts/confidence | transaction-intake service | UUID + version `1` |
+| `transaction_draft_decisions` | immutable explicit confirm/reject; optional exact transaction link | draft-decision service | UUID + unique draft id |
 | `recommendation_runs` | immutable input/output snapshots, amount, totals, reason и algorithm evidence | recommendation service | UUID |
 | `proposal_sets` | amount/profile version, ordered strategy metadata и refs на `1..3` runs | proposal application service | UUID |
 | portfolio response | quantity, cost/value/P&L, allocation и drift | derived application query | не хранится отдельной таблицей |
 | GigaChat admission report | model/prompt/corpus hashes, metrics, latency/usage и case evidence | file `reports/gigachat-admission-v1.json` | report/corpus version; не DB entity |
 
-### Планируемые PC2 authorities
+### PC2 authorities
 
 | Сущность | Назначение | Authority / invariant |
 | --- | --- | --- |
 | research evidence | normalized issuer/market/corporate-action/dividend facts и provenance | typed source adapter; source/fetched/observed/freshness/schema обязательны |
-| transaction draft | исходный text/image hash, extraction, resolved instrument, confidence и unknowns | transaction-intake service; immutable и unconfirmed |
-| draft decision | explicit confirm/reject и exact confirmed payload/version | append-only; только confirm может вызвать существующий transaction command |
+| transaction draft *(implemented)* | исходный text/image hash, extraction, resolved instrument, confidence и unknowns | transaction-intake service; immutable и unconfirmed |
+| draft decision *(implemented)* | explicit confirm/reject и exact confirmed payload/version | append-only; только confirm может вызвать существующий transaction command |
 | monitor run / alert | schedule/policy/input/result и trigger/no-op evidence | monitor service; immutable, без transaction/order side effect |
 
 ## Lifecycle и версии
@@ -36,7 +38,7 @@ updated: 2026-08-16
 а не отдельными таблицами. Asset identity стабильна, а параметры/target создают следующую
 `asset_versions` row. Price, transaction и recommendation rows append-only. PostgreSQL triggers
 отклоняют `UPDATE/DELETE` для `profile_versions`, `asset_versions`, `price_snapshots`, `transactions`,
-`recommendation_runs` и `proposal_sets`.
+`recommendation_runs`, `proposal_sets`, `transaction_drafts` и `transaction_draft_decisions`.
 
 API поддерживает только `BUY` и `SELL`. Formal compensating-event link в schema отсутствует;
 исправление вводится новой фактической операцией с новым idempotency key и поясняющей `note`, если
@@ -58,11 +60,11 @@ profile/asset/price/position facts;
 не пересчитывается новой algorithm или policy version. `assets.id` является business identity;
 automatic mode materialизует только валидированный MOEX `SECID`, отдельного broker resolver нет.
 
-Migration `20260816_0003` additive: существующие profile/assets/prices/transactions/runs не
-переписываются. Proposal set хранит только admitted strategy metadata и UUID runs; DB trigger
-запрещает update/delete. Transaction draft не меняет position. Resolver может предложить
-identity только из typed instrument source и сохраняет кандидатов/причину выбора. Неоднозначный
-resolver result остаётся `unknown` до пользовательского выбора.
+Migrations `20260816_0003` и `20260816_0004` additive: существующие profile/assets/prices/
+transactions/runs не переписываются. Proposal set хранит только admitted strategy metadata и UUID
+runs. Draft хранит extraction snapshot; unique append-only decision ссылается на transaction только
+после атомарного confirm. DB triggers запрещают update/delete. Resolver принимает только известную
+asset identity; неоднозначный или отсутствующий результат остаётся `unknown` до выбора пользователя.
 
 ## Provenance и чувствительность
 
@@ -76,9 +78,10 @@ contract. Каждый price хранит source, `as_of`, `max_age_seconds` и 
 output и reason. GigaChat report хранит provider/model, prompt/corpus hashes, latency, usage и raw
 response hash, но не raw prompt/output и никогда не становится источником portfolio facts.
 
-Raw image является временными конфиденциальными данными: принимается в bounded private temp storage,
-не входит в PostgreSQL backup и Git, удаляется сразу после confirm/reject и не позднее 24 часов для
-незавершённого draft. Постоянно сохраняются content hash, media metadata, extractor/version,
+Raw image является временными конфиденциальными данными: принимается в памяти, нормализуется в
+bounded private tmpfs, не входит в PostgreSQL backup и Git и удаляется вместе со всеми OCR artifacts
+до возврата draft независимо от дальнейшего confirm/reject. Постоянно сохраняются content hash,
+media metadata, extractor/version,
 extracted fields, confidence/unknowns и решение пользователя. Передача raw image внешнему provider
 запрещена без отдельного approved minimal-data/retention contract.
 

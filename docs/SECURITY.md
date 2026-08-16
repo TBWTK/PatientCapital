@@ -44,7 +44,7 @@ broker order capability.
 | Регуляторный/consumer harm | no execution, no return forecast, explicit scope, legal gate | disclaimer не гарантирует выход из регулирования |
 | Malicious/oversized image | MIME/magic-byte/dimension/size limits, generated filename, private tmpfs, timeout | parser/library vulnerability |
 | OCR/vision hallucination | output is unconfirmed draft, field confidence/unknowns, exact human confirmation | пользователь может подтвердить неверный draft |
-| Sensitive screenshot retention | raw file never in DB/Git/backup; delete on decision or 24h expiry | host administrator can inspect live tmpfs |
+| Sensitive screenshot retention | raw file never in DB/Git/backup; private temp удаляется до ответа draft | host administrator can inspect live process/tmpfs во время OCR |
 | Research/source injection | allowlisted typed adapters, provenance/freshness, prose cannot materialize facts | issuer/public source can be misleading |
 | Monitoring churn or duplicate alert | versioned thresholds, idempotent run/alert keys, no transaction/order tool | noisy but non-executing recommendations |
 
@@ -62,9 +62,10 @@ MCP/GigaChat credentials не передаются в Compose. HTTPX входи�
 adapter; URL нельзя переопределить на другой host. Python runtime и npm lockfile audit 15.08.2026
 дали `0` известных advisories до этого product change; повторный audit обязателен перед handoff.
 
-PC2 upload/extractor остаётся local-only, пока отдельный admission и data-flow review не разрешат
-конкретного внешнего provider. Upload parser должен ограничивать bytes, pixels, media types и время,
-не доверять filename/metadata, не исполнять embedded content и очищать temp artifacts по retention.
+PC2 upload/extractor local-only: Pillow проверяет decoded JPEG/PNG, MIME/magic, bytes/pixels; generated
+0600 files находятся в 0700 tmpfs directory, Tesseract rus/eng ограничен timeout, а context manager
+очищает artifacts до ответа. Filename не используется как путь, raw image внешнему provider не
+передаётся; любой будущий внешний extractor требует нового admission и data-flow review.
 Monitor получает только read/evidence capabilities и технически не импортирует ledger/order command.
 
 ## Production blockers

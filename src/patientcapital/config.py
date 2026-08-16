@@ -19,6 +19,10 @@ class Settings(BaseSettings):
     moex_iss_base_url: str = "https://iss.moex.com/iss"
     moex_timeout_seconds: float = Field(default=10.0, gt=0, le=30)
     moex_max_age_seconds: int = Field(default=345_600, gt=0, le=604_800)
+    upload_max_bytes: int = Field(default=8_388_608, gt=0, le=20_000_000)
+    upload_max_pixels: int = Field(default=20_000_000, gt=0, le=40_000_000)
+    ocr_timeout_seconds: float = Field(default=20.0, gt=0, le=60)
+    upload_temp_directory: Path = Path("/tmp")
     gigachat_enabled: bool = False
     gigachat_api_key: SecretStr | None = None
     gigachat_client_id: SecretStr | None = None

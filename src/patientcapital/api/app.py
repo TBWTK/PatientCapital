@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, Request, Response
+from fastapi import Depends, FastAPI, File, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -20,10 +20,15 @@ from patientcapital.application.services import (
     create_proposal_set,
     create_recommendation,
     create_transaction,
+    create_transaction_draft_from_image,
+    create_transaction_draft_from_text,
+    create_transaction_draft_manual,
+    decide_transaction_draft,
     get_portfolio,
     get_profile,
     get_proposal_set,
     get_recommendation,
+    get_transaction_draft,
     list_assets,
     put_asset,
     put_profile,
@@ -45,12 +50,17 @@ from patientcapital.contracts import (
     RecommendationCreate,
     RecommendationResponse,
     TransactionCreate,
+    TransactionDraftDecisionCreate,
+    TransactionDraftManualCreate,
+    TransactionDraftResponse,
+    TransactionDraftTextCreate,
     TransactionResponse,
 )
 from patientcapital.domain.errors import InvalidAllocationInput
 from patientcapital.marketdata.models import MarketDataProvider
 from patientcapital.marketdata.moex import MoexIssProvider
 from patientcapital.persistence.database import Database
+from patientcapital.transaction_intake.image import ImageTextExtractor, TesseractImageExtractor
 
 
 def _error(status_code: int, code: str, message: str) -> JSONResponse:
@@ -63,6 +73,7 @@ def _error(status_code: int, code: str, message: str) -> JSONResponse:
 def create_app(
     settings: Settings | None = None,
     market_data_provider: MarketDataProvider | None = None,
+    image_text_extractor: ImageTextExtractor | None = None,
 ) -> FastAPI:
     resolved = settings or Settings()
     database = Database(resolved.database_url)
@@ -70,6 +81,12 @@ def create_app(
         base_url=resolved.moex_iss_base_url,
         timeout_seconds=resolved.moex_timeout_seconds,
         max_age_seconds=resolved.moex_max_age_seconds,
+    )
+    extractor = image_text_extractor or TesseractImageExtractor(
+        max_bytes=resolved.upload_max_bytes,
+        max_pixels=resolved.upload_max_pixels,
+        timeout_seconds=resolved.ocr_timeout_seconds,
+        temp_directory=resolved.upload_temp_directory,
     )
 
     @asynccontextmanager
@@ -155,6 +172,69 @@ def create_app(
         session: SessionDependency,
     ) -> TransactionResponse:
         result, created = create_transaction(session, payload)
+        response.status_code = 201 if created else 200
+        return result
+
+    @app.post(
+        "/v1/transaction-drafts/text",
+        response_model=TransactionDraftResponse,
+        status_code=201,
+    )
+    def transaction_draft_text_post(
+        payload: TransactionDraftTextCreate,
+        session: SessionDependency,
+    ) -> TransactionDraftResponse:
+        return create_transaction_draft_from_text(session, payload)
+
+    @app.post(
+        "/v1/transaction-drafts/manual",
+        response_model=TransactionDraftResponse,
+        status_code=201,
+    )
+    def transaction_draft_manual_post(
+        payload: TransactionDraftManualCreate,
+        session: SessionDependency,
+    ) -> TransactionDraftResponse:
+        return create_transaction_draft_manual(session, payload)
+
+    @app.post(
+        "/v1/transaction-drafts/image",
+        response_model=TransactionDraftResponse,
+        status_code=201,
+    )
+    async def transaction_draft_image_post(
+        session: SessionDependency,
+        file: Annotated[UploadFile, File()],
+    ) -> TransactionDraftResponse:
+        content = await file.read(resolved.upload_max_bytes + 1)
+        return create_transaction_draft_from_image(
+            session,
+            content=content,
+            declared_content_type=file.content_type or "application/octet-stream",
+            extractor=extractor,
+        )
+
+    @app.get(
+        "/v1/transaction-drafts/{draft_id}", response_model=TransactionDraftResponse
+    )
+    def transaction_draft_get(
+        draft_id: UUID,
+        session: SessionDependency,
+    ) -> TransactionDraftResponse:
+        return get_transaction_draft(session, draft_id)
+
+    @app.post(
+        "/v1/transaction-drafts/{draft_id}/decisions",
+        response_model=TransactionDraftResponse,
+        status_code=201,
+    )
+    def transaction_draft_decision_post(
+        draft_id: UUID,
+        payload: TransactionDraftDecisionCreate,
+        response: Response,
+        session: SessionDependency,
+    ) -> TransactionDraftResponse:
+        result, created = decide_transaction_draft(session, draft_id, payload)
         response.status_code = 201 if created else 200
         return result
 

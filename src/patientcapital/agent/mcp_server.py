@@ -20,6 +20,9 @@ from patientcapital.contracts import (
     RecommendationCreate,
     RecommendationResponse,
     TransactionCreate,
+    TransactionDraftDecisionCreate,
+    TransactionDraftResponse,
+    TransactionDraftTextCreate,
     TransactionResponse,
 )
 from patientcapital.marketdata.models import MarketDataProvider
@@ -186,6 +189,42 @@ def build_mcp_server(
     )
     def get_proposal_set_tool(proposal_set_id: UUID) -> ProposalSetResponse:
         return tools.get_proposal_set(proposal_set_id)
+
+    @server.tool(
+        name="create_transaction_draft",
+        title="Create transaction draft from text",
+        description=(
+            "Parse user-supplied transaction text into an immutable unconfirmed draft with exact "
+            "unknown/conflict fields. This never records a transaction or changes positions."
+        ),
+        annotations=PROPOSE,
+    )
+    def create_transaction_draft_tool(text: str) -> TransactionDraftResponse:
+        return tools.create_transaction_draft(TransactionDraftTextCreate(text=text))
+
+    @server.tool(
+        name="get_transaction_draft",
+        title="Get transaction draft",
+        description="Read one saved transaction draft and its decision without recalculation.",
+        annotations=READ_ONLY,
+    )
+    def get_transaction_draft_tool(draft_id: UUID) -> TransactionDraftResponse:
+        return tools.get_transaction_draft(draft_id)
+
+    @server.tool(
+        name="decide_transaction_draft",
+        title="Confirm or reject transaction draft",
+        description=(
+            "Append an explicit decision. Confirm requires the user's complete actual transaction "
+            "payload and is the only draft operation that may append one ledger event."
+        ),
+        annotations=RECORD,
+    )
+    def decide_transaction_draft_tool(
+        draft_id: UUID,
+        decision: TransactionDraftDecisionCreate,
+    ) -> TransactionDraftResponse:
+        return tools.decide_transaction_draft(draft_id, decision)
 
     @server.tool(
         name="get_recommendation",

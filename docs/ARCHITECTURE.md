@@ -81,6 +81,11 @@ evidence; transaction intake создаёт подтверждаемый draft; 
 | `GET/PUT` | `/v1/assets[/{id}]` | latest/next asset/target version |
 | `POST` | `/v1/assets/{id}/prices` | append-only manual price snapshot |
 | `POST` | `/v1/transactions` | idempotent append-only BUY/SELL с отдельным total НКД |
+| `POST` | `/v1/transaction-drafts/text` | immutable unconfirmed draft из русского текста; ledger не меняется |
+| `POST` | `/v1/transaction-drafts/image` | bounded JPEG/PNG → local Tesseract → immutable draft; raw bytes удаляются |
+| `POST` | `/v1/transaction-drafts/manual` | advanced exact input использует тот же draft contract |
+| `GET` | `/v1/transaction-drafts/{id}` | сохранённые fields, unknowns/conflicts, confidence и decision |
+| `POST` | `/v1/transaction-drafts/{id}/decisions` | explicit confirm/reject; только confirm атомарно создаёт один transaction |
 | `GET` | `/v1/portfolio` | derived quantities, cost basis, value, P&L, allocation/drift |
 | `POST/GET` | `/v1/recommendations[/{id}]` | calculate/store or retrieve immutable domain run |
 | `POST` | `/v1/discovery/recommendations` | fetch/validate MOEX candidates, apply policy and persist deterministic proposal |
@@ -98,14 +103,15 @@ implementation, но capability boundaries фиксированы:
 | Capability | Команда/запрос | Authority / эффект |
 | --- | --- | --- |
 | Proposal set *(implemented)* | `POST/GET /v1/proposal-sets[/{id}]` | сохраняет amount/profile version и `1..3` run refs; ledger не меняется |
-| Transaction draft | create from text/image; get by id | сохраняет extraction, resolver evidence, confidence/unknowns; transaction не создаёт |
-| Draft decision | confirm/reject with expected draft version | confirm принимает полный exact payload и единственный вызывает idempotent ledger command |
+| Transaction draft *(implemented)* | `POST text/image/manual`, `GET` by id | сохраняет extraction, resolver evidence, confidence/unknowns; transaction не создаёт |
+| Draft decision *(implemented)* | `POST /{id}/decisions` с expected version | confirm принимает полный exact payload и единственный вызывает idempotent ledger command |
 | Analytics overview | read current derived view | только server-derived cashflow/result/income/drift/freshness; unsupported facts explicit |
 | Alerts | list/acknowledge | immutable monitor evidence и user acknowledgement; trade side effects отсутствуют |
 
-Transport для image — bounded multipart upload. OpenAPI, generated TypeScript и MCP schemas должны
-проецировать одни application contracts; ни один transport не реализует собственную extraction или
-financial logic.
+Transport для image — bounded multipart upload. JPEG/PNG проверяются по MIME, magic bytes, размеру
+и pixels; local Tesseract имеет timeout, а private tmpfs artifacts удаляются сразу после OCR.
+OpenAPI, generated TypeScript и MCP schemas проецируют одни application contracts; ни один transport
+не реализует собственную financial logic.
 
 ## Первичный аудит решений
 
@@ -225,10 +231,10 @@ runtime technology не добавляется без требования, owne
 | Service | Build/runtime | Dependency/health | State и exposure |
 | --- | --- | --- | --- |
 | `db` | pinned `postgres:17-alpine` | `pg_isready` | named volume; loopback port 55432 |
-| `api` | pinned Python 3.13 slim, core deps only, non-root/read-only | healthy DB → Alembic head → DB readiness query | stateless; loopback port 8000; `/tmp` tmpfs |
+| `api` | pinned Python 3.13 slim, Tesseract rus/eng, non-root/read-only | healthy DB → Alembic head → DB readiness query | stateless; loopback port 8000; bounded OCR в `/tmp` tmpfs |
 | `web` | pinned Node 22 multi-stage Vinext build, non-root/read-only | healthy API → HTTP root health | generated bundle; loopback port 3000; `/tmp` tmpfs |
 
-Compose передаёт API application/DB/CORS и allowlisted MOEX timeout/base URL config, а также
+Compose передаёт API application/DB/CORS, allowlisted MOEX и bounded upload/OCR config, а также
 `GIGACHAT_ENABLED=false`; model keys не входят в images/environment. Browser-visible API URL
 bake-time и указывает на host loopback.
 `scripts/docker-smoke.sh` создаёт изолированный project/volume и доказывает full HTTP flow. Logs,

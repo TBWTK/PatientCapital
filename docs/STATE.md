@@ -9,9 +9,9 @@ updated: 2026-08-16
 
 ## Active objective
 
-**In progress — Assistant-first MVP v2 (`PC2-MVP`).** Превратить проверенный amount-only v1
-в лаконичный продуктовый цикл `сумма → выбор стратегии → подтверждение исполнения → обновлённая
-аналитика`, добавить source-backed расширение universe и наблюдение без автоматической торговли.
+**Complete — Assistant-first MVP v2 (`PC2-MVP`).** Проверенный amount-only v1 превращён в
+лаконичный продуктовый цикл `сумма → выбор стратегии → подтверждение исполнения → обновлённая
+аналитика` с source-backed расширением universe и наблюдением без автоматической торговли.
 
 ## Acceptance criteria
 
@@ -37,7 +37,7 @@ updated: 2026-08-16
   зарегистрированному событию или threshold; SELL и broker order никогда не выполняются самими.
 - [x] Web использует четыре основных раздела — Обзор, Пополнить, Ассистент, Профиль — и проходит
   desktop/mobile, keyboard, screen-reader, error-recovery и sensitive-upload проверки.
-- [ ] Schema/API/MCP/data/retention/security/Docker/docs обновлены согласованно; migration совместима
+- [x] Schema/API/MCP/data/retention/security/Docker/docs обновлены согласованно; migration совместима
   с существующим ledger, full regression и isolated Docker E2E проходят на releasable `main`.
 
 ## Current verified state
@@ -63,7 +63,8 @@ updated: 2026-08-16
 - `PC2-5 Monitoring` завершён: `monitor-threshold-v1`, четыре московских слота, immutable
   run/alert/acknowledgement, daily dedupe, явный provider-error и API/MCP/web read/ack surfaces.
   Worker не импортирует transaction/order use case.
-- Оставшийся product-gap: финальный cross-surface/Git handoff audit.
+- PC2-MVP fast-forward перенесён на локальный `main`; все acceptance criteria и cross-surface gates
+  закрыты. Broker execution и public/commercial mode по-прежнему вне scope.
 - PC2-1 evidence 16.08.2026: `145 passed`, branch coverage `94.23%`; Ruff/mypy/OpenAPI; web build,
   typecheck, lint, SSR, `4` component tests + axe; MCP/API/migration tests; healthy Compose; browser
   desktop `1440px` и mobile `390px` без horizontal overflow.
@@ -87,8 +88,8 @@ updated: 2026-08-16
 
 ## Changed areas
 
-- `monitor-threshold-v1`, worker schedule, additive immutable monitor schema, API/MCP alert surfaces,
-  Assistant observation UI и Docker monitor role.
+- Полный PC2 loop: proposal sets, transaction drafts/confirmation, analytics, dividend research,
+  `monitor-threshold-v1`, additive schemas, API/MCP/web surfaces и Docker monitor role.
 
 ## Decisions made
 
@@ -103,8 +104,8 @@ updated: 2026-08-16
 
 ## Next exact step
 
-Завершить `PC2-MVP handoff`: выполнить full web/Python/docs/IMMUNE/Git gates, isolated Docker
-migration smoke, подтвердить clean releasable branch и синхронизировать `main` с `origin/main`.
+Ждать следующую продуктовую цель владельца. Рекомендуемый следующий stage — расширять research
+universe только по одному asset class/issuer через новый reviewed corpus и policy regression.
 
 ## Blockers
 

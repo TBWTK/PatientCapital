@@ -4,6 +4,7 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import DBAPIError
 
 from patientcapital.api.app import create_app
 from patientcapital.config import Settings
@@ -13,10 +14,12 @@ from patientcapital.marketdata.errors import MarketDataError
 from patientcapital.marketdata.models import InstrumentKind, MarketCandidate, MarketScan
 from patientcapital.persistence.database import Database
 from tests.integration.conftest import TEST_DATABASE_URL
+from tests.market_fixtures import admitted_liquidity
 
 
 class CountingScanner:
     name = "counting-market-scanner"
+    scan_policy_version = "moex-board-scan-v3"
 
     def __init__(self) -> None:
         self.calls = 0
@@ -43,9 +46,13 @@ class CountingScanner:
             accrued_interest=Decimal("20"),
             next_coupon_date=calculated_at.date() + timedelta(days=60),
             coupon_percent=Decimal("12"),
+            liquidity=admitted_liquidity(
+                InstrumentKind.OFZ,
+                observed_at=calculated_at - timedelta(minutes=5),
+            ),
         )
         return MarketScan(
-            policy_version="moex-board-scan-v1",
+            policy_version=self.scan_policy_version,
             observed_at=calculated_at,
             candidates=(candidate,),
             universe_size=321,
@@ -59,6 +66,7 @@ class CountingScanner:
 
 class FailingScanner:
     name = "failing-market-scanner"
+    scan_policy_version = "moex-board-scan-v3"
 
     def scan(self, *, calculated_at: datetime) -> MarketScan:
         del calculated_at
@@ -112,6 +120,8 @@ def test_proposal_persists_and_reuses_fresh_market_snapshot_without_trading() ->
     engine = create_engine(TEST_DATABASE_URL)
     with engine.connect() as connection:
         assert connection.scalar(text("SELECT count(*) FROM market_research_snapshots")) == 1
+        assert connection.scalar(text("SELECT count(*) FROM asset_admission_runs")) == 1
+        assert connection.scalar(text("SELECT count(*) FROM asset_admission_assessments")) == 1
         assert connection.scalar(text("SELECT count(*) FROM transactions")) == 0
     engine.dispose()
 
@@ -123,6 +133,7 @@ def test_latest_market_research_endpoint_exposes_snapshot_status() -> None:
         _configure_profile(client)
         created = client.post("/v1/proposal-sets", json={"contribution": "8000.00"})
         latest = client.get("/v1/market-research/latest")
+        admission = client.get("/v1/asset-admission/latest")
 
     assert created.status_code == 201
     assert latest.status_code == 200
@@ -131,6 +142,32 @@ def test_latest_market_research_endpoint_exposes_snapshot_status() -> None:
     assert payload["provider"] == scanner.name
     assert payload["universe_size"] == 321
     assert datetime.fromisoformat(payload["observed_at"]).tzinfo is not None
+    assert admission.status_code == 200
+    admission_payload = admission.json()
+    assert admission_payload["policy_version"] == "asset-admission-v2"
+    assert admission_payload["assessment_count"] == 1
+    assert admission_payload["status_counts"]["eligible"] == 1
+    profile = admission_payload["assessments"][0]["profile"]
+    assert profile["overall_status"] == "eligible"
+    assert profile["liquidity"]["status"] == "eligible"
+    assert profile["investment"]["status"] == "eligible"
+
+
+def test_admission_assessments_are_append_only() -> None:
+    scanner = CountingScanner()
+    settings = Settings(database_url=TEST_DATABASE_URL, app_env="test")
+    with TestClient(create_app(settings, market_data_provider=scanner)) as client:
+        _configure_profile(client)
+        created = client.post("/v1/proposal-sets", json={"contribution": "8000.00"})
+    assert created.status_code == 201
+
+    engine = create_engine(TEST_DATABASE_URL)
+    with (
+        pytest.raises(DBAPIError, match="immutable table asset_admission_assessments"),
+        engine.begin() as connection,
+    ):
+        connection.execute(text("UPDATE asset_admission_assessments SET overall_status = 'reject'"))
+    engine.dispose()
 
 
 def test_provider_failure_is_persisted_and_never_hidden_by_an_old_universe() -> None:

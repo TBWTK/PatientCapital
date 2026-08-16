@@ -9,7 +9,12 @@ from patientcapital.domain.discovery import (
     select_market_candidates,
 )
 from patientcapital.domain.errors import InvalidAllocationInput
-from patientcapital.marketdata.models import InstrumentKind, MarketCandidate
+from patientcapital.marketdata.models import (
+    InstrumentKind,
+    LiquidityObservation,
+    MarketCandidate,
+    MarketLiquidityEvidence,
+)
 from patientcapital.research.models import (
     BalanceSheetStatus,
     CorporateActionStatus,
@@ -19,6 +24,31 @@ from patientcapital.research.models import (
 )
 
 NOW = datetime(2026, 8, 16, 9, 0, tzinfo=UTC)
+
+
+def admitted_liquidity(
+    kind: InstrumentKind, *, turnover: str | None = None
+) -> MarketLiquidityEvidence:
+    rolling_turnover = turnover or (
+        "100000000" if kind is not InstrumentKind.EQUITY_INDEX_FUND else "10000000"
+    )
+    return MarketLiquidityEvidence(
+        policy_version="market-liquidity-v2",
+        observed_at=NOW - timedelta(hours=1),
+        max_age=timedelta(days=4),
+        security_status="active",
+        observations=tuple(
+            LiquidityObservation(
+                session_date=date(2026, 8, 15) - timedelta(days=index),
+                turnover_rub=Decimal(rolling_turnover),
+                trades=1000,
+                bid=Decimal("100"),
+                offer=Decimal("100.4"),
+            )
+            for index in range(20)
+        ),
+        source_url="https://iss.moex.com/iss/history/test",
+    )
 
 
 def evidence(**overrides: object) -> DividendResearchEvidence:
@@ -53,6 +83,7 @@ def evidence(**overrides: object) -> DividendResearchEvidence:
                 ),
             )
         ),
+        "last_registry_close_date": date(2025, 7, 18),
     }
     values.update(overrides)
     return DividendResearchEvidence(**values)  # type: ignore[arg-type]
@@ -67,6 +98,7 @@ def candidate(
     research: DividendResearchEvidence | None = None,
     maturity: date | None = None,
     currency: str = "RUB",
+    market_liquidity: MarketLiquidityEvidence | None = None,
 ) -> MarketCandidate:
     return MarketCandidate(
         asset_id=asset_id,
@@ -78,14 +110,20 @@ def candidate(
         price_as_of=NOW - timedelta(hours=1),
         max_age=timedelta(days=4),
         source_url=f"https://iss.moex.com/{asset_id}",
-        classification_url="https://www.moex.com/ru/marketdata/",
+        classification_url=(
+            "https://www.moex.com/msn/etf"
+            if kind is InstrumentKind.EQUITY_INDEX_FUND
+            else "https://www.moex.com/ru/marketdata/"
+        ),
         quote_kind="last_dirty" if maturity is not None else "current",
         turnover=Decimal(turnover),
         maturity_date=maturity,
+        yield_percent=Decimal("15") if maturity is not None else None,
         clean_price_percent=Decimal("77") if maturity is not None else None,
         face_value=Decimal("1000") if maturity is not None else None,
         accrued_interest=Decimal("30") if maturity is not None else None,
         research=research,
+        liquidity=market_liquidity or admitted_liquidity(kind),
     )
 
 
@@ -144,7 +182,6 @@ def test_growth_policy_admits_source_backed_dividend_stock_with_concentration_ca
             "1000000000",
             "корпоратив",
         ),
-        (evidence(), "9999999", "ликвид"),
     ],
 )
 def test_dividend_gate_rejects_each_material_unknown(
@@ -172,6 +209,31 @@ def test_dividend_gate_rejects_each_material_unknown(
     assert [(item.candidate.asset_id, item.target_weight) for item in selection.items] == [
         ("FUND", Decimal("1.00000000"))
     ]
+
+
+def test_dividend_gate_uses_rolling_liquidity_instead_of_current_turnover() -> None:
+    selection = select_market_candidates(
+        (
+            candidate("FUND", InstrumentKind.EQUITY_INDEX_FUND, price="100", turnover="800"),
+            candidate(
+                "STOCK",
+                InstrumentKind.DIVIDEND_STOCK,
+                price="155",
+                turnover="1000000000",
+                research=evidence(),
+                market_liquidity=admitted_liquidity(
+                    InstrumentKind.DIVIDEND_STOCK, turnover="1000000"
+                ),
+            ),
+        ),
+        contribution=Decimal("8000"),
+        horizon_years=5,
+        risk_level="growth",
+        calculated_at=NOW,
+    )
+
+    rejected = next(item for item in selection.rejected if item.candidate.asset_id == "STOCK")
+    assert "LIQUIDITY_TURNOVER_REJECT" in rejected.reason
 
 
 def test_dividend_candidate_requires_typed_research_evidence() -> None:

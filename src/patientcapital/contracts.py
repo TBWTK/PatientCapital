@@ -251,9 +251,7 @@ class AlertAcknowledgementResponse(ContractModel):
 class MonitorAlertResponse(ContractModel):
     id: UUID
     monitor_run_id: UUID
-    kind: Literal[
-        "allocation_drift", "price_move", "research_expiring", "corporate_action_review"
-    ]
+    kind: Literal["allocation_drift", "price_move", "research_expiring", "corporate_action_review"]
     severity: Literal["info", "warning"]
     asset_id: str
     title: str
@@ -309,9 +307,7 @@ class DividendResearchResponse(ContractModel):
     payout_ratio_percent: Decimal | None = None
     balance_sheet_status: Literal["no_debt", "adequate_capital", "concern", "unknown"]
     governance_program_member: bool | None = None
-    corporate_action_status: Literal[
-        "no_material_action_identified", "material", "unknown"
-    ]
+    corporate_action_status: Literal["no_material_action_identified", "material", "unknown"]
     summary: str
     citations: list[ResearchCitationResponse]
     annual_dividend_per_share: Decimal | None = None
@@ -321,10 +317,45 @@ class DividendResearchResponse(ContractModel):
     unknown_facts: list[str] = Field(default_factory=list)
 
 
+class AdmissionGateResponse(ContractModel):
+    gate_id: str
+    status: Literal["eligible", "watch", "reject", "unknown"]
+    reason_code: str
+    observed_value: str | None = None
+    unit: str | None = None
+    threshold: str | None = None
+    source_url: str
+    observed_at: datetime
+    valid_until: datetime
+    material: bool
+
+
+class AdmissionDimensionResponse(ContractModel):
+    policy_version: str
+    status: Literal["eligible", "watch", "reject", "unknown"]
+    reason_codes: list[str]
+    gates: list[AdmissionGateResponse]
+
+
+class AssetAdmissionProfileResponse(ContractModel):
+    policy_version: str
+    asset_id: str
+    instrument_kind: Literal["ofz", "equity_index_fund", "dividend_stock", "public_equity"]
+    strategy_profile: str
+    overall_status: Literal["eligible", "watch", "reject", "unknown"]
+    evaluated_at: datetime
+    expires_at: datetime
+    liquidity: AdmissionDimensionResponse
+    investment: AdmissionDimensionResponse
+    reason_codes: list[str]
+    hard_kills: list[str]
+    unknowns: list[str]
+
+
 class DiscoveryCandidateResponse(ContractModel):
     asset_id: str
     name: str
-    instrument_type: Literal["ofz", "equity_index_fund", "dividend_stock"]
+    instrument_type: Literal["ofz", "equity_index_fund", "dividend_stock", "public_equity"]
     target_weight: Decimal
     rationale: str
     unit_price: Decimal
@@ -343,12 +374,13 @@ class DiscoveryCandidateResponse(ContractModel):
     source_url: str
     classification_url: str
     research: DividendResearchResponse | None = None
+    admission: AssetAdmissionProfileResponse
 
 
 class RejectedDiscoveryCandidateResponse(ContractModel):
     asset_id: str
     name: str
-    instrument_type: Literal["ofz", "equity_index_fund", "dividend_stock"]
+    instrument_type: Literal["ofz", "equity_index_fund", "dividend_stock", "public_equity"]
     reason: str
     unit_price: Decimal
     lot_size: int
@@ -357,6 +389,7 @@ class RejectedDiscoveryCandidateResponse(ContractModel):
     source_url: str
     score: Decimal | None = None
     rank_factors: dict[str, str] = Field(default_factory=dict)
+    admission: AssetAdmissionProfileResponse
 
 
 class MarketSearchResponse(ContractModel):
@@ -370,6 +403,9 @@ class MarketSearchResponse(ContractModel):
     candidate_count: int
     enriched_count: int
     kind_counts: dict[str, int]
+    admission_run_id: UUID
+    admission_policy_version: str
+    admission_status_counts: dict[str, int]
 
 
 class MarketResearchStatusResponse(ContractModel):
@@ -385,6 +421,24 @@ class MarketResearchStatusResponse(ContractModel):
     enriched_count: int
     kind_counts: dict[str, int]
     created_at: datetime
+
+
+class AssetAdmissionAssessmentResponse(ContractModel):
+    name: str
+    profile: AssetAdmissionProfileResponse
+
+
+class AssetAdmissionRunResponse(ContractModel):
+    id: UUID
+    market_snapshot_id: UUID
+    policy_version: str
+    scope: Literal["universe_discovery", "pool_refresh", "on_demand"]
+    status: Literal["succeeded"]
+    evaluated_at: datetime
+    expires_at: datetime
+    assessment_count: int
+    status_counts: dict[str, int]
+    assessments: list[AssetAdmissionAssessmentResponse]
 
 
 class RecommendationLineResponse(ContractModel):

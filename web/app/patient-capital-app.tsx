@@ -6,6 +6,7 @@ import {
   type AlertAcknowledgement,
   type AnalyticsOverview,
   type Asset,
+  type AssetAdmissionProfile,
   type MonitorAlert,
   type Portfolio,
   type Profile,
@@ -227,6 +228,37 @@ function Overview({
   );
 }
 
+function admissionLabel(status: AssetAdmissionProfile["overall_status"]) {
+  return {
+    eligible: "Допущен",
+    watch: "Наблюдать",
+    reject: "Отклонён",
+    unknown: "Нужно исследование",
+  }[status];
+}
+
+function AdmissionDetails({ profile }: { profile: AssetAdmissionProfile }) {
+  return (
+    <details className="admission-details">
+      <summary>Контур допуска · {admissionLabel(profile.overall_status)}</summary>
+      <div className="admission-axes">
+        <span><b>Торговая ликвидность</b><i className={`admission-status ${profile.liquidity.status}`}>{admissionLabel(profile.liquidity.status)}</i></span>
+        <span><b>Инвестиционный профиль</b><i className={`admission-status ${profile.investment.status}`}>{admissionLabel(profile.investment.status)}</i></span>
+      </div>
+      {profile.reason_codes.length > 0 && <p>Причины: {profile.reason_codes.join(" · ")}</p>}
+      <dl>
+        {[...profile.liquidity.gates, ...profile.investment.gates].map((gate) => (
+          <div key={`${gate.gate_id}-${gate.reason_code}`}>
+            <dt>{gate.gate_id}</dt>
+            <dd>{gate.observed_value ?? "unknown"}{gate.unit ? ` ${gate.unit}` : ""} · {gate.reason_code}</dd>
+          </div>
+        ))}
+      </dl>
+      <footer><small>{profile.policy_version} · проверено {shortDateTime(profile.evaluated_at)} · до {shortDateTime(profile.expires_at)}</small></footer>
+    </details>
+  );
+}
+
 function RecommendationEvidence({ result }: { result: Recommendation }) {
   const candidates = result.candidates ?? [];
   const rejectedCandidates = result.rejected_candidates ?? [];
@@ -238,12 +270,12 @@ function RecommendationEvidence({ result }: { result: Recommendation }) {
             <i>{result.search.mode === "live" ? "LIVE SEARCH" : "FRESH CACHE"}</i>
             <b>Просмотрено {result.search.universe_size} инструментов</b>
             <span>
-              Допущено {result.search.candidate_count} · углублённо проверено {result.search.enriched_count}
+              Профилей {result.search.candidate_count} · допущено {result.search.admission_status_counts.eligible ?? 0} · на исследовании {result.search.admission_status_counts.unknown ?? 0}
             </span>
           </div>
           <div>
             <span>Снимок {shortDateTime(result.search.observed_at)}</span>
-            <small>{result.search.scan_policy_version} · {result.search.snapshot_id.slice(0, 8)}</small>
+            <small>{result.search.scan_policy_version} · {result.search.admission_policy_version} · {result.search.admission_run_id.slice(0, 8)}</small>
           </div>
         </section>
       )}
@@ -251,7 +283,7 @@ function RecommendationEvidence({ result }: { result: Recommendation }) {
         <div className="candidate-grid" aria-label="Подобранные инструменты">
           {candidates.map((candidate) => (
             <article key={candidate.asset_id}>
-              <header><i>{candidate.instrument_type === "ofz" ? "ОФЗ" : candidate.instrument_type === "dividend_stock" ? "АКЦИЯ" : "ФОНД"}</i><b>{percent(candidate.target_weight)}</b></header>
+              <header><i>{candidate.instrument_type === "ofz" ? "ОФЗ" : candidate.instrument_type === "equity_index_fund" ? "ФОНД" : "АКЦИЯ"}</i><b>{percent(candidate.target_weight)}</b></header>
               <h3>{candidate.name}</h3>
               <p>{candidate.rationale}</p>
               <dl>
@@ -265,6 +297,7 @@ function RecommendationEvidence({ result }: { result: Recommendation }) {
                 <div><dt>Цена на</dt><dd>{shortDateTime(candidate.price_as_of)}</dd></div>
                 {candidate.score != null && <div><dt>Ranking score</dt><dd>{candidate.score}</dd></div>}
               </dl>
+              <AdmissionDetails profile={candidate.admission} />
               {candidate.research && (
                 <details className="research-details">
                   <summary>{candidate.research.scope === "market_screen" ? "Что проверил market screen" : "Почему акция прошла полную проверку"}</summary>
@@ -300,9 +333,10 @@ function RecommendationEvidence({ result }: { result: Recommendation }) {
           <div>
             {rejectedCandidates.map((candidate) => (
               <article key={candidate.asset_id}>
-                <span><b>{candidate.name}</b><small>{candidate.asset_id} · лот {candidate.lot_size} · {money(candidate.lot_cost, result.currency)}</small></span>
+                <span><b>{candidate.name}</b><small>{candidate.asset_id} · лот {candidate.lot_size} · {money(candidate.lot_cost, result.currency)}</small><i className={`admission-status ${candidate.admission.overall_status}`}>{admissionLabel(candidate.admission.overall_status)}</i></span>
                 <p>{candidate.reason}</p>
                 {candidate.score != null && <small>Score {candidate.score}</small>}
+                <AdmissionDetails profile={candidate.admission} />
                 <a href={candidate.source_url} target="_blank" rel="noreferrer">Источник ↗</a>
               </article>
             ))}

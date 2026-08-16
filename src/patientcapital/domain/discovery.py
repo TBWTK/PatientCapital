@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 
+from patientcapital.domain.admission import AdmissionStatus, evaluate_asset_admission
 from patientcapital.domain.errors import InvalidAllocationInput
 from patientcapital.marketdata.models import InstrumentKind, MarketCandidate
 from patientcapital.research.models import BalanceSheetStatus, CorporateActionStatus, ResearchScope
@@ -23,7 +24,6 @@ _EXPANDED_WEIGHTS: dict[str, tuple[Decimal, Decimal, Decimal]] = {
     "growth": (Decimal("0.40000000"), Decimal("0.40000000"), Decimal("0.20000000")),
 }
 _MATURITY_WINDOW_DAYS = 366
-_MIN_DIVIDEND_STOCK_TURNOVER = Decimal("10000000")
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,18 +57,12 @@ def _anniversary(value: date, years: int) -> date:
         return value.replace(year=value.year + years, day=28)
 
 
-def _ofz_rank(
-    candidate: MarketCandidate, *, target_date: date
-) -> tuple[Decimal, dict[str, str]]:
+def _ofz_rank(candidate: MarketCandidate, *, target_date: date) -> tuple[Decimal, dict[str, str]]:
     distance = abs((candidate.maturity_date - target_date).days)  # type: ignore[operator]
     yield_percent = candidate.yield_percent or Decimal("0")
     maturity_fit = Decimal(max(0, _MATURITY_WINDOW_DAYS - distance))
     liquidity = min(candidate.turnover / Decimal("1000000"), Decimal("100000"))
-    raw_score = (
-        yield_percent * Decimal("1000000")
-        + maturity_fit * Decimal("1000")
-        + liquidity
-    )
+    raw_score = yield_percent * Decimal("1000000") + maturity_fit * Decimal("1000") + liquidity
     score = raw_score.quantize(Decimal("0.00000001"))
     return score, {
         "yield_percent": str(yield_percent),
@@ -79,7 +73,11 @@ def _ofz_rank(
 
 
 def _select_ofz(
-    candidates: tuple[MarketCandidate, ...], *, contribution: Decimal, target_date: date
+    candidates: tuple[MarketCandidate, ...],
+    *,
+    contribution: Decimal,
+    target_date: date,
+    calculated_at: datetime,
 ) -> MarketCandidate | None:
     eligible = [
         item
@@ -89,6 +87,8 @@ def _select_ofz(
         and item.maturity_date is not None
         and item.maturity_date > target_date.replace(year=target_date.year - 5)
         and item.lot_cost <= contribution
+        and evaluate_asset_admission(item, calculated_at=calculated_at).overall_status
+        is AdmissionStatus.ELIGIBLE
     ]
     if not eligible:
         return None
@@ -102,7 +102,7 @@ def _select_ofz(
 
 
 def _select_fund(
-    candidates: tuple[MarketCandidate, ...], *, contribution: Decimal
+    candidates: tuple[MarketCandidate, ...], *, contribution: Decimal, calculated_at: datetime
 ) -> MarketCandidate | None:
     eligible = [
         item
@@ -110,6 +110,8 @@ def _select_fund(
         if item.kind is InstrumentKind.EQUITY_INDEX_FUND
         and item.currency == "RUB"
         and item.lot_cost <= contribution
+        and evaluate_asset_admission(item, calculated_at=calculated_at).overall_status
+        is AdmissionStatus.ELIGIBLE
     ]
     if not eligible:
         return None
@@ -131,27 +133,10 @@ def _dividend_rejection_reason(
     if not research.is_fresh_at(calculated_at):
         return "Research evidence просрочено или имеет недопустимое время наблюдения."
     if research.scope is ResearchScope.MARKET_SCREEN:
-        if research.policy_version != DIVIDEND_MARKET_POLICY_VERSION:
-            return "Отсутствует evidence допустимой версии dividend market-screen policy."
-        if research.dividend_years < 3:
-            return "Недостаточно подтверждённых лет дивидендных выплат в market screen."
-        if (
-            research.annual_dividend_per_share is None
-            or research.annual_dividend_per_share <= 0
-            or research.historical_dividend_yield_percent is None
-            or research.historical_dividend_yield_percent <= 0
-            or research.historical_dividend_yield_percent > 50
-        ):
-            return "Историческая дивидендная выплата отсутствует или имеет аномальное значение."
-        if research.listing_level not in {1, 2}:
-            return "Уровень листинга не допускается dividend market-screen policy."
-        if candidate.turnover < _MIN_DIVIDEND_STOCK_TURNOVER:
-            return "Недостаточная подтверждённая ликвидность dividend-stock кандидата."
-        if candidate.currency != "RUB":
-            return "Валюта инструмента не соответствует рублёвой policy."
-        if candidate.lot_cost > contribution:
-            return "Стоимость целого лота превышает сумму пополнения."
-        return None
+        return (
+            "Market screen является research-only: profitability, payout, balance, governance "
+            "и corporate actions остаются unknown."
+        )
     if research.policy_version != DIVIDEND_POLICY_VERSION:
         return "Отсутствует evidence допустимой версии dividend research policy."
     if research.profitable_years is None or research.profitable_years < 3:
@@ -171,17 +156,15 @@ def _dividend_rejection_reason(
         return "Состояние баланса неизвестно или содержит подтверждённый риск."
     if research.governance_program_member is not True:
         return "Отдельная проверка корпоративного управления не пройдена."
-    if (
-        research.corporate_action_status
-        is not CorporateActionStatus.NO_MATERIAL_ACTION_IDENTIFIED
-    ):
+    if research.corporate_action_status is not CorporateActionStatus.NO_MATERIAL_ACTION_IDENTIFIED:
         return "Выявлено или не исключено существенное корпоративное действие."
-    if candidate.turnover < _MIN_DIVIDEND_STOCK_TURNOVER:
-        return "Недостаточная подтверждённая ликвидность dividend-stock кандидата."
     if candidate.currency != "RUB":
         return "Валюта инструмента не соответствует рублёвой policy."
     if candidate.lot_cost > contribution:
         return "Стоимость целого лота превышает сумму пополнения."
+    profile = evaluate_asset_admission(candidate, calculated_at=calculated_at)
+    if profile.overall_status is not AdmissionStatus.ELIGIBLE:
+        return "Контур допуска актива не пройден: " + ", ".join(profile.reason_codes)
     return None
 
 
@@ -195,7 +178,7 @@ def _select_dividend_stock(
     eligible = [
         item
         for item in candidates
-        if item.kind is InstrumentKind.DIVIDEND_STOCK
+        if item.kind in {InstrumentKind.DIVIDEND_STOCK, InstrumentKind.PUBLIC_EQUITY}
         and _dividend_rejection_reason(
             item,
             contribution=contribution,
@@ -215,9 +198,7 @@ def _dividend_rank(candidate: MarketCandidate) -> tuple[Decimal, dict[str, str]]
         return Decimal("0"), {}
     historical_yield = research.historical_dividend_yield_percent or Decimal("0")
     quality_bonus = (
-        Decimal("100000000")
-        if research.scope is ResearchScope.FULL_QUALITY
-        else Decimal("0")
+        Decimal("100000000") if research.scope is ResearchScope.FULL_QUALITY else Decimal("0")
     )
     liquidity = min(candidate.turnover / Decimal("1000000"), Decimal("100000"))
     score = (
@@ -236,7 +217,7 @@ def _dividend_rank(candidate: MarketCandidate) -> tuple[Decimal, dict[str, str]]
 
 
 def _normalized_weights(
-    selected: tuple[tuple[MarketCandidate | None, Decimal], ...]
+    selected: tuple[tuple[MarketCandidate | None, Decimal], ...],
 ) -> dict[str, Decimal]:
     available = [(candidate, weight) for candidate, weight in selected if candidate is not None]
     total = sum((weight for _, weight in available), Decimal("0"))
@@ -281,8 +262,13 @@ def select_market_candidates(
         )
 
     target_date = _anniversary(calculated_at.date(), horizon_years)
-    ofz = _select_ofz(candidates, contribution=contribution, target_date=target_date)
-    fund = _select_fund(candidates, contribution=contribution)
+    ofz = _select_ofz(
+        candidates,
+        contribution=contribution,
+        target_date=target_date,
+        calculated_at=calculated_at,
+    )
+    fund = _select_fund(candidates, contribution=contribution, calculated_at=calculated_at)
     stock = _select_dividend_stock(
         candidates,
         contribution=contribution,
@@ -360,22 +346,29 @@ def select_market_candidates(
     for candidate in candidates:
         if candidate.asset_id in selected_ids:
             continue
-        if candidate.kind is InstrumentKind.DIVIDEND_STOCK:
-            reason = _dividend_rejection_reason(
-                candidate,
-                contribution=contribution,
-                risk_level=risk_level,
-                calculated_at=calculated_at,
-            ) or "Акция уступила выбранному кандидату в dividend-quality ranking policy."
+        if candidate.kind in {InstrumentKind.DIVIDEND_STOCK, InstrumentKind.PUBLIC_EQUITY}:
+            reason = (
+                _dividend_rejection_reason(
+                    candidate,
+                    contribution=contribution,
+                    risk_level=risk_level,
+                    calculated_at=calculated_at,
+                )
+                or "Акция уступила выбранному кандидату в dividend-quality ranking policy."
+            )
         elif candidate.currency != "RUB":
             reason = "Валюта инструмента не соответствует рублёвой policy."
         elif candidate.lot_cost > contribution:
             reason = "Стоимость целого лота превышает сумму пополнения."
+        elif (
+            profile := evaluate_asset_admission(candidate, calculated_at=calculated_at)
+        ).overall_status is not AdmissionStatus.ELIGIBLE:
+            reason = "Контур допуска актива не пройден: " + ", ".join(profile.reason_codes)
         else:
             reason = "Инструмент уступил выбранному кандидату в детерминированном ranking policy."
         if candidate.kind is InstrumentKind.OFZ and candidate.maturity_date is not None:
             score, factors = _ofz_rank(candidate, target_date=target_date)
-        elif candidate.kind is InstrumentKind.DIVIDEND_STOCK:
+        elif candidate.kind in {InstrumentKind.DIVIDEND_STOCK, InstrumentKind.PUBLIC_EQUITY}:
             score, factors = _dividend_rank(candidate)
         else:
             score = candidate.turnover.quantize(Decimal("0.00000001"))

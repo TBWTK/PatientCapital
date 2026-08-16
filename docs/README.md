@@ -59,13 +59,15 @@ transaction assistant, explainable analytics, первый research-universe gat
 research context — из reviewed primary-source corpus. Policy не ранжирует акции по дивидендной
 доходности и не реализует dividend capture.
 
-Активный `PC3-MI` устраняет этот статический предел. Фоновый scanner четыре раза в день перечисляет
+`PC3-MI` устранил статический предел, а активный `PC4-ADMISSION` отделяет discovery от допуска.
+Фоновый scanner четыре раза в день перечисляет
 активные рублёвые инструменты MOEX, сохраняет immutable market snapshot, а запрос суммы использует
 его только пока он свежий и иначе выполняет bounded live refresh. SECID ОФЗ и dividend-stock
 кандидатов не перечисляются в коде. Versioned policy хранит trace: universe coverage, доступность
-лота, maturity/yield/liquidity для ОФЗ и listing/dividend-history/liquidity для акций. MOEX-only
-дивидендный screen явно не называется полным фундаментальным аудитом; неподтверждённые измерения
-остаются `unknown`, а не заполняются моделью.
+лота и 20-session liquidity. Все прошедшие equity остаются в research queue, но MOEX-only
+дивидендный screen всегда `unknown` и не может попасть в proposal. Только immutable overall
+`eligible` после class investment gate участвует в ranking; неподтверждённые измерения не
+заполняются моделью.
 
 Целевая web-навигация: **Обзор**, **Пополнить**, **Ассистент**, **Профиль**. Ручной ledger editor
 остаётся доступным как advanced/recovery fallback, но не является основным пользовательским путём.
@@ -122,6 +124,7 @@ broker execution, публикацию, ослабление quality gates ил�
 - [ADR 0003: автоматический подбор через MOEX](decisions/0003-automatic-moex-discovery.md)
 - [ADR 0004: assistant-first продуктовый цикл](decisions/0004-assistant-first-product-loop.md)
 - [ADR 0005: динамический Market Intelligence](decisions/0005-dynamic-market-intelligence.md)
+- [ADR 0006: контур допуска актива](decisions/0006-asset-admission-contour.md)
 
 <!-- immune-project-engineering:docs:start -->
 - [Аудит и достаточность контекста](AUDIT.md)

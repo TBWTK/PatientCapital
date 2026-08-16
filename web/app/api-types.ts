@@ -362,6 +362,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/asset-admission/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latest Asset Admission Endpoint */
+        get: operations["latest_asset_admission_endpoint_v1_asset_admission_latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/proposal-sets/{proposal_set_id}": {
         parameters: {
             query?: never;
@@ -400,6 +417,52 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AdmissionDimensionResponse */
+        AdmissionDimensionResponse: {
+            /** Policy Version */
+            policy_version: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "eligible" | "watch" | "reject" | "unknown";
+            /** Reason Codes */
+            reason_codes: string[];
+            /** Gates */
+            gates: components["schemas"]["AdmissionGateResponse"][];
+        };
+        /** AdmissionGateResponse */
+        AdmissionGateResponse: {
+            /** Gate Id */
+            gate_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "eligible" | "watch" | "reject" | "unknown";
+            /** Reason Code */
+            reason_code: string;
+            /** Observed Value */
+            observed_value?: string | null;
+            /** Unit */
+            unit?: string | null;
+            /** Threshold */
+            threshold?: string | null;
+            /** Source Url */
+            source_url: string;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /**
+             * Valid Until
+             * Format: date-time
+             */
+            valid_until: string;
+            /** Material */
+            material: boolean;
+        };
         /** AlertAcknowledgeCreate */
         AlertAcknowledgeCreate: Record<string, never>;
         /** AlertAcknowledgementResponse */
@@ -454,6 +517,92 @@ export interface components {
             allocation: components["schemas"]["PortfolioAssetResponse"][];
             /** Recent Activity */
             recent_activity: components["schemas"]["TransactionResponse"][];
+        };
+        /** AssetAdmissionAssessmentResponse */
+        AssetAdmissionAssessmentResponse: {
+            /** Name */
+            name: string;
+            profile: components["schemas"]["AssetAdmissionProfileResponse"];
+        };
+        /** AssetAdmissionProfileResponse */
+        AssetAdmissionProfileResponse: {
+            /** Policy Version */
+            policy_version: string;
+            /** Asset Id */
+            asset_id: string;
+            /**
+             * Instrument Kind
+             * @enum {string}
+             */
+            instrument_kind: "ofz" | "equity_index_fund" | "dividend_stock" | "public_equity";
+            /** Strategy Profile */
+            strategy_profile: string;
+            /**
+             * Overall Status
+             * @enum {string}
+             */
+            overall_status: "eligible" | "watch" | "reject" | "unknown";
+            /**
+             * Evaluated At
+             * Format: date-time
+             */
+            evaluated_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            liquidity: components["schemas"]["AdmissionDimensionResponse"];
+            investment: components["schemas"]["AdmissionDimensionResponse"];
+            /** Reason Codes */
+            reason_codes: string[];
+            /** Hard Kills */
+            hard_kills: string[];
+            /** Unknowns */
+            unknowns: string[];
+        };
+        /** AssetAdmissionRunResponse */
+        AssetAdmissionRunResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Market Snapshot Id
+             * Format: uuid
+             */
+            market_snapshot_id: string;
+            /** Policy Version */
+            policy_version: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "universe_discovery" | "pool_refresh" | "on_demand";
+            /**
+             * Status
+             * @constant
+             */
+            status: "succeeded";
+            /**
+             * Evaluated At
+             * Format: date-time
+             */
+            evaluated_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Assessment Count */
+            assessment_count: number;
+            /** Status Counts */
+            status_counts: {
+                [key: string]: number;
+            };
+            /** Assessments */
+            assessments: components["schemas"]["AssetAdmissionAssessmentResponse"][];
         };
         /** AssetListResponse */
         AssetListResponse: {
@@ -515,7 +664,7 @@ export interface components {
              * Instrument Type
              * @enum {string}
              */
-            instrument_type: "ofz" | "equity_index_fund" | "dividend_stock";
+            instrument_type: "ofz" | "equity_index_fund" | "dividend_stock" | "public_equity";
             /** Target Weight */
             target_weight: string;
             /** Rationale */
@@ -556,6 +705,7 @@ export interface components {
             /** Classification Url */
             classification_url: string;
             research?: components["schemas"]["DividendResearchResponse"] | null;
+            admission: components["schemas"]["AssetAdmissionProfileResponse"];
         };
         /** DiscoveryRecommendationCreate */
         DiscoveryRecommendationCreate: {
@@ -705,6 +855,17 @@ export interface components {
             enriched_count: number;
             /** Kind Counts */
             kind_counts: {
+                [key: string]: number;
+            };
+            /**
+             * Admission Run Id
+             * Format: uuid
+             */
+            admission_run_id: string;
+            /** Admission Policy Version */
+            admission_policy_version: string;
+            /** Admission Status Counts */
+            admission_status_counts: {
                 [key: string]: number;
             };
         };
@@ -1085,7 +1246,7 @@ export interface components {
              * Instrument Type
              * @enum {string}
              */
-            instrument_type: "ofz" | "equity_index_fund" | "dividend_stock";
+            instrument_type: "ofz" | "equity_index_fund" | "dividend_stock" | "public_equity";
             /** Reason */
             reason: string;
             /** Unit Price */
@@ -1107,6 +1268,7 @@ export interface components {
             rank_factors?: {
                 [key: string]: string;
             };
+            admission: components["schemas"]["AssetAdmissionProfileResponse"];
         };
         /** ResearchCitationResponse */
         ResearchCitationResponse: {
@@ -2220,6 +2382,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MarketResearchStatusResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    latest_asset_admission_endpoint_v1_asset_admission_latest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssetAdmissionRunResponse"];
                 };
             };
             /** @description Conflict */

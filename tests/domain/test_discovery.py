@@ -5,9 +5,37 @@ import pytest
 
 from patientcapital.domain.discovery import DISCOVERY_POLICY_VERSION, select_market_candidates
 from patientcapital.domain.errors import InvalidAllocationInput
-from patientcapital.marketdata.models import InstrumentKind, MarketCandidate
+from patientcapital.marketdata.models import (
+    InstrumentKind,
+    LiquidityObservation,
+    MarketCandidate,
+    MarketLiquidityEvidence,
+)
 
 NOW = datetime(2026, 8, 15, 9, 0, tzinfo=UTC)
+
+
+def admitted_liquidity(
+    kind: InstrumentKind, *, observed_at: datetime = NOW - timedelta(hours=1)
+) -> MarketLiquidityEvidence:
+    turnover = "100000000" if kind is not InstrumentKind.EQUITY_INDEX_FUND else "10000000"
+    return MarketLiquidityEvidence(
+        policy_version="market-liquidity-v2",
+        observed_at=observed_at,
+        max_age=timedelta(days=4),
+        security_status="active",
+        observations=tuple(
+            LiquidityObservation(
+                session_date=observed_at.date() - timedelta(days=index + 1),
+                turnover_rub=Decimal(turnover),
+                trades=1000,
+                bid=Decimal("100"),
+                offer=Decimal("100.4"),
+            )
+            for index in range(20)
+        ),
+        source_url="https://iss.moex.com/iss/history/test",
+    )
 
 
 def candidate(
@@ -17,6 +45,7 @@ def candidate(
     price: str,
     turnover: str,
     maturity: date | None = None,
+    liquidity_observed_at: datetime = NOW - timedelta(hours=1),
 ) -> MarketCandidate:
     return MarketCandidate(
         asset_id=asset_id,
@@ -36,6 +65,7 @@ def candidate(
         clean_price_percent=Decimal("78.00") if maturity else None,
         face_value=Decimal("1000.00") if maturity else None,
         accrued_interest=Decimal("30.00") if maturity else None,
+        liquidity=admitted_liquidity(kind, observed_at=liquidity_observed_at),
     )
 
 
@@ -112,12 +142,14 @@ def test_policy_renormalizes_to_ofz_and_uses_far_maturity_fallback() -> None:
                 price="800",
                 turnover="100",
                 maturity=date(2034, 8, 15),
+                liquidity_observed_at=datetime(2024, 2, 29, 8, 0, tzinfo=UTC),
             ),
             candidate(
                 "FUND-EXPENSIVE",
                 InstrumentKind.EQUITY_INDEX_FUND,
                 price="9000",
                 turnover="1",
+                liquidity_observed_at=datetime(2024, 2, 29, 8, 0, tzinfo=UTC),
             ),
         ),
         contribution=Decimal("8000"),

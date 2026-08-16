@@ -18,6 +18,7 @@ from patientcapital.application.services import (
     create_transaction_draft_from_text,
     decide_transaction_draft,
     get_analytics_overview,
+    get_latest_asset_admission,
     get_latest_market_research,
     get_portfolio,
     get_profile,
@@ -29,6 +30,7 @@ from patientcapital.application.services import (
 from patientcapital.contracts import (
     AlertAcknowledgementResponse,
     AnalyticsOverviewResponse,
+    AssetAdmissionRunResponse,
     AssetListResponse,
     DiscoveryRecommendationCreate,
     ErrorDetail,
@@ -112,6 +114,9 @@ class AgentTools:
 
     def get_latest_market_research(self) -> MarketResearchStatusResponse:
         return self._call(get_latest_market_research)
+
+    def get_latest_asset_admission(self) -> AssetAdmissionRunResponse:
+        return self._call(get_latest_asset_admission)
 
     def acknowledge_alert(self, alert_id: UUID) -> AlertAcknowledgementResponse:
         def acknowledge(session: Session) -> AlertAcknowledgementResponse:

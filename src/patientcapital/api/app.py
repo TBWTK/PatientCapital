@@ -25,6 +25,7 @@ from patientcapital.application.services import (
     create_transaction_draft_manual,
     decide_transaction_draft,
     get_analytics_overview,
+    get_latest_asset_admission,
     get_latest_market_research,
     get_portfolio,
     get_profile,
@@ -40,6 +41,7 @@ from patientcapital.contracts import (
     AlertAcknowledgeCreate,
     AlertAcknowledgementResponse,
     AnalyticsOverviewResponse,
+    AssetAdmissionRunResponse,
     AssetListResponse,
     AssetPut,
     AssetResponse,
@@ -224,9 +226,7 @@ def create_app(
             extractor=extractor,
         )
 
-    @app.get(
-        "/v1/transaction-drafts/{draft_id}", response_model=TransactionDraftResponse
-    )
+    @app.get("/v1/transaction-drafts/{draft_id}", response_model=TransactionDraftResponse)
     def transaction_draft_get(
         draft_id: UUID,
         session: SessionDependency,
@@ -329,6 +329,12 @@ def create_app(
         session: SessionDependency,
     ) -> MarketResearchStatusResponse:
         return get_latest_market_research(session)
+
+    @app.get("/v1/asset-admission/latest", response_model=AssetAdmissionRunResponse)
+    def latest_asset_admission_endpoint(
+        session: SessionDependency,
+    ) -> AssetAdmissionRunResponse:
+        return get_latest_asset_admission(session)
 
     @app.get("/v1/proposal-sets/{proposal_set_id}", response_model=ProposalSetResponse)
     def proposal_set_get(

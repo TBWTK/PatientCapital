@@ -29,6 +29,9 @@ def test_head_migration_creates_required_authorities() -> None:
         "monitor_runs",
         "monitor_alerts",
         "monitor_alert_acknowledgements",
+        "market_research_snapshots",
+        "asset_admission_runs",
+        "asset_admission_assessments",
     }.issubset(set(inspector.get_table_names()))
     assert inspector.get_unique_constraints("transactions")
     transaction_columns = {item["name"]: item for item in inspector.get_columns("transactions")}
@@ -42,6 +45,8 @@ def test_head_migration_creates_required_authorities() -> None:
     assert inspector.get_foreign_keys("transaction_draft_decisions")
     assert inspector.get_foreign_keys("monitor_alerts")
     assert inspector.get_foreign_keys("monitor_alert_acknowledgements")
+    assert inspector.get_foreign_keys("asset_admission_runs")
+    assert inspector.get_foreign_keys("asset_admission_assessments")
     engine.dispose()
 
 
@@ -94,9 +99,7 @@ def test_database_rejects_mutation_of_proposal_sets() -> None:
                 """
             )
         )
-        connection.execute(
-            text("UPDATE proposal_sets SET recommended_strategy_id = 'mutated'")
-        )
+        connection.execute(text("UPDATE proposal_sets SET recommended_strategy_id = 'mutated'"))
     engine.dispose()
 
 

@@ -32,10 +32,16 @@ PUBLIC_PATHS = {
     "/v1/proposal-sets",
     "/v1/proposal-sets/{proposal_set_id}",
     "/v1/market-research/latest",
+    "/v1/asset-admission/latest",
 }
 
 PUBLIC_SCHEMAS = {
     "AssetResponse",
+    "AdmissionGateResponse",
+    "AdmissionDimensionResponse",
+    "AssetAdmissionProfileResponse",
+    "AssetAdmissionAssessmentResponse",
+    "AssetAdmissionRunResponse",
     "AnalyticsMoneyMetricResponse",
     "AnalyticsOverviewResponse",
     "AlertAcknowledgementResponse",

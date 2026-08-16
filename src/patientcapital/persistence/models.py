@@ -174,9 +174,7 @@ class ProposalSetRecord(Base):
 class MarketResearchSnapshotRecord(Base):
     __tablename__ = "market_research_snapshots"
     __table_args__ = (
-        UniqueConstraint(
-            "idempotency_key", name="uq_market_research_snapshots_idempotency_key"
-        ),
+        UniqueConstraint("idempotency_key", name="uq_market_research_snapshots_idempotency_key"),
         CheckConstraint("status IN ('succeeded', 'provider_error')"),
         CheckConstraint("universe_size >= 0"),
         CheckConstraint("candidate_count >= 0 AND candidate_count <= universe_size"),
@@ -197,6 +195,65 @@ class MarketResearchSnapshotRecord(Base):
     enriched_count: Mapped[int] = mapped_column(Integer, nullable=False)
     kind_counts: Mapped[dict[str, int]] = mapped_column(JSONB, nullable=False)
     candidates: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class AssetAdmissionRunRecord(Base):
+    __tablename__ = "asset_admission_runs"
+    __table_args__ = (
+        UniqueConstraint(
+            "market_snapshot_id",
+            "policy_version",
+            name="uq_asset_admission_runs_snapshot_policy",
+        ),
+        CheckConstraint("scope IN ('universe_discovery', 'pool_refresh', 'on_demand')"),
+        CheckConstraint("status = 'succeeded'"),
+        CheckConstraint("assessment_count >= 0"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    market_snapshot_id: Mapped[UUID] = mapped_column(
+        ForeignKey("market_research_snapshots.id", ondelete="RESTRICT"), nullable=False
+    )
+    policy_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    scope: Mapped[str] = mapped_column(String(32), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    assessment_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    status_counts: Mapped[dict[str, int]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class AssetAdmissionAssessmentRecord(Base):
+    __tablename__ = "asset_admission_assessments"
+    __table_args__ = (
+        UniqueConstraint(
+            "run_id",
+            "asset_id",
+            "policy_version",
+            name="uq_asset_admission_assessments_run_asset_policy",
+        ),
+        CheckConstraint("overall_status IN ('eligible', 'watch', 'reject', 'unknown')"),
+    )
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    run_id: Mapped[UUID] = mapped_column(
+        ForeignKey("asset_admission_runs.id", ondelete="RESTRICT"), nullable=False
+    )
+    asset_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    instrument_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    strategy_profile: Mapped[str] = mapped_column(String(64), nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    overall_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    profile: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

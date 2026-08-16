@@ -12,6 +12,7 @@ from patientcapital.marketdata.models import InstrumentKind, MarketCandidate
 from patientcapital.monitoring.service import acknowledge_alert, list_alerts, run_monitor
 from patientcapital.persistence.database import Database
 from tests.integration.conftest import TEST_DATABASE_URL
+from tests.market_fixtures import admitted_liquidity
 
 
 class MonitorProvider:
@@ -32,6 +33,10 @@ class MonitorProvider:
                 classification_url="https://www.moex.com/msn/etf",
                 quote_kind="current",
                 turnover=Decimal("100000000"),
+                liquidity=admitted_liquidity(
+                    InstrumentKind.EQUITY_INDEX_FUND,
+                    observed_at=calculated_at - timedelta(minutes=5),
+                ),
             ),
         )
 

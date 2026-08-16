@@ -13,6 +13,7 @@ from patientcapital.config import Settings
 from patientcapital.contracts import (
     AlertAcknowledgementResponse,
     AnalyticsOverviewResponse,
+    AssetAdmissionRunResponse,
     AssetListResponse,
     DiscoveryRecommendationCreate,
     MarketResearchStatusResponse,
@@ -194,6 +195,18 @@ def build_mcp_server(
     )
     def get_latest_market_research_tool() -> MarketResearchStatusResponse:
         return tools.get_latest_market_research()
+
+    @server.tool(
+        name="get_latest_asset_admission",
+        title="Get latest asset-admission profiles",
+        description=(
+            "Read the immutable rolling-liquidity and investment-admission verdicts, gates, "
+            "sources, freshness and research queue. Only eligible profiles may enter a proposal."
+        ),
+        annotations=READ_ONLY,
+    )
+    def get_latest_asset_admission_tool() -> AssetAdmissionRunResponse:
+        return tools.get_latest_asset_admission()
 
     @server.tool(
         name="acknowledge_alert",

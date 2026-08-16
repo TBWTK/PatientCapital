@@ -71,6 +71,45 @@ const analyticsOverview = (marketValue = "0.00", costBasis = "0.00", unrealized 
   recent_activity: [] as Array<Record<string, unknown>>,
 });
 
+const admissionProfile = (
+  assetId: string,
+  instrumentKind: "ofz" | "equity_index_fund" | "dividend_stock" | "public_equity",
+) => ({
+  policy_version: "asset-admission-v2",
+  asset_id: assetId,
+  instrument_kind: instrumentKind,
+  strategy_profile: instrumentKind === "ofz" ? "sovereign_fixed_income" : instrumentKind === "equity_index_fund" ? "broad_index" : "dividend_quality",
+  overall_status: "eligible" as const,
+  evaluated_at: "2026-08-15T09:00:00Z",
+  expires_at: "2026-08-19T09:00:00Z",
+  liquidity: {
+    policy_version: "market-liquidity-v2",
+    status: "eligible" as const,
+    reason_codes: [],
+    gates: [{
+      gate_id: "median_turnover",
+      status: "eligible" as const,
+      reason_code: "LIQUIDITY_TURNOVER_PASS",
+      observed_value: "100000000",
+      unit: "RUB",
+      threshold: ">=50000000",
+      source_url: "https://iss.moex.com/iss/history/test",
+      observed_at: "2026-08-15T09:00:00Z",
+      valid_until: "2026-08-19T09:00:00Z",
+      material: true,
+    }],
+  },
+  investment: {
+    policy_version: instrumentKind === "ofz" ? "ofz-admission-v1" : "equity-dividend-quality-v1",
+    status: "eligible" as const,
+    reason_codes: ["ADMISSION_PASS"],
+    gates: [],
+  },
+  reason_codes: [],
+  hard_kills: [],
+  unknowns: [],
+});
+
 afterEach(() => vi.restoreAllMocks());
 
 describe("PatientCapitalApp", () => {
@@ -176,6 +215,9 @@ describe("PatientCapitalApp", () => {
           candidate_count: 26,
           enriched_count: 12,
           kind_counts: { ofz: 54, equity_index_fund: 3, dividend_stock: 12 },
+          admission_run_id: "00000000-0000-0000-0000-000000000098",
+          admission_policy_version: "asset-admission-v2",
+          admission_status_counts: { eligible: 14, watch: 3, reject: 2, unknown: 7 },
         },
         candidates: [{
           asset_id: "SU26218RMFS6",
@@ -193,6 +235,7 @@ describe("PatientCapitalApp", () => {
           yield_percent: "15.19",
           source_url: "https://iss.moex.com/ofz",
           classification_url: "https://www.moex.com/ru/marketdata/",
+          admission: admissionProfile("SU26218RMFS6", "ofz"),
         }, {
           asset_id: "MOEX",
           name: "Московская биржа",
@@ -207,6 +250,7 @@ describe("PatientCapitalApp", () => {
           turnover: "1144411993",
           source_url: "https://iss.moex.com/moex",
           classification_url: "https://www.moex.com/en/stocks/moex",
+          admission: admissionProfile("MOEX", "dividend_stock"),
           research: {
             schema_version: "dividend-research-evidence-v1",
             policy_version: "dividend-quality-v1",
@@ -244,6 +288,7 @@ describe("PatientCapitalApp", () => {
           lot_cost: "120.00",
           price_as_of: "2026-08-14T20:50:44Z",
           source_url: "https://iss.moex.com/fundalt",
+          admission: admissionProfile("FUNDALT", "equity_index_fund"),
         }],
         lines: [{ asset_id: "SU26218RMFS6", lots: 9, lot_size: 1, quantity: 9, unit_price: "818.21000000", current_value: "0.00", target_value: "4800.00", pre_drift: "-4800.00", post_drift: "2563.89", gross: "7363.89", fee: "7.36", total: "7371.25" }],
         profile_version: 3,
@@ -263,7 +308,8 @@ describe("PatientCapitalApp", () => {
     expect(screen.getByText("Рекомендуется")).toBeTruthy();
     expect(screen.getByText("LIVE SEARCH")).toBeTruthy();
     expect(screen.getByText("Просмотрено 321 инструментов")).toBeTruthy();
-    expect(screen.getByText(/Допущено 26 · углублённо проверено 12/)).toBeTruthy();
+    expect(screen.getByText(/Профилей 26 · допущено 14 · на исследовании 7/)).toBeTruthy();
+    expect(screen.getAllByText(/Контур допуска · Допущен/).length).toBeGreaterThan(0);
     const evidence = screen.getByText("Расчёт и источники").closest("details");
     expect(evidence?.open).toBe(false);
     fireEvent.click(screen.getByText("Расчёт и источники"));

@@ -6,7 +6,12 @@ from patientcapital.domain.discovery import (
     DIVIDEND_MARKET_POLICY_VERSION,
     select_market_candidates,
 )
-from patientcapital.marketdata.models import InstrumentKind, MarketCandidate
+from patientcapital.marketdata.models import (
+    InstrumentKind,
+    LiquidityObservation,
+    MarketCandidate,
+    MarketLiquidityEvidence,
+)
 from patientcapital.research.models import (
     BalanceSheetStatus,
     CorporateActionStatus,
@@ -17,6 +22,26 @@ from patientcapital.research.models import (
 )
 
 NOW = datetime(2026, 8, 16, 9, 0, tzinfo=UTC)
+
+
+def admitted_liquidity() -> MarketLiquidityEvidence:
+    return MarketLiquidityEvidence(
+        policy_version="market-liquidity-v2",
+        observed_at=NOW - timedelta(hours=1),
+        max_age=timedelta(days=4),
+        security_status="active",
+        observations=tuple(
+            LiquidityObservation(
+                session_date=date(2026, 8, 15) - timedelta(days=index),
+                turnover_rub=Decimal("100000000"),
+                trades=1000,
+                bid=Decimal("100"),
+                offer=Decimal("100.4"),
+            )
+            for index in range(20)
+        ),
+        source_url="https://iss.moex.com/iss/history/test",
+    )
 
 
 def ofz(
@@ -47,6 +72,7 @@ def ofz(
         accrued_interest=Decimal("20"),
         next_coupon_date=date(2026, 9, 23),
         coupon_percent=Decimal("12"),
+        liquidity=admitted_liquidity(),
     )
 
 
@@ -103,6 +129,7 @@ def market_screen(
         quote_kind="current",
         turnover=Decimal(turnover),
         research=research,
+        liquidity=admitted_liquidity(),
     )
 
 
@@ -182,9 +209,16 @@ def test_budget_can_change_winner_and_candidate_order_cannot() -> None:
     assert reordered.items[0].candidate.asset_id == large.items[0].candidate.asset_id
 
 
-def test_dynamic_dividend_screen_ranks_current_market_candidates() -> None:
+def test_dynamic_dividend_screen_never_enters_a_proposal() -> None:
     selection = select_market_candidates(
         (
+            ofz(
+                "OFZ",
+                price="800",
+                maturity=date(2031, 8, 20),
+                yield_percent="15",
+                turnover="500000000",
+            ),
             market_screen("STOCK-LIQUID", price="200", turnover="900000000", historical_yield="8"),
             market_screen("STOCK-INCOME", price="150", turnover="400000000", historical_yield="12"),
         ),
@@ -194,14 +228,9 @@ def test_dynamic_dividend_screen_ranks_current_market_candidates() -> None:
         calculated_at=NOW,
     )
 
-    stock = selection.items[0]
-    assert stock.candidate.asset_id == "STOCK-INCOME"
-    assert stock.target_weight == Decimal("1.00000000")
-    assert stock.candidate.research is not None
-    assert stock.candidate.research.scope is ResearchScope.MARKET_SCREEN
-    assert "полный фундаментальный аудит" in stock.rationale.lower()
-    rejected = next(
-        item for item in selection.rejected if item.candidate.asset_id == "STOCK-LIQUID"
-    )
-    assert rejected.score is not None
-    assert "ranking" in rejected.reason
+    assert [item.candidate.asset_id for item in selection.items] == ["OFZ"]
+    assert {item.candidate.asset_id for item in selection.rejected} == {
+        "STOCK-LIQUID",
+        "STOCK-INCOME",
+    }
+    assert all("research" in item.reason.lower() for item in selection.rejected)

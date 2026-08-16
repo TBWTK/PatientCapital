@@ -21,6 +21,8 @@ updated: 2026-08-16
 | `recommendation_runs` | immutable input/output snapshots, amount, totals, reason и algorithm evidence | recommendation service | UUID |
 | `proposal_sets` | amount/profile version, ordered strategy metadata и refs на `1..3` runs | proposal application service | UUID |
 | `market_research_snapshots` | immutable scan: provider/policy/status, coverage и typed public candidate JSON | market-intelligence service | UUID + unique idempotency key |
+| `asset_admission_runs` | immutable composition batch для market snapshot: policy/scope/status/counts/expiry | asset-admission service | UUID + unique snapshot/policy |
+| `asset_admission_assessments` | immutable профиль актива: liquidity/investment gates, verdict, reasons, sources и fact times | deterministic asset-admission policy | UUID + unique run/asset/policy |
 | portfolio / analytics response | quantity, cost/value, realized/unrealized result, allocation/drift, freshness/activity и metric status | derived application query `analytics-ledger-v1` | не хранится отдельной таблицей |
 | GigaChat admission report | model/prompt/corpus hashes, metrics, latency/usage и case evidence | file `reports/gigachat-admission-v1.json` | report/corpus version; не DB entity |
 
@@ -41,7 +43,7 @@ updated: 2026-08-16
 отклоняют `UPDATE/DELETE` для `profile_versions`, `asset_versions`, `price_snapshots`, `transactions`,
 `recommendation_runs`, `proposal_sets`, `transaction_drafts`, `transaction_draft_decisions`,
 `monitor_runs`, `monitor_alerts`, `monitor_alert_acknowledgements` и
-`market_research_snapshots`.
+`market_research_snapshots`, `asset_admission_runs`, `asset_admission_assessments`.
 
 API поддерживает только `BUY` и `SELL`. Formal compensating-event link в schema отсутствует;
 исправление вводится новой фактической операцией с новым idempotency key и поясняющей `note`, если
@@ -74,6 +76,12 @@ portfolio quantities, пользовательский бюджет и broker pr
 на snapshot id и отдельно сохраняет budget/portfolio allocation. Snapshot не перезаписывается:
 каждый refresh создаёт новую строку, а slot/idempotency key блокирует дубликат.
 
+Admission run ссылается на конкретный market snapshot и не переоценивает его молча. Assessment не
+создаёт строку в `assets`: широкий research pool не является portfolio universe. Latest pool —
+проекция последних immutable assessments; `asset_versions` остаётся authority только для выбранных
+либо пользовательских portfolio assets. Legacy PC3 snapshot без matching `asset-admission-v2` run
+не переиспользуется новым cache path.
+
 Для `dividend_stock` input snapshot дополнительно фиксирует `dividend-research-evidence-v1`:
 policy version, observed/max-age, reporting period, profitable/dividend years, payout ratio,
 balance/governance/corporate-action statuses, summary и ровно по одной primary citation на каждый
@@ -81,7 +89,7 @@ gate. Evidence не является отдельной mutable таблицей
 immutable recommendation run. `five-year-moex-v2` использует числа из него только в eligibility;
 security identity, price, lot и turnover всё равно принадлежат строгому ISS adapter.
 
-Migrations `20260816_0003`…`20260816_0006` additive: существующие profile/assets/prices/
+Migrations `20260816_0003`…`20260816_0008` additive: существующие profile/assets/prices/
 transactions/runs не переписываются. Proposal set хранит только admitted strategy metadata и UUID
 runs. Draft хранит extraction snapshot; unique append-only decision ссылается на transaction только
 после атомарного confirm. Monitor сохраняет slot/policy/provider outcome, daily-deduplicated alert и

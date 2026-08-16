@@ -36,6 +36,12 @@ GigaChat fields не включают runtime mode и используются �
 `MARKET_RESEARCH_STOCK_PREFILTER_LIMIT` ограничивает per-security dividend fan-out. Увеличивать его
 без live latency/rate-limit evidence нельзя.
 
+`moex-board-scan-v3` перед enrichment собирает 20 завершённых сессий TQOB/TQBR через paginated ISS
+history. На проверочном host полный scan `537` instruments занял около `5–7 s`, создал `134`
+profiles (`32` ОФЗ, `3` фонда, `99` equity) и только `12` dividend calls. Closed-market отсутствие
+spread хранится как non-material advisory; подтверждённый высокий spread material. Каждый свежий
+market snapshot обязан иметь matching `asset-admission-v2` run, иначе cache fail closed.
+
 Планируемая PC2 config должна иметь безопасные явные defaults: `MONITOR_RUNS_PER_DAY` принимает
 только `3` или `4`; расписание хранится с timezone, а missed/duplicate ticks идемпотентны. Upload
 bytes/pixels/TTL и extractor mode задаются отдельными bounded settings. External extractor остаётся
@@ -71,8 +77,10 @@ Monitor запускается отдельным Compose service `monitor`: п�
 `patientcapital-monitor`, наблюдает слоты `06:00,10:00,14:00,18:00 Europe/Moscow` и пишет каждый
 outcome в `monitor_runs`. API позволяет отличить успешный no-op/alert от `provider_error`; worker
 не импортирует transaction/order command. Перед portfolio alert evaluation тот же process создаёт
-или идемпотентно переиспользует market
-research snapshot для слота. Cold proposal также выполняет scan, если свежего snapshot нет; это
+или идемпотентно переиспользует market research snapshot и matching admission run для слота. В
+текущем локальном MVP один bounded broad scan одновременно обновляет наблюдаемый pool; выделение
+редкого weekly discovery и более дешёвого intraday pool refresh остаётся operational optimization,
+но не меняет gates. Cold proposal также выполняет scan, если свежего snapshot нет; это
 ожидаемо более медленный путь, и его status/ошибка возвращаются пользователю.
 Process state проверяется через `docker compose ps`, последний immutable outcome — через
 `/v1/monitor-runs` и logs. Внешний watchdog пока отсутствует.

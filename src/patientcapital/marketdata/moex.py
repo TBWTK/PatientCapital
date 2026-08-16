@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Mapping
 from contextlib import nullcontext
 from datetime import UTC, date, datetime, timedelta
@@ -11,7 +12,13 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from patientcapital.marketdata.errors import MarketDataError
-from patientcapital.marketdata.models import InstrumentKind, MarketCandidate, MarketScan
+from patientcapital.marketdata.models import (
+    InstrumentKind,
+    LiquidityObservation,
+    MarketCandidate,
+    MarketLiquidityEvidence,
+    MarketScan,
+)
 from patientcapital.research.models import (
     BalanceSheetStatus,
     CorporateActionStatus,
@@ -28,7 +35,8 @@ _APPROVED_FUNDS: Mapping[str, str] = {
     "SBMX": "Первая — Фонд Топ Российских акций",
     "TMOS": "Тинькофф / Т-Капитал — Индекс МосБиржи",  # noqa: RUF001
 }
-_SCAN_POLICY_VERSION = "moex-board-scan-v1"
+_SCAN_POLICY_VERSION = "moex-board-scan-v3"
+_LIQUIDITY_POLICY_VERSION = "market-liquidity-v2"
 _DIVIDEND_MARKET_POLICY_VERSION = "dividend-market-screen-v1"
 _DEFAULT_STOCK_PREFILTER_LIMIT = 12
 _BOND_SECURITY_COLUMNS = (
@@ -44,7 +52,16 @@ _BOND_SECURITY_COLUMNS = (
     "NEXTCOUPON",
     "COUPONVALUE",
 )
-_BOND_MARKET_COLUMNS = ("SECID", "LAST", "MARKETPRICE", "YIELD", "VALTODAY", "SYSTIME")
+_BOND_MARKET_COLUMNS = (
+    "SECID",
+    "LAST",
+    "MARKETPRICE",
+    "YIELD",
+    "VALTODAY",
+    "BID",
+    "OFFER",
+    "SYSTIME",
+)
 _FUND_SECURITY_COLUMNS = (
     "SECID",
     "SHORTNAME",
@@ -62,8 +79,13 @@ _FUND_MARKET_COLUMNS = (
     "MARKETPRICE",
     "LCURRENTPRICE",
     "VALTODAY",
+    "BID",
+    "OFFER",
     "SYSTIME",
 )
+_HISTORY_COLUMNS = ("SECID", "TRADEDATE", "NUMTRADES", "VALUE")
+_ROLLING_SESSIONS = 20
+_MAX_CALENDAR_LOOKBACK = 45
 
 
 def _decimal(value: object, *, field: str, positive: bool = False) -> Decimal:
@@ -146,6 +168,7 @@ class MoexIssProvider:
     """Fetch a constrained universe from official delayed MOEX ISS endpoints."""
 
     name = "moex-market-intelligence-v1"
+    scan_policy_version = _SCAN_POLICY_VERSION
 
     def __init__(
         self,
@@ -176,7 +199,162 @@ class MoexIssProvider:
                 "MOEX_UNAVAILABLE", "MOEX ISS request failed; automatic proposal was not created"
             ) from error
 
-    def _bond_candidates(self, client: httpx.Client) -> list[MarketCandidate]:
+    def _history_page(
+        self,
+        client: httpx.Client,
+        *,
+        market: str,
+        board: str,
+        session_date: date,
+        start: int,
+    ) -> tuple[list[dict[str, object]], int, int]:
+        payload = self._get(
+            client,
+            f"/history/engines/stock/markets/{market}/boards/{board}/securities.json",
+            {
+                "iss.meta": "off",
+                "iss.only": "history,history.cursor",
+                "history.columns": ",".join(_HISTORY_COLUMNS),
+                "date": session_date.isoformat(),
+                "limit": "100",
+                "start": str(start),
+            },
+        )
+        rows = _rows(payload, "history")
+        cursor = _rows(payload, "history.cursor")
+        if len(cursor) != 1:
+            raise MarketDataError("MOEX_INVALID_RESPONSE", "history.cursor must contain one row")
+        total_value = cursor[0].get("TOTAL")
+        page_size_value = cursor[0].get("PAGESIZE")
+        if isinstance(total_value, bool) or isinstance(page_size_value, bool):
+            raise MarketDataError("MOEX_INVALID_RESPONSE", "history cursor is invalid")
+        try:
+            total = int(str(total_value))
+            page_size = int(str(page_size_value))
+        except ValueError as error:
+            raise MarketDataError("MOEX_INVALID_RESPONSE", "history cursor is invalid") from error
+        if total < 0 or page_size <= 0:
+            raise MarketDataError("MOEX_INVALID_RESPONSE", "history cursor is invalid")
+        return rows, total, page_size
+
+    def _rolling_history(
+        self,
+        client: httpx.Client,
+        *,
+        market: str,
+        board: str,
+        calculated_at: datetime,
+    ) -> dict[str, tuple[LiquidityObservation, ...]]:
+        by_asset: dict[str, list[LiquidityObservation]] = defaultdict(list)
+        completed_sessions = 0
+        calendar_offset = 1
+        while completed_sessions < _ROLLING_SESSIONS and calendar_offset <= _MAX_CALENDAR_LOOKBACK:
+            session_date = calculated_at.date() - timedelta(days=calendar_offset)
+            first, total, page_size = self._history_page(
+                client,
+                market=market,
+                board=board,
+                session_date=session_date,
+                start=0,
+            )
+            rows = list(first)
+            start = page_size
+            while start < total:
+                page, _, next_page_size = self._history_page(
+                    client,
+                    market=market,
+                    board=board,
+                    session_date=session_date,
+                    start=start,
+                )
+                rows.extend(page)
+                start += next_page_size
+            if rows:
+                dates = {_date(row.get("TRADEDATE"), field="TRADEDATE") for row in rows}
+                if dates != {session_date}:
+                    raise MarketDataError(
+                        "MOEX_INVALID_RESPONSE", "history rows do not match requested session"
+                    )
+                completed_sessions += 1
+                for row in rows:
+                    asset_id = _string(row, "SECID")
+                    trades_raw = row.get("NUMTRADES")
+                    if isinstance(trades_raw, bool):
+                        raise MarketDataError("MOEX_INVALID_RESPONSE", "NUMTRADES is invalid")
+                    try:
+                        trades = int(str(trades_raw))
+                    except ValueError as error:
+                        raise MarketDataError(
+                            "MOEX_INVALID_RESPONSE", "NUMTRADES is invalid"
+                        ) from error
+                    if trades < 0:
+                        raise MarketDataError("MOEX_INVALID_RESPONSE", "NUMTRADES is invalid")
+                    turnover = _decimal(row.get("VALUE") or 0, field="VALUE")
+                    by_asset[asset_id].append(
+                        LiquidityObservation(
+                            session_date=session_date,
+                            turnover_rub=turnover,
+                            trades=trades,
+                        )
+                    )
+            calendar_offset += 1
+        if completed_sessions == 0:
+            raise MarketDataError(
+                "MOEX_NO_LIQUIDITY_HISTORY", "MOEX returned no completed-session history"
+            )
+        return {asset_id: tuple(items) for asset_id, items in by_asset.items()}
+
+    def _liquidity_evidence(
+        self,
+        *,
+        asset_id: str,
+        status: object,
+        quote: Mapping[str, object],
+        history: Mapping[str, tuple[LiquidityObservation, ...]],
+        observed_at: datetime,
+        history_url: str,
+    ) -> MarketLiquidityEvidence | None:
+        observations = list(history.get(asset_id, ()))
+        if not observations:
+            return None
+        bid = (
+            _decimal(quote.get("BID"), field="BID", positive=True)
+            if quote.get("BID") is not None
+            else None
+        )
+        offer = (
+            _decimal(quote.get("OFFER"), field="OFFER", positive=True)
+            if quote.get("OFFER") is not None
+            else None
+        )
+        if (bid is None) != (offer is None):
+            bid = None
+            offer = None
+        if bid is not None and offer is not None:
+            first = observations[0]
+            observations[0] = LiquidityObservation(
+                session_date=first.session_date,
+                turnover_rub=first.turnover_rub,
+                trades=first.trades,
+                bid=bid,
+                offer=offer,
+            )
+        return MarketLiquidityEvidence(
+            policy_version=_LIQUIDITY_POLICY_VERSION,
+            observed_at=observed_at,
+            max_age=self._max_age,
+            security_status="active" if status == "A" else "unknown",
+            observations=tuple(observations),
+            source_url=history_url,
+        )
+
+    def _bond_candidates(
+        self,
+        client: httpx.Client,
+        *,
+        history: Mapping[str, tuple[LiquidityObservation, ...]],
+        calculated_at: datetime,
+    ) -> list[MarketCandidate]:
         path = "/engines/stock/markets/bonds/boards/TQOB/securities.json"
         payload = self._get(
             client,
@@ -246,6 +424,17 @@ class MoexIssProvider:
                         if security.get("COUPONVALUE") is not None
                         else None
                     ),
+                    liquidity=self._liquidity_evidence(
+                        asset_id=asset_id,
+                        status=security.get("STATUS"),
+                        quote=quote,
+                        history=history,
+                        observed_at=calculated_at,
+                        history_url=(
+                            f"{self._base_url}/history/engines/stock/markets/bonds/"
+                            f"boards/TQOB/securities/{asset_id}.json"
+                        ),
+                    ),
                 )
             )
         return candidates
@@ -299,19 +488,16 @@ class MoexIssProvider:
             years = {
                 closed.year
                 for closed, _ in valid
-                if latest_year - 4 <= closed.year <= latest_year
+                if calculated_at.year - 4 <= closed.year <= calculated_at.year
             }
             last_registry = valid[-1][0]
         else:
             annual = Decimal("0")
             years = set()
             last_registry = None
-        historical_yield = (annual / unit_price * Decimal("100")).quantize(
-            Decimal("0.00000001")
-        )
+        historical_yield = (annual / unit_price * Decimal("100")).quantize(Decimal("0.00000001"))
         listing_url = (
-            f"{self._base_url}/engines/stock/markets/shares/boards/TQBR/"
-            f"securities/{asset_id}.json"
+            f"{self._base_url}/engines/stock/markets/shares/boards/TQBR/securities/{asset_id}.json"
         )
         return DividendResearchEvidence(
             schema_version="dividend-market-evidence-v1",
@@ -357,7 +543,11 @@ class MoexIssProvider:
         )
 
     def _share_candidates(
-        self, client: httpx.Client, *, calculated_at: datetime
+        self,
+        client: httpx.Client,
+        *,
+        calculated_at: datetime,
+        history: Mapping[str, tuple[LiquidityObservation, ...]],
     ) -> tuple[list[MarketCandidate], int, int]:
         path = "/engines/stock/markets/shares/boards/TQBR/securities.json"
         payload = self._get(
@@ -408,6 +598,17 @@ class MoexIssProvider:
                         classification_url=_FUND_CLASSIFICATION_URL,
                         quote_kind=price_field.lower(),
                         turnover=turnover,
+                        liquidity=self._liquidity_evidence(
+                            asset_id=asset_id,
+                            status=security.get("STATUS"),
+                            quote=quote,
+                            history=history,
+                            observed_at=calculated_at,
+                            history_url=(
+                                f"{self._base_url}/history/engines/stock/markets/shares/"
+                                f"boards/TQBR/securities/{asset_id}.json"
+                            ),
+                        ),
                     )
                 )
                 continue
@@ -417,11 +618,25 @@ class MoexIssProvider:
             if listing_level not in {1, 2}:
                 continue
             stock_rows.append((turnover, asset_id, security, quote))
-        selected_rows = sorted(stock_rows, key=lambda item: (-item[0], item[1]))[
-            : self._stock_prefilter_limit
-        ]
+        rolling_rows: list[tuple[Decimal, str, Mapping[str, object], Mapping[str, object]]] = []
+        for row in stock_rows:
+            _, asset_id, _, _ = row
+            observations = history.get(asset_id, ())
+            if len(observations) < 20:
+                continue
+            traded = sum(item.trades > 0 for item in observations)
+            turnovers = sorted(item.turnover_rub for item in observations)
+            median = (turnovers[9] + turnovers[10]) / Decimal("2")
+            if traded >= 15 and median >= Decimal("10000000"):
+                rolling_rows.append((median, asset_id, row[2], row[3]))
+        selected_ids = {
+            item[1]
+            for item in sorted(rolling_rows, key=lambda item: (-item[0], item[1]))[
+                : self._stock_prefilter_limit
+            ]
+        }
         stocks: list[MarketCandidate] = []
-        for turnover, asset_id, security_row, quote_row in selected_rows:
+        for turnover, asset_id, security_row, quote_row in stock_rows:
             price_field = self._price_field(quote_row)
             if price_field is None:  # guarded above
                 continue
@@ -429,33 +644,46 @@ class MoexIssProvider:
                 quote_row.get(price_field), field=price_field, positive=True
             ).quantize(Decimal("0.00000001"))
             listing_level = _integer(security_row.get("LISTLEVEL"), field="LISTLEVEL")
-            research = self._dividend_research(
-                client,
-                asset_id=asset_id,
-                listing_level=listing_level,
-                unit_price=unit_price,
-                calculated_at=calculated_at,
+            research = (
+                self._dividend_research(
+                    client,
+                    asset_id=asset_id,
+                    listing_level=listing_level,
+                    unit_price=unit_price,
+                    calculated_at=calculated_at,
+                )
+                if asset_id in selected_ids
+                else None
             )
             stocks.append(
                 MarketCandidate(
                     asset_id=asset_id,
                     name=_string(security_row, "SHORTNAME"),
-                    kind=InstrumentKind.DIVIDEND_STOCK,
+                    kind=InstrumentKind.PUBLIC_EQUITY,
                     currency="RUB",
                     lot_size=_integer(security_row.get("LOTSIZE"), field="LOTSIZE"),
                     unit_price=unit_price,
                     price_as_of=_timestamp(quote_row.get("SYSTIME")),
                     max_age=self._max_age,
-                    source_url=(
-                        f"{self._base_url}{path.removesuffix('.json')}/{asset_id}.json"
-                    ),
+                    source_url=(f"{self._base_url}{path.removesuffix('.json')}/{asset_id}.json"),
                     classification_url="https://www.moex.com/ru/marketdata/",
                     quote_kind=price_field.lower(),
                     turnover=turnover,
                     research=research,
+                    liquidity=self._liquidity_evidence(
+                        asset_id=asset_id,
+                        status=security_row.get("STATUS"),
+                        quote=quote_row,
+                        history=history,
+                        observed_at=calculated_at,
+                        history_url=(
+                            f"{self._base_url}/history/engines/stock/markets/shares/"
+                            f"boards/TQBR/securities/{asset_id}.json"
+                        ),
+                    ),
                 )
             )
-        return funds + stocks, len(securities), len(selected_rows)
+        return funds + stocks, len(securities), len(selected_ids)
 
     def scan(self, *, calculated_at: datetime) -> MarketScan:
         if calculated_at.tzinfo is None or calculated_at.utcoffset() is None:
@@ -468,9 +696,27 @@ class MoexIssProvider:
         with manager as client:
             if client is None:  # pragma: no cover - nullcontext preserves injected client
                 raise RuntimeError("HTTP client is unavailable")
-            bonds = self._bond_candidates(client)
+            bond_history = self._rolling_history(
+                client,
+                market="bonds",
+                board="TQOB",
+                calculated_at=calculated_at,
+            )
+            share_history = self._rolling_history(
+                client,
+                market="shares",
+                board="TQBR",
+                calculated_at=calculated_at,
+            )
+            bonds = self._bond_candidates(
+                client,
+                history=bond_history,
+                calculated_at=calculated_at,
+            )
             shares, share_universe_size, enriched_count = self._share_candidates(
-                client, calculated_at=calculated_at
+                client,
+                calculated_at=calculated_at,
+                history=share_history,
             )
             candidates = bonds + shares
         if not candidates:

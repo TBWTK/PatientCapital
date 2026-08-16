@@ -14,8 +14,13 @@ from sqlalchemy.orm import Session
 
 from patientcapital.application.errors import ApplicationError
 from patientcapital.contracts import (
+    AdmissionDimensionResponse,
+    AdmissionGateResponse,
     AnalyticsMoneyMetricResponse,
     AnalyticsOverviewResponse,
+    AssetAdmissionAssessmentResponse,
+    AssetAdmissionProfileResponse,
+    AssetAdmissionRunResponse,
     AssetListResponse,
     AssetPut,
     AssetResponse,
@@ -49,6 +54,7 @@ from patientcapital.contracts import (
     TransactionDraftTextCreate,
     TransactionResponse,
 )
+from patientcapital.domain.admission import AssetAdmissionProfile
 from patientcapital.domain.discovery import MarketSelection, select_market_candidates
 from patientcapital.domain.models import (
     AllocationInput,
@@ -70,6 +76,8 @@ from patientcapital.domain.transaction_intake import (
 from patientcapital.market_intelligence.service import (
     AcquiredMarketResearch,
     acquire_market_research,
+    deserialize_admission_profile,
+    latest_asset_admission,
     latest_market_research,
     serialize_candidate,
 )
@@ -529,16 +537,19 @@ def create_transaction_draft_manual(
             )
         if asset.currency != payload.currency:
             raise ApplicationError(422, "CURRENCY_MISMATCH", "draft currency differs from asset")
-        confidence = {field: Decimal("1.00") for field in (
-            "side",
-            "asset_id",
-            "quantity",
-            "unit_price",
-            "accrued_interest_total",
-            "fee",
-            "currency",
-            "occurred_at",
-        )}
+        confidence = {
+            field: Decimal("1.00")
+            for field in (
+                "side",
+                "asset_id",
+                "quantity",
+                "unit_price",
+                "accrued_interest_total",
+                "fee",
+                "currency",
+                "occurred_at",
+            )
+        }
         parsed = ParsedTransaction(
             side=payload.side,
             asset_id=payload.asset_id,
@@ -682,11 +693,7 @@ def _ledger_projection(
                 )
             average_cost = cost / quantity
             removed_cost = average_cost * event.quantity
-            proceeds = (
-                event.unit_price * event.quantity
-                + event.accrued_interest_total
-                - event.fee
-            )
+            proceeds = event.unit_price * event.quantity + event.accrued_interest_total - event.fee
             realized = quantize_minor(realized + proceeds - removed_cost)
             cost -= removed_cost
             quantity -= event.quantity
@@ -813,9 +820,7 @@ def get_analytics_overview(session: Session) -> AnalyticsOverviewResponse:
         ),
         realized_result=_available_metric(realized),
         unrealized_result=_available_metric(portfolio.total_unrealized_pnl),
-        income=_not_configured_metric(
-            "COUPON/DIVIDEND events are not configured in the ledger"
-        ),
+        income=_not_configured_metric("COUPON/DIVIDEND events are not configured in the ledger"),
         price_freshness=freshness,
         allocation=portfolio.assets,
         recent_activity=recent,
@@ -865,6 +870,7 @@ def _recommendation_response(
 def _discovery_candidate_response(
     item: MarketCandidate,
     *,
+    admission: AssetAdmissionProfile,
     target_weight: Decimal,
     rationale: str,
     score: Decimal,
@@ -915,9 +921,7 @@ def _discovery_candidate_response(
                     for citation in item.research.citations
                 ],
                 annual_dividend_per_share=item.research.annual_dividend_per_share,
-                historical_dividend_yield_percent=(
-                    item.research.historical_dividend_yield_percent
-                ),
+                historical_dividend_yield_percent=(item.research.historical_dividend_yield_percent),
                 last_registry_close_date=item.research.last_registry_close_date,
                 listing_level=item.research.listing_level,
                 unknown_facts=list(item.research.unknown_facts),
@@ -925,12 +929,14 @@ def _discovery_candidate_response(
             if item.research is not None
             else None
         ),
+        admission=_asset_admission_profile_response(admission),
     )
 
 
 def _rejected_discovery_candidate_response(
     item: MarketCandidate,
     *,
+    admission: AssetAdmissionProfile,
     reason: str,
     score: Decimal | None,
     rank_factors: dict[str, str],
@@ -947,6 +953,55 @@ def _rejected_discovery_candidate_response(
         source_url=item.source_url,
         score=score,
         rank_factors=rank_factors,
+        admission=_asset_admission_profile_response(admission),
+    )
+
+
+def _admission_dimension_response(
+    dimension: object,
+) -> AdmissionDimensionResponse:
+    from patientcapital.domain.admission import AdmissionDimension
+
+    if not isinstance(dimension, AdmissionDimension):
+        raise TypeError("admission dimension is invalid")
+    return AdmissionDimensionResponse(
+        policy_version=dimension.policy_version,
+        status=dimension.status.value,
+        reason_codes=list(dimension.reason_codes),
+        gates=[
+            AdmissionGateResponse(
+                gate_id=gate.gate_id,
+                status=gate.status.value,
+                reason_code=gate.reason_code,
+                observed_value=gate.observed_value,
+                unit=gate.unit,
+                threshold=gate.threshold,
+                source_url=gate.source_url,
+                observed_at=gate.observed_at,
+                valid_until=gate.valid_until,
+                material=gate.material,
+            )
+            for gate in dimension.gates
+        ],
+    )
+
+
+def _asset_admission_profile_response(
+    profile: AssetAdmissionProfile,
+) -> AssetAdmissionProfileResponse:
+    return AssetAdmissionProfileResponse(
+        policy_version=profile.policy_version,
+        asset_id=profile.asset_id,
+        instrument_kind=profile.instrument_kind.value,
+        strategy_profile=profile.strategy_profile,
+        overall_status=profile.overall_status.value,
+        evaluated_at=profile.evaluated_at,
+        expires_at=profile.expires_at,
+        liquidity=_admission_dimension_response(profile.liquidity),
+        investment=_admission_dimension_response(profile.investment),
+        reason_codes=list(profile.reason_codes),
+        hard_kills=list(profile.hard_kills),
+        unknowns=list(profile.unknowns),
     )
 
 
@@ -963,6 +1018,11 @@ def _market_search_response(acquired: AcquiredMarketResearch) -> MarketSearchRes
         candidate_count=record.candidate_count,
         enriched_count=record.enriched_count,
         kind_counts={key: int(value) for key, value in record.kind_counts.items()},
+        admission_run_id=acquired.admission_run.id,
+        admission_policy_version=acquired.admission_run.policy_version,
+        admission_status_counts={
+            key: int(value) for key, value in acquired.admission_run.status_counts.items()
+        },
     )
 
 
@@ -985,6 +1045,35 @@ def get_latest_market_research(session: Session) -> MarketResearchStatusResponse
         enriched_count=record.enriched_count,
         kind_counts={key: int(value) for key, value in record.kind_counts.items()},
         created_at=record.created_at,
+    )
+
+
+def get_latest_asset_admission(session: Session) -> AssetAdmissionRunResponse:
+    result = latest_asset_admission(session)
+    if result is None:
+        raise ApplicationError(
+            404, "ASSET_ADMISSION_NOT_FOUND", "no asset-admission run is available"
+        )
+    run, assessments = result
+    return AssetAdmissionRunResponse(
+        id=run.id,
+        market_snapshot_id=run.market_snapshot_id,
+        policy_version=run.policy_version,
+        scope=run.scope,  # type: ignore[arg-type]
+        status=run.status,  # type: ignore[arg-type]
+        evaluated_at=run.evaluated_at,
+        expires_at=run.expires_at,
+        assessment_count=run.assessment_count,
+        status_counts={key: int(value) for key, value in run.status_counts.items()},
+        assessments=[
+            AssetAdmissionAssessmentResponse(
+                name=item.name,
+                profile=_asset_admission_profile_response(
+                    deserialize_admission_profile(item.profile)
+                ),
+            )
+            for item in assessments
+        ],
     )
 
 
@@ -1177,6 +1266,7 @@ def create_discovery_recommendation(
                 "candidates": [
                     _discovery_candidate_response(
                         item.candidate,
+                        admission=acquired.profiles[item.candidate.asset_id],
                         target_weight=item.target_weight,
                         rationale=item.rationale,
                         score=item.score,
@@ -1187,6 +1277,7 @@ def create_discovery_recommendation(
                 "rejected_candidates": [
                     _rejected_discovery_candidate_response(
                         item.candidate,
+                        admission=acquired.profiles[item.candidate.asset_id],
                         reason=item.reason,
                         score=item.score,
                         rank_factors=dict(item.rank_factors or {}),
@@ -1210,6 +1301,8 @@ def create_discovery_recommendation(
             "assets": [
                 {
                     **serialize_candidate(item),
+                    "admission": acquired.profiles[item.asset_id].overall_status.value,
+                    "admission_policy_version": acquired.profiles[item.asset_id].policy_version,
                     "asset_id": item.asset_id,
                     "kind": item.kind.value,
                     "target_weight": str(targets.get(item.asset_id, Decimal("0"))),

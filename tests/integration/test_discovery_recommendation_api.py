@@ -9,6 +9,7 @@ from patientcapital.config import Settings
 from patientcapital.marketdata.models import InstrumentKind, MarketCandidate
 from patientcapital.research.corpus import MOEX_DIVIDEND_RESEARCH
 from tests.integration.conftest import TEST_DATABASE_URL
+from tests.market_fixtures import admitted_liquidity
 
 
 class StaticMarketDataProvider:
@@ -34,6 +35,10 @@ class StaticMarketDataProvider:
                 clean_price_percent=Decimal("78.445"),
                 face_value=Decimal("1000"),
                 accrued_interest=Decimal("33.76"),
+                liquidity=admitted_liquidity(
+                    InstrumentKind.OFZ,
+                    observed_at=calculated_at - timedelta(hours=1),
+                ),
             ),
             MarketCandidate(
                 asset_id="EQMX",
@@ -48,6 +53,10 @@ class StaticMarketDataProvider:
                 classification_url="https://www.moex.com/msn/etf",
                 quote_kind="current",
                 turnover=Decimal("601551768"),
+                liquidity=admitted_liquidity(
+                    InstrumentKind.EQUITY_INDEX_FUND,
+                    observed_at=calculated_at - timedelta(hours=1),
+                ),
             ),
             MarketCandidate(
                 asset_id="FUNDALT",
@@ -62,6 +71,10 @@ class StaticMarketDataProvider:
                 classification_url="https://www.moex.com/msn/etf",
                 quote_kind="current",
                 turnover=Decimal("1000"),
+                liquidity=admitted_liquidity(
+                    InstrumentKind.EQUITY_INDEX_FUND,
+                    observed_at=calculated_at - timedelta(hours=1),
+                ),
             ),
             MarketCandidate(
                 asset_id="MOEX",
@@ -77,6 +90,10 @@ class StaticMarketDataProvider:
                 quote_kind="current",
                 turnover=Decimal("1144411993"),
                 research=MOEX_DIVIDEND_RESEARCH,
+                liquidity=admitted_liquidity(
+                    InstrumentKind.DIVIDEND_STOCK,
+                    observed_at=calculated_at - timedelta(hours=1),
+                ),
             ),
         )
 

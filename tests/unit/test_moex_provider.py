@@ -17,6 +17,31 @@ def _block(columns: list[str], data: list[list[object]]) -> dict[str, object]:
 
 
 def _handler(request: httpx.Request) -> httpx.Response:
+    if "/history/" in request.url.path:
+        session_date = request.url.params["date"]
+        if "/bonds/" in request.url.path:
+            history_rows = [["SU26218RMFS6", session_date, 5000, 742285912]]
+        else:
+            history_rows = [
+                [asset_id, session_date, trades, turnover]
+                for asset_id, trades, turnover in (
+                    ("EQMX", 5000, 601551768),
+                    ("SBMX", 4000, 501551768),
+                    ("TMOS", 3000, 401551768),
+                    ("SBER", 15000, 1601551768),
+                    ("MOEX", 12000, 1201551768),
+                    ("THIRD", 1000, 201551768),
+                )
+            ]
+        return httpx.Response(
+            200,
+            json={
+                "history": _block(["SECID", "TRADEDATE", "NUMTRADES", "VALUE"], history_rows),
+                "history.cursor": _block(
+                    ["INDEX", "TOTAL", "PAGESIZE"], [[0, len(history_rows), 100]]
+                ),
+            },
+        )
     if "/bonds/boards/TQOB/" in request.url.path:
         return httpx.Response(
             200,
@@ -48,8 +73,28 @@ def _handler(request: httpx.Request) -> httpx.Response:
                     ],
                 ),
                 "marketdata": _block(
-                    ["SECID", "LAST", "MARKETPRICE", "YIELD", "VALTODAY", "SYSTIME"],
-                    [["SU26218RMFS6", 78.445, 78.4, 15.19, 742285912, "2026-08-14 23:50:44"]],
+                    [
+                        "SECID",
+                        "LAST",
+                        "MARKETPRICE",
+                        "YIELD",
+                        "VALTODAY",
+                        "BID",
+                        "OFFER",
+                        "SYSTIME",
+                    ],
+                    [
+                        [
+                            "SU26218RMFS6",
+                            78.445,
+                            78.4,
+                            15.19,
+                            742285912,
+                            78.4,
+                            78.5,
+                            "2026-08-14 23:50:44",
+                        ]
+                    ],
                 ),
             },
         )
@@ -77,7 +122,16 @@ def _handler(request: httpx.Request) -> httpx.Response:
         ["THIRD", "Третья", 10, "A", "SUR", "1", "EQIN", "RU000THIRD", 1],
     ]
     market = [
-        [asset_id, 117.35, 122.85, 117.35, turnover, "2026-08-14 23:50:43"]
+        [
+            asset_id,
+            117.35,
+            122.85,
+            117.35,
+            turnover,
+            117.30,
+            117.40,
+            "2026-08-14 23:50:43",
+        ]
         for asset_id, turnover in (
             ("EQMX", 601551768),
             ("SBMX", 501551768),
@@ -105,7 +159,16 @@ def _handler(request: httpx.Request) -> httpx.Response:
                 rows,
             ),
             "marketdata": _block(
-                ["SECID", "LAST", "MARKETPRICE", "LCURRENTPRICE", "VALTODAY", "SYSTIME"],
+                [
+                    "SECID",
+                    "LAST",
+                    "MARKETPRICE",
+                    "LCURRENTPRICE",
+                    "VALTODAY",
+                    "BID",
+                    "OFFER",
+                    "SYSTIME",
+                ],
                 market,
             ),
         },
@@ -127,12 +190,15 @@ def test_provider_maps_strict_moex_facts_and_dirty_ofz_cost() -> None:
     funds = [item for item in result if item.kind is InstrumentKind.EQUITY_INDEX_FUND]
     assert {item.asset_id for item in funds} == {"EQMX", "SBMX", "TMOS"}
     assert all(item.classification_url == "https://www.moex.com/msn/etf" for item in funds)
-    stocks = [item for item in result if item.kind is InstrumentKind.DIVIDEND_STOCK]
-    assert [item.asset_id for item in stocks] == ["SBER", "MOEX"]
+    stocks = [item for item in result if item.kind is InstrumentKind.PUBLIC_EQUITY]
+    assert [item.asset_id for item in stocks] == ["SBER", "MOEX", "THIRD"]
     assert stocks[0].lot_size == 10
     assert stocks[0].research is not None
     assert stocks[0].research.scope is ResearchScope.MARKET_SCREEN
     assert stocks[0].research.dividend_years == 3
+    assert stocks[0].liquidity is not None
+    assert len(stocks[0].liquidity.observations) == 20
+    assert stocks[2].research is None
     assert {citation.kind.value for citation in stocks[0].research.citations} == {
         "listing",
         "dividends",

@@ -64,6 +64,7 @@ evidence; transaction intake создаёт подтверждаемый draft; 
 | `api` | versioned HTTP contracts и input validation | 4xx для входа, 409 для version conflict, 503 для dependency |
 | `persistence` | PostgreSQL repositories и migrations | health degraded; запись не подтверждается |
 | `marketdata` | allowlisted MOEX ISS transport и strict mapping в immutable bond/fund/share candidate facts | timeout/schema/stale/unknown блокирует automatic run typed-ошибкой |
+| `asset admission` | rolling 20-session liquidity, class investment gate и deterministic `eligible/watch/reject/unknown` composition | missing/stale/conflicting material evidence остаётся unknown; market screen не selectable |
 | `selection policy` | `five-year-moex-v2`: maturity/liquidity ranking, class targets и composition с dividend gate | пустой eligible set блокирует proposal; LLM fallback запрещён |
 | `strategy registry` | упорядоченный набор admitted policies и выбор единственной recommended | недоступная policy исключается с видимой причиной; случайная замена запрещена |
 | `research` *(implemented)* | `dividend-research-evidence-v1`, primary corpus и `dividend-quality-v1` для новых классов | stale/incomplete/coverage/governance/action/liquidity failure исключает candidate |
@@ -94,12 +95,13 @@ evidence; transaction intake создаёт подтверждаемый draft; 
 | `GET` | `/v1/alerts` | immutable threshold/event alerts с evidence и acknowledgement state |
 | `POST` | `/v1/alerts/{id}/acknowledgements` | append-only отметка ознакомления; ledger не меняется |
 | `GET` | `/v1/monitor-runs` | outcomes scheduled наблюдений, включая явный provider error |
+| `GET` | `/v1/asset-admission/latest` | latest immutable run, все профили/gates/reasons и research queue; ничего не пересчитывает |
 | `GET` | `/health/live`, `/health/ready` | process health отдельно от PostgreSQL readiness |
 
 Все денежные JSON-поля сериализуются decimal-строками. Ошибка имеет один envelope
 `{"error":{"code","message"}}`; transport не превращает domain unknown в HTTP 200.
 
-`DiscoveryCandidateResponse.research` присутствует только у `dividend_stock` и содержит версии,
+`DiscoveryCandidateResponse.research` присутствует у исследованной equity и содержит версии,
 freshness, typed gate facts, server-owned summary и primary citations. Это evidence layer, а не
 второй calculation engine: identity/price/lot/turnover приходят из ISS, веса задаёт
 `five-year-moex-v2`, а quantities/fees/totals — общий allocator.
@@ -185,7 +187,8 @@ Agent path заканчивается на MCP boundary: зарегистрир�
 допускает категорию к пятилетнему growth plan только при одновременном выполнении всех условий:
 fresh reviewed evidence; минимум три прибыльных и три дивидендных периода; payout `0 < x <= 100%`;
 `no_debt` либо `adequate_capital`; подтверждённый governance gate; отсутствие выявленного material
-corporate action; RUB, доступный целый lot и дневной turnover не ниже `10 000 000 RUB`. Target
+corporate action; RUB и доступный целый lot. Торгуемость принадлежит отдельному rolling liquidity
+gate, а affordability — budget feasibility. Target
 категории ограничен `20%`; при любом отказе исходная OFZ/fund policy продолжает работать без акции.
 
 Эта production allowlist была границей PC2 и заменяется в PC3 dynamic board enumeration. Reviewed
@@ -205,19 +208,22 @@ flowchart LR
   Worker["Worker · 4/day"] --> Scan["MOEX TQOB/TQBR scan"]
   Request["Amount request"] --> Fresh{"Fresh snapshot ≤4h?"}
   Fresh -- no --> Scan
-  Scan --> Prefilter["Typed listing/liquidity prefilter"]
+  Scan --> History["20 completed MOEX sessions"]
+  History --> Prefilter["Class liquidity gates"]
   Prefilter --> Enrich["Bounded dividend-history enrichment"]
   Enrich --> Snapshot[("Immutable market snapshot")]
+  Snapshot --> Admission[("Immutable admission run + profiles")]
   Fresh -- yes --> Snapshot
-  Snapshot --> Rank["market-intelligence-v1 ranking"]
+  Admission --> Rank["Eligible-only ranking"]
   Rank --> Core["Lot/fee deterministic planner"]
   Core --> Proposal[("Immutable proposal run")]
   Proposal --> Explain["Web/MCP evidence"]
 ```
 
 Cold provider/schema failure создаёт видимый failed/blocked outcome и не использует прежний
-allowlist. Large TQBR universe не создаёт unbounded N+1: dividend enrichment получает только top-N
-active RUB listing-level candidates после marketdata prefilter. Broad-index funds пока используют
+allowlist. Large TQBR universe получает batch/paginated rolling history; dividend enrichment
+получает только top-N после liquidity watch floor, но остальные прошедшие equity остаются в
+research queue. Broad-index funds пока используют
 reviewed classification registry, потому что MOEX `IFTF` описывает форму инструмента, не underlying
 strategy.
 

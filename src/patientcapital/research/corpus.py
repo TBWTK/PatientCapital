@@ -23,6 +23,7 @@ MOEX_DIVIDEND_RESEARCH = DividendResearchEvidence(
     balance_sheet_status=BalanceSheetStatus.NO_DEBT,
     governance_program_member=True,
     corporate_action_status=CorporateActionStatus.NO_MATERIAL_ACTION_IDENTIFIED,
+    last_registry_close_date=date(2025, 7, 18),
     summary=(
         "MOEX показывает положительную прибыль за четыре года, дивиденды за четыре последних "
         "отчётных периода, выплату 75% прибыли за 2025 год и отсутствие долговых обязательств. "
@@ -50,10 +51,7 @@ MOEX_DIVIDEND_RESEARCH = DividendResearchEvidence(
         ResearchCitation(
             kind=ResearchFactKind.CORPORATE_ACTIONS,
             title="Материалы годового собрания MOEX за 2025 год",
-            url=(
-                "https://www.moex.com/povtornoe-godovoe-zasedanie-"
-                "obschego-sobraniya-aktsionerov"
-            ),
+            url=("https://www.moex.com/povtornoe-godovoe-zasedanie-obschego-sobraniya-aktsionerov"),
         ),
     ),
 )

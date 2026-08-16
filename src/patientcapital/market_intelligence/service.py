@@ -11,16 +11,30 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from patientcapital.domain.admission import (
+    ADMISSION_POLICY_VERSION,
+    AdmissionDimension,
+    AdmissionGate,
+    AdmissionStatus,
+    AssetAdmissionProfile,
+    evaluate_asset_admission,
+)
 from patientcapital.domain.errors import InvalidAllocationInput
 from patientcapital.marketdata.errors import MarketDataError
 from patientcapital.marketdata.models import (
     InstrumentKind,
+    LiquidityObservation,
     MarketCandidate,
     MarketDataProvider,
+    MarketLiquidityEvidence,
     MarketScan,
     MarketScanProvider,
 )
-from patientcapital.persistence.models import MarketResearchSnapshotRecord
+from patientcapital.persistence.models import (
+    AssetAdmissionAssessmentRecord,
+    AssetAdmissionRunRecord,
+    MarketResearchSnapshotRecord,
+)
 from patientcapital.research.models import (
     BalanceSheetStatus,
     CorporateActionStatus,
@@ -36,6 +50,8 @@ class AcquiredMarketResearch:
     record: MarketResearchSnapshotRecord
     candidates: tuple[MarketCandidate, ...]
     mode: Literal["live", "cached"]
+    admission_run: AssetAdmissionRunRecord
+    profiles: dict[str, AssetAdmissionProfile]
 
 
 def _decimal(value: object | None) -> Decimal | None:
@@ -91,6 +107,67 @@ def _research_payload(research: DividendResearchEvidence) -> dict[str, object]:
     }
 
 
+def _liquidity_payload(liquidity: MarketLiquidityEvidence) -> dict[str, object]:
+    return {
+        "policy_version": liquidity.policy_version,
+        "observed_at": liquidity.observed_at.isoformat(),
+        "max_age_seconds": int(liquidity.max_age.total_seconds()),
+        "security_status": liquidity.security_status,
+        "source_url": liquidity.source_url,
+        "observations": [
+            {
+                "session_date": item.session_date.isoformat(),
+                "turnover_rub": str(item.turnover_rub),
+                "trades": item.trades,
+                "bid": str(item.bid) if item.bid is not None else None,
+                "offer": str(item.offer) if item.offer is not None else None,
+            }
+            for item in liquidity.observations
+        ],
+    }
+
+
+def _gate_payload(gate: AdmissionGate) -> dict[str, object]:
+    return {
+        "gate_id": gate.gate_id,
+        "status": gate.status.value,
+        "reason_code": gate.reason_code,
+        "observed_value": gate.observed_value,
+        "unit": gate.unit,
+        "threshold": gate.threshold,
+        "source_url": gate.source_url,
+        "observed_at": gate.observed_at.isoformat(),
+        "valid_until": gate.valid_until.isoformat(),
+        "material": gate.material,
+    }
+
+
+def _dimension_payload(dimension: AdmissionDimension) -> dict[str, object]:
+    return {
+        "policy_version": dimension.policy_version,
+        "status": dimension.status.value,
+        "reason_codes": list(dimension.reason_codes),
+        "gates": [_gate_payload(item) for item in dimension.gates],
+    }
+
+
+def serialize_admission_profile(profile: AssetAdmissionProfile) -> dict[str, object]:
+    return {
+        "policy_version": profile.policy_version,
+        "asset_id": profile.asset_id,
+        "instrument_kind": profile.instrument_kind.value,
+        "strategy_profile": profile.strategy_profile,
+        "overall_status": profile.overall_status.value,
+        "evaluated_at": profile.evaluated_at.isoformat(),
+        "expires_at": profile.expires_at.isoformat(),
+        "liquidity": _dimension_payload(profile.liquidity),
+        "investment": _dimension_payload(profile.investment),
+        "reason_codes": list(profile.reason_codes),
+        "hard_kills": list(profile.hard_kills),
+        "unknowns": list(profile.unknowns),
+    }
+
+
 def serialize_candidate(candidate: MarketCandidate) -> dict[str, object]:
     return {
         "asset_id": candidate.asset_id,
@@ -132,6 +209,9 @@ def serialize_candidate(candidate: MarketCandidate) -> dict[str, object]:
             str(candidate.coupon_value) if candidate.coupon_value is not None else None
         ),
         "research": _research_payload(candidate.research) if candidate.research else None,
+        "liquidity": (
+            _liquidity_payload(candidate.liquidity) if candidate.liquidity is not None else None
+        ),
     }
 
 
@@ -177,8 +257,74 @@ def _research_from_payload(payload: dict[str, object]) -> DividendResearchEviden
     )
 
 
+def _liquidity_from_payload(payload: dict[str, object]) -> MarketLiquidityEvidence:
+    observations = cast(list[dict[str, object]], payload["observations"])
+    return MarketLiquidityEvidence(
+        policy_version=str(payload["policy_version"]),
+        observed_at=datetime.fromisoformat(str(payload["observed_at"])),
+        max_age=timedelta(seconds=int(cast(int, payload["max_age_seconds"]))),
+        security_status=str(payload["security_status"]),
+        source_url=str(payload["source_url"]),
+        observations=tuple(
+            LiquidityObservation(
+                session_date=_date(item["session_date"]),
+                turnover_rub=Decimal(str(item["turnover_rub"])),
+                trades=int(cast(int, item["trades"])),
+                bid=_decimal(item.get("bid")),
+                offer=_decimal(item.get("offer")),
+            )
+            for item in observations
+        ),
+    )
+
+
+def _gate_from_payload(payload: dict[str, object]) -> AdmissionGate:
+    return AdmissionGate(
+        gate_id=str(payload["gate_id"]),
+        status=AdmissionStatus(str(payload["status"])),
+        reason_code=str(payload["reason_code"]),
+        observed_value=(
+            str(payload["observed_value"]) if payload.get("observed_value") is not None else None
+        ),
+        unit=str(payload["unit"]) if payload.get("unit") is not None else None,
+        threshold=(str(payload["threshold"]) if payload.get("threshold") is not None else None),
+        source_url=str(payload["source_url"]),
+        observed_at=datetime.fromisoformat(str(payload["observed_at"])),
+        valid_until=datetime.fromisoformat(str(payload["valid_until"])),
+        material=bool(payload.get("material", True)),
+    )
+
+
+def _dimension_from_payload(payload: dict[str, object]) -> AdmissionDimension:
+    gates = cast(list[dict[str, object]], payload["gates"])
+    return AdmissionDimension(
+        policy_version=str(payload["policy_version"]),
+        status=AdmissionStatus(str(payload["status"])),
+        gates=tuple(_gate_from_payload(item) for item in gates),
+        reason_codes=tuple(cast(list[str], payload["reason_codes"])),
+    )
+
+
+def deserialize_admission_profile(payload: dict[str, object]) -> AssetAdmissionProfile:
+    return AssetAdmissionProfile(
+        policy_version=str(payload["policy_version"]),
+        asset_id=str(payload["asset_id"]),
+        instrument_kind=InstrumentKind(str(payload["instrument_kind"])),
+        strategy_profile=str(payload["strategy_profile"]),
+        overall_status=AdmissionStatus(str(payload["overall_status"])),
+        evaluated_at=datetime.fromisoformat(str(payload["evaluated_at"])),
+        expires_at=datetime.fromisoformat(str(payload["expires_at"])),
+        liquidity=_dimension_from_payload(cast(dict[str, object], payload["liquidity"])),
+        investment=_dimension_from_payload(cast(dict[str, object], payload["investment"])),
+        reason_codes=tuple(cast(list[str], payload["reason_codes"])),
+        hard_kills=tuple(cast(list[str], payload["hard_kills"])),
+        unknowns=tuple(cast(list[str], payload["unknowns"])),
+    )
+
+
 def deserialize_candidate(payload: dict[str, object]) -> MarketCandidate:
     research_payload = payload.get("research")
+    liquidity_payload = payload.get("liquidity")
     return MarketCandidate(
         asset_id=str(payload["asset_id"]),
         name=str(payload["name"]),
@@ -205,6 +351,11 @@ def deserialize_candidate(payload: dict[str, object]) -> MarketCandidate:
             if research_payload is not None
             else None
         ),
+        liquidity=(
+            _liquidity_from_payload(cast(dict[str, object], liquidity_payload))
+            if liquidity_payload is not None
+            else None
+        ),
     )
 
 
@@ -225,6 +376,34 @@ def _scan(provider: MarketDataProvider, *, observed_at: datetime) -> MarketScan:
     )
 
 
+def _load_admission(
+    session: Session, snapshot_id: object
+) -> tuple[AssetAdmissionRunRecord, dict[str, AssetAdmissionProfile]] | None:
+    run = session.scalar(
+        select(AssetAdmissionRunRecord)
+        .where(
+            AssetAdmissionRunRecord.market_snapshot_id == snapshot_id,
+            AssetAdmissionRunRecord.policy_version == ADMISSION_POLICY_VERSION,
+        )
+        .order_by(AssetAdmissionRunRecord.evaluated_at.desc())
+        .limit(1)
+    )
+    if run is None:
+        return None
+    records = session.scalars(
+        select(AssetAdmissionAssessmentRecord)
+        .where(AssetAdmissionAssessmentRecord.run_id == run.id)
+        .order_by(AssetAdmissionAssessmentRecord.asset_id)
+    ).all()
+    profiles = {item.asset_id: deserialize_admission_profile(item.profile) for item in records}
+    if len(profiles) != run.assessment_count:
+        raise MarketDataError(
+            "ADMISSION_SNAPSHOT_INCOMPLETE",
+            "asset-admission assessment count does not match the immutable run",
+        )
+    return run, profiles
+
+
 def acquire_market_research(
     session: Session,
     provider: MarketDataProvider,
@@ -243,6 +422,7 @@ def acquire_market_research(
             "INVALID_MARKET_RESEARCH_CACHE", "market research cache must be positive"
         )
     existing: MarketResearchSnapshotRecord | None = None
+    expected_scan_policy = getattr(provider, "scan_policy_version", None)
     with session.begin():
         if idempotency_key is not None:
             existing = session.scalar(
@@ -251,14 +431,17 @@ def acquire_market_research(
                 )
             )
         if existing is None and not force:
-            existing = session.scalar(
-                select(MarketResearchSnapshotRecord)
-                .where(
-                    MarketResearchSnapshotRecord.status == "succeeded",
-                    MarketResearchSnapshotRecord.expires_at >= observed_at,
+            query = select(MarketResearchSnapshotRecord).where(
+                MarketResearchSnapshotRecord.status == "succeeded",
+                MarketResearchSnapshotRecord.expires_at >= observed_at,
+                MarketResearchSnapshotRecord.provider == provider.name,
+            )
+            if expected_scan_policy is not None:
+                query = query.where(
+                    MarketResearchSnapshotRecord.scan_policy_version == str(expected_scan_policy)
                 )
-                .order_by(MarketResearchSnapshotRecord.observed_at.desc())
-                .limit(1)
+            existing = session.scalar(
+                query.order_by(MarketResearchSnapshotRecord.observed_at.desc()).limit(1)
             )
     if existing is not None:
         if existing.status != "succeeded":
@@ -266,10 +449,20 @@ def acquire_market_research(
                 existing.error_code or "MARKET_RESEARCH_FAILED",
                 existing.error_detail or "market research snapshot failed",
             )
+        with session.begin():
+            loaded = _load_admission(session, existing.id)
+        if loaded is None:
+            raise MarketDataError(
+                "ADMISSION_SNAPSHOT_MISSING",
+                "fresh market snapshot has no matching asset-admission run",
+            )
+        admission_run, profiles = loaded
         return AcquiredMarketResearch(
             existing,
             tuple(deserialize_candidate(item) for item in existing.candidates),
             "cached",
+            admission_run,
+            profiles,
         )
 
     key = idempotency_key or f"live:{uuid4()}"
@@ -297,6 +490,10 @@ def acquire_market_research(
             session.flush()
         raise
     serialized = [serialize_candidate(item) for item in scan.candidates]
+    profiles = {
+        item.asset_id: evaluate_asset_admission(item, calculated_at=observed_at)
+        for item in scan.candidates
+    }
     record = MarketResearchSnapshotRecord(
         id=uuid4(),
         idempotency_key=key,
@@ -313,10 +510,48 @@ def acquire_market_research(
         kind_counts=scan.kind_counts,
         candidates=serialized,
     )
+    status_counts = {
+        status.value: sum(profile.overall_status is status for profile in profiles.values())
+        for status in AdmissionStatus
+    }
+    expiry = min(
+        (profile.expires_at for profile in profiles.values()),
+        default=observed_at,
+    )
+    admission_run = AssetAdmissionRunRecord(
+        id=uuid4(),
+        market_snapshot_id=record.id,
+        policy_version=ADMISSION_POLICY_VERSION,
+        scope="universe_discovery",
+        status="succeeded",
+        evaluated_at=observed_at,
+        expires_at=expiry,
+        assessment_count=len(profiles),
+        status_counts=status_counts,
+    )
     with session.begin():
         session.add(record)
         session.flush()
-    return AcquiredMarketResearch(record, scan.candidates, "live")
+        session.add(admission_run)
+        session.flush()
+        session.add_all(
+            AssetAdmissionAssessmentRecord(
+                id=uuid4(),
+                run_id=admission_run.id,
+                asset_id=item.asset_id,
+                name=item.name,
+                instrument_kind=item.kind.value,
+                strategy_profile=profiles[item.asset_id].strategy_profile,
+                policy_version=ADMISSION_POLICY_VERSION,
+                overall_status=profiles[item.asset_id].overall_status.value,
+                evaluated_at=profiles[item.asset_id].evaluated_at,
+                expires_at=profiles[item.asset_id].expires_at,
+                profile=serialize_admission_profile(profiles[item.asset_id]),
+            )
+            for item in scan.candidates
+        )
+        session.flush()
+    return AcquiredMarketResearch(record, scan.candidates, "live", admission_run, profiles)
 
 
 def latest_market_research(session: Session) -> MarketResearchSnapshotRecord | None:
@@ -327,10 +562,36 @@ def latest_market_research(session: Session) -> MarketResearchSnapshotRecord | N
     )
 
 
+def latest_asset_admission(
+    session: Session,
+) -> tuple[AssetAdmissionRunRecord, list[AssetAdmissionAssessmentRecord]] | None:
+    run = session.scalar(
+        select(AssetAdmissionRunRecord)
+        .order_by(AssetAdmissionRunRecord.evaluated_at.desc())
+        .limit(1)
+    )
+    if run is None:
+        return None
+    assessments = list(
+        session.scalars(
+            select(AssetAdmissionAssessmentRecord)
+            .where(AssetAdmissionAssessmentRecord.run_id == run.id)
+            .order_by(
+                AssetAdmissionAssessmentRecord.overall_status,
+                AssetAdmissionAssessmentRecord.asset_id,
+            )
+        ).all()
+    )
+    return run, assessments
+
+
 __all__ = [
     "AcquiredMarketResearch",
     "acquire_market_research",
+    "deserialize_admission_profile",
     "deserialize_candidate",
+    "latest_asset_admission",
     "latest_market_research",
+    "serialize_admission_profile",
     "serialize_candidate",
 ]

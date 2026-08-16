@@ -46,6 +46,7 @@ def test_mcp_discovery_is_allowlisted_typed_and_permission_annotated() -> None:
         "get_profile",
         "get_analytics_overview",
         "get_latest_market_research",
+        "get_latest_asset_admission",
         "list_alerts",
         "list_monitor_runs",
         "acknowledge_alert",
@@ -69,6 +70,9 @@ def test_mcp_discovery_is_allowlisted_typed_and_permission_annotated() -> None:
     assert by_name["get_latest_market_research"].annotations is not None
     assert by_name["get_latest_market_research"].annotations.read_only_hint is True
     assert by_name["get_latest_market_research"].annotations.open_world_hint is False
+    assert by_name["get_latest_asset_admission"].annotations is not None
+    assert by_name["get_latest_asset_admission"].annotations.read_only_hint is True
+    assert by_name["get_latest_asset_admission"].annotations.open_world_hint is False
     assert by_name["list_alerts"].annotations is not None
     assert by_name["list_alerts"].annotations.read_only_hint is True
     assert by_name["acknowledge_alert"].annotations is not None
@@ -144,6 +148,7 @@ def test_mcp_reads_and_acknowledges_monitor_alert_without_trade(client: TestClie
         return alerts, acknowledgement, runs
 
     try:
+
         async def execute(mcp_client: Client) -> tuple[CallToolResult, ...]:
             return await monitor_tools(mcp_client)
 
@@ -151,9 +156,7 @@ def test_mcp_reads_and_acknowledges_monitor_alert_without_trade(client: TestClie
     finally:
         database.close()
 
-    assert cast(dict[str, Any], alerts.structured_content)["alerts"][0]["kind"] == (
-        "price_move"
-    )
+    assert cast(dict[str, Any], alerts.structured_content)["alerts"][0]["kind"] == ("price_move")
     assert cast(dict[str, Any], acknowledgement.structured_content)["alert_id"]
     assert cast(dict[str, Any], runs.structured_content)["runs"][0]["alerts_created"] == 2
     assert client.get("/v1/portfolio").json()["assets"][0]["quantity"] == 10
@@ -266,6 +269,15 @@ def test_mcp_missing_market_research_is_a_machine_coded_tool_error() -> None:
     assert '"code":"MARKET_RESEARCH_NOT_FOUND"' in _error_text(result)
 
 
+def test_mcp_missing_asset_admission_is_a_machine_coded_tool_error() -> None:
+    async def get_missing_admission(mcp_client: Client) -> CallToolResult:
+        return await mcp_client.call_tool("get_latest_asset_admission", {})
+
+    result = _run(get_missing_admission)
+    assert result.is_error is True
+    assert '"code":"ASSET_ADMISSION_NOT_FOUND"' in _error_text(result)
+
+
 def test_mcp_proposal_is_the_same_immutable_run_retrieved_by_http(
     client: TestClient,
 ) -> None:
@@ -374,19 +386,14 @@ def test_mcp_transaction_draft_requires_explicit_exact_confirmation(
     client: TestClient,
 ) -> None:
     seed_two_assets(client)
-    source_text = (
-        "Купил 3 AAA по 101,25 ₽, НКД 2,75 ₽, комиссия 1,00 ₽, "
-        "15 августа 2026 12:00"
-    )
+    source_text = "Купил 3 AAA по 101,25 ₽, НКД 2,75 ₽, комиссия 1,00 ₽, 15 августа 2026 12:00"
 
     async def draft_then_confirm(
         mcp_client: Client,
     ) -> tuple[CallToolResult, CallToolResult, CallToolResult]:
         created = await mcp_client.call_tool("create_transaction_draft", {"text": source_text})
         draft = cast(dict[str, Any], created.structured_content)
-        retrieved = await mcp_client.call_tool(
-            "get_transaction_draft", {"draft_id": draft["id"]}
-        )
+        retrieved = await mcp_client.call_tool("get_transaction_draft", {"draft_id": draft["id"]})
         confirmed = await mcp_client.call_tool(
             "decide_transaction_draft",
             {

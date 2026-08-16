@@ -50,6 +50,9 @@ broker order capability.
 | Market-wide request amplification | board fetch + deterministic liquidity prefilter + bounded dividend fan-out/timeouts | MOEX availability/rate limits can block a cold proposal |
 | Screen presented as fundamental audit | typed `market_screen` scope, explicit unknown fields and source URLs | historical dividends do not predict future payments |
 | Stale cache silently reused | persisted expiry, fail-loud stale/provider error, immutable scan id in proposal | delayed MOEX facts remain non-real-time even when fresh by policy |
+| Однодневный spike принят за ликвидность | 20 completed-session coverage/median turnover и class thresholds; top-N только enrichment queue | thresholds требуют периодической калибровки под режим рынка |
+| LLM/opinion превращён в issuer verdict | typed primary evidence, immutable gates и deterministic status; narrative не входит в decision hash | trusted issuer adapter ещё не реализован, поэтому equity остаётся unknown |
+| Старый PC3 cache обходит новый gate | cache namespace фильтрует provider/scan policy и требует matching admission run | ошибочная ручная DB-операция вне приложения остаётся operator risk |
 
 ## Условия эксплуатации MVP
 

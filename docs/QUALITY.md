@@ -60,6 +60,30 @@ updated: 2026-08-16
 - [x] `PC2 migration`: существующая `SU26226RMFS9` ledger evidence и v1 runs неизменны до/после
   additive migration; rollback/restore caveat видим.
 
+## PC4 asset-admission capability evals
+
+- [x] `Rolling liquidity`: synthetic 20-session fixtures для акции/ОФЗ/фонда воспроизводят
+  eligible/watch/reject/unknown по coverage, median RUB turnover, spread и freshness; current-day
+  spike не может заменить rolling result.
+- [x] `Admission composition`: reject/unknown/watch/eligible комбинируются с приоритетом
+  `reject > unknown > watch > eligible`; budget affordability не изменяет liquidity status.
+- [x] `No screen-to-trade`: любой `market_screen`, включая исторически привлекательный dividend
+  fixture, остаётся research-only и никогда не попадает в selected candidate или transaction.
+- [x] `Dividend recency`: окно считается от calculation date; последняя выплата 2022 года не
+  становится свежей при загрузке истории в 2026 году.
+- [x] `Issuer hard kills`: binding suspension/default/delisting fixture детерминированно исключает
+  dividend strategy; management comment без binding decision даёт watch/unknown, не hard blacklist.
+- [x] `Dynamic queue`: полный synthetic TQBR board проходит дешёвый rolling gate до bounded issuer
+  enrichment; ticker вне однодневного top-N остаётся в research queue при достаточной ликвидности.
+- [x] `Source/freshness`: missing/stale/conflicting/unsupported issuer facts остаются explicit
+  unknown; LLM narrative и input order не меняют decision hash/status.
+- [x] `Channel parity`: immutable profile, gates, source/as-of/reasons и queue совпадают в API,
+  MCP и web; proposal использует только overall eligible.
+- [x] `Cadence/no-trade`: bounded broad-universe + completed-session scan 4/day идемпотентен;
+  outage visible; ledger/order count неизменен.
+- [x] `PC4 migration`: существующие profile/ledger/runs/snapshots/drafts/alerts сохраняются после
+  additive schema migration и rollback caveat документирован.
+
 ## Regression gates
 
 - [x] Unit + property tests domain core (`51 passed`, branch coverage `98.01%`, 15.08.2026).
@@ -170,6 +194,11 @@ git diff --check
 | PC3-REQ-05 explainable search | API/MCP/component/a11y/browser | `8k/50k`, warm/cold, selected/rejected candidates | contracts + web tests + browser | Scan id/mode/time/coverage and ranking reasons visible; exact run replay | passing |
 | PC3-RISK-01 false fundamentals | negative/eval/content inspection | market-screened stock without issuer fundamentals | policy/API/web assertions | Scope and unknowns visible; no invented profitability/payout/governance claim | passing |
 | PC3-RISK-02 provider fan-out | boundary/performance/resilience | large board, bounded top-N, slow/error dividend endpoints | provider tests + controlled live timing | External fan-out capped; cold run bounded; partial evidence explicit | passing |
+| PC4-REQ-01 rolling market liquidity | capability + boundary + live provider | 20-session class fixtures + live TQOB/TQBR | asset-admission/provider suites + live run `e7543bb8` | Coverage/median turnover/spread/session freshness are versioned and reproducible | passing |
+| PC4-REQ-02 fail-closed investment admission | capability + negative contract | full-quality/screen/stale/event fixtures | domain/discovery/API/MCP suites | Only overall eligible reaches proposal; screen/stale/missing stays unknown | passing |
+| PC4-REQ-03 immutable profiles | migration + API/MCP/web parity | PostgreSQL `0008` + generated TS + browser | migration/contract/component/browser suites | Gates/source/as-of/reasons persist append-only and render progressively | passing |
+| PC4-RISK-01 top-N bias | metamorphic provider + live inspection | full synthetic board + live 537-instrument universe | provider suite + latest admission endpoint | Top-N caps enrichment only; 99 equities remain in research queue | passing |
+| PC4-RISK-02 narrative-to-trade | negative/eval/ledger inspection | market screen and missing issuer facts | discovery/monitor/API suites + product DB counts | LLM/user opinion cannot create eligible fact, transaction, SELL or order | passing |
 
 ## Портфель проверок
 
